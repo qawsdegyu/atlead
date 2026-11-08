@@ -55,7 +55,24 @@ class MetaService {
       };
     } catch (err) {
       const msg = err.response?.data?.error?.message || err.message;
-      return { success: false, message: `فشل الاتصال بـ Meta Graph API: ${msg}` };
+      const code = err.response?.data?.error?.code;
+      // A Messenger-only page token can't read the Page node (needs pages_read_engagement),
+      // but it CAN reply to messages. If we know the Page ID, verify what matters instead:
+      // subscribing the Page to the webhook (pages_manage_metadata).
+      const cfg = metaConfig();
+      if (code !== 190 && cfg.page_id && !tokenOverride) {
+        const sub = await this.subscribePage();
+        if (sub.success) {
+          storageService.updateSettings({ meta: { _ids_checked: true } });
+          return {
+            success: true,
+            message: `✅ الماسنجر مربوط: الصفحة ${cfg.page_id} مشتركة بالرسائل والبوت بيقدر يرد. ⚠️ الرمز ناقصه صلاحية pages_read_engagement، فقراءة التعليقات وربط الإنستغرام ما رح يشتغلوا لحد ما تعمل رمز جديد فيه هاي الصلاحية.`
+          };
+        }
+        return { success: false, message: `فشل الاتصال بـ Meta: ${msg} — ومحاولة اشتراك الصفحة فشلت كمان: ${sub.message}` };
+      }
+      if (code === 190) return { success: false, message: `الرمز غير صالح أو منتهي — أنشئ رمز جديد. (${msg})` };
+      return { success: false, message: `فشل الاتصال بـ Meta Graph API: ${msg}${cfg.page_id ? '' : ' — اكتب Page ID بالخانة واضغط فحص الاتصال مرة ثانية.'}` };
     }
   }
 
@@ -105,6 +122,8 @@ class MetaService {
         } });
       } catch (err) {
         console.warn('[Meta] Could not read own page/IG ids:', err.response?.data?.error?.message || err.message);
+        // Page ID already known (typed/saved) → don't retry on every message.
+        if (cfg.page_id && err.response?.data?.error?.code !== 190) storageService.updateSettings({ meta: { _ids_checked: true } });
       } finally {
         this._idsPromise = null;
       }

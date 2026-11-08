@@ -220,6 +220,8 @@ router.post('/settings/test-meta', async (req, res) => {
   const patch = {};
   if (token) { patch.page_access_token = token; patch._ids_checked = false; }
   if (/^\d{5,}$/.test(pageId)) patch.page_id = pageId;
+  const appSecret = unmask(req.body.app_secret);
+  if (appSecret) patch.app_secret = String(appSecret).trim();
   if (Object.keys(patch).length) storageService.updateSettings({ meta: patch });
   const result = await metaService.testConnection();
   res.json(result);

@@ -910,7 +910,7 @@ document.getElementById('btn-test-meta-conn')?.addEventListener('click', async (
   const res = await fetch('/api/settings/test-meta', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ page_access_token: token, page_id: document.getElementById('meta-page-id').value })
+    body: JSON.stringify({ page_access_token: token, page_id: document.getElementById('meta-page-id').value, app_secret: document.getElementById('meta-app-secret').value })
   });
   const data = await res.json();
   showToast(data.message, data.success ? 'success' : 'error');

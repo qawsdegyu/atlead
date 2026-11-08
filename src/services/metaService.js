@@ -25,10 +25,79 @@ const metaConfig = () => storageService.getSettings().meta || {};
 const ECHO_SETTLE_MS = Number(process.env.ECHO_SETTLE_MS || 3000);
 
 class MetaService {
+  /**
+   * If a USER token was pasted (e.g. from Graph API Explorer), turn it into the
+   * Page token automatically: (optionally) make it long-lived with the App Secret,
+   * then read /me/accounts and take the configured Page's token.
+   * Returns { converted, pageToken, page, longLived, note } or { converted: false }.
+   */
+  async convertUserTokenToPageToken(token) {
+    let accounts;
+    try {
+      accounts = (await axios.get(`${GRAPH}/me/accounts`, {
+        params: { access_token: token, fields: 'id,name,access_token,instagram_business_account{id,username}', limit: 100 },
+        timeout: 10000
+      })).data?.data;
+    } catch {
+      return { converted: false }; // not a user token (page tokens can't list accounts)
+    }
+    if (!Array.isArray(accounts)) return { converted: false };
+    if (!accounts.length) return { converted: true, error: 'رمز المستخدم ما عنده صلاحية على أي صفحة — عند "Generate Access Token" اختار صفحة Atlead - AI ووافق.' };
+
+    const cfg = metaConfig();
+    let userToken = token;
+    let longLived = false;
+    // Long-lived user token → Page tokens derived from it never expire.
+    if (cfg.app_secret) {
+      try {
+        const app = (await axios.get(`${GRAPH}/app`, { params: { access_token: token }, timeout: 10000 })).data;
+        const ex = (await axios.get(`${GRAPH}/oauth/access_token`, {
+          params: { grant_type: 'fb_exchange_token', client_id: app.id, client_secret: cfg.app_secret, fb_exchange_token: token },
+          timeout: 10000
+        })).data;
+        if (ex?.access_token) {
+          userToken = ex.access_token;
+          longLived = true;
+          accounts = (await axios.get(`${GRAPH}/me/accounts`, {
+            params: { access_token: userToken, fields: 'id,name,access_token,instagram_business_account{id,username}', limit: 100 },
+            timeout: 10000
+          })).data?.data || accounts;
+        }
+      } catch (err) {
+        console.warn('[Meta] long-lived exchange failed:', err.response?.data?.error?.message || err.message);
+      }
+    }
+
+    const page = accounts.find(p => p.id === cfg.page_id) || (accounts.length === 1 ? accounts[0] : null);
+    if (!page) {
+      return { converted: true, error: `رمز المستخدم بيدير ${accounts.length} صفحات (${accounts.map(p => p.name).join('، ')}). اكتب Page ID تبع الصفحة المطلوبة بالخانة وجرب مرة ثانية.` };
+    }
+    const ig = page.instagram_business_account;
+    storageService.updateSettings({ meta: {
+      page_access_token: page.access_token,
+      page_id: page.id,
+      ...(ig?.id ? { instagram_account_id: ig.id, instagram_username: ig.username || '' } : {}),
+      _ids_checked: true
+    } });
+    return { converted: true, pageToken: page.access_token, page, longLived };
+  }
+
   async testConnection(tokenOverride = null) {
-    const token = tokenOverride || metaConfig().page_access_token;
+    let token = tokenOverride || metaConfig().page_access_token;
     if (!token) {
       return { success: false, message: 'رمز الوصول الخاص بصفحة فيسبوك/إنستغرام (Page Access Token) غير مدخل.' };
+    }
+
+    // A user token was pasted? Convert it to the Page token automatically.
+    let convertNote = '';
+    const conv = await this.convertUserTokenToPageToken(token);
+    if (conv.converted) {
+      if (conv.error) return { success: false, message: conv.error };
+      token = conv.pageToken;
+      tokenOverride = null; // the Page token is now saved
+      convertNote = conv.longLived
+        ? ' — 🔁 حوّلت رمز المستخدم لرمز الصفحة الدائم (ما بينتهي) ✅'
+        : ' — 🔁 حوّلت رمز المستخدم لرمز الصفحة. ⚠️ الرمز مؤقت (ساعة تقريباً): حط App Secret بالخانة واضغط فحص الاتصال مرة ثانية عشان يصير دائم.';
     }
 
     try {
@@ -50,7 +119,7 @@ class MetaService {
 
       return {
         success: true,
-        message: `تم الاتصال بنجاح بصفحة: ${response.data.name || 'الصفحة'} (ID: ${response.data.id})${ig ? ` + إنستغرام @${ig.username}` : identity.igError ? ' — (ما قدرنا نقرأ حساب الإنستغرام: الرمز ناقصه صلاحية pages_read_engagement / instagram_basic — الماسنجر شغال عادي)' : ' — لا يوجد حساب إنستغرام أعمال مربوط بالصفحة'}${subNote}`,
+        message: `تم الاتصال بنجاح بصفحة: ${response.data.name || 'الصفحة'} (ID: ${response.data.id})${ig ? ` + إنستغرام @${ig.username}` : identity.igError ? ' — (ما قدرنا نقرأ حساب الإنستغرام: الرمز ناقصه صلاحية pages_read_engagement / instagram_basic — الماسنجر شغال عادي)' : ' — لا يوجد حساب إنستغرام أعمال مربوط بالصفحة'}${subNote}${convertNote}`,
         data: response.data
       };
     } catch (err) {
@@ -66,7 +135,7 @@ class MetaService {
           storageService.updateSettings({ meta: { _ids_checked: true } });
           return {
             success: true,
-            message: `✅ الماسنجر مربوط: الصفحة ${cfg.page_id} مشتركة بالرسائل والبوت بيقدر يرد. ⚠️ الرمز ناقصه صلاحية pages_read_engagement، فقراءة التعليقات وربط الإنستغرام ما رح يشتغلوا لحد ما تعمل رمز جديد فيه هاي الصلاحية.`
+            message: `✅ الماسنجر مربوط${convertNote}: الصفحة ${cfg.page_id} مشتركة بالرسائل والبوت بيقدر يرد. ⚠️ الرمز ناقصه صلاحية pages_read_engagement، فقراءة التعليقات وربط الإنستغرام ما رح يشتغلوا لحد ما تعمل رمز جديد فيه هاي الصلاحية.`
           };
         }
         return { success: false, message: `فشل الاتصال بـ Meta: ${msg} — ومحاولة اشتراك الصفحة فشلت كمان: ${sub.message}` };

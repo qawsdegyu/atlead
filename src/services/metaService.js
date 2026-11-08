@@ -32,11 +32,9 @@ class MetaService {
     }
 
     try {
-      const response = await axios.get(`${GRAPH}/me`, {
-        params: { access_token: token, fields: 'id,name,instagram_business_account{id,username}' },
-        timeout: 10000
-      });
-      const ig = response.data.instagram_business_account;
+      const identity = await this.getPageIdentity(token);
+      const response = { data: identity };
+      const ig = identity.instagram_business_account;
       // Auto-fill IDs if they're empty
       const cfg = metaConfig();
       const patch = {};
@@ -52,12 +50,32 @@ class MetaService {
 
       return {
         success: true,
-        message: `تم الاتصال بنجاح بصفحة: ${response.data.name} (ID: ${response.data.id})${ig ? ` + إنستغرام @${ig.username}` : ' — لا يوجد حساب إنستغرام أعمال مربوط بالصفحة'}${subNote}`,
+        message: `تم الاتصال بنجاح بصفحة: ${response.data.name || 'الصفحة'} (ID: ${response.data.id})${ig ? ` + إنستغرام @${ig.username}` : identity.igError ? ' — (ما قدرنا نقرأ حساب الإنستغرام: الرمز ناقصه صلاحية pages_read_engagement / instagram_basic — الماسنجر شغال عادي)' : ' — لا يوجد حساب إنستغرام أعمال مربوط بالصفحة'}${subNote}`,
         data: response.data
       };
     } catch (err) {
       const msg = err.response?.data?.error?.message || err.message;
       return { success: false, message: `فشل الاتصال بـ Meta Graph API: ${msg}` };
+    }
+  }
+
+  /**
+   * Page id/name (+ linked Instagram when the token is allowed to read it).
+   * Reading the Instagram link needs extra permissions (pages_read_engagement /
+   * instagram_basic); a Messenger-only token must still work, so fall back gracefully.
+   */
+  async getPageIdentity(token) {
+    const get = (fields) => axios.get(`${GRAPH}/me`, { params: { access_token: token, fields }, timeout: 10000 });
+    try {
+      return (await get('id,name,instagram_business_account{id,username}')).data;
+    } catch (err) {
+      const igError = err.response?.data?.error?.message || err.message;
+      if (err.response?.data?.error?.code === 190) throw err; // invalid/expired token
+      try {
+        return { ...(await get('id,name')).data, igError };
+      } catch {
+        return { ...(await get('id')).data, igError };
+      }
     }
   }
 
@@ -76,10 +94,7 @@ class MetaService {
     if (this._idsPromise) return this._idsPromise;
     this._idsPromise = (async () => {
       try {
-        const res = await axios.get(`${GRAPH}/me`, {
-          params: { access_token: cfg.page_access_token, fields: 'id,name,instagram_business_account{id,username}' },
-          timeout: 10000
-        });
+        const res = { data: await this.getPageIdentity(cfg.page_access_token) };
         const ig = res.data.instagram_business_account;
         storageService.updateSettings({ meta: {
           // The token's own page is the source of truth.

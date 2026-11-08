@@ -67,11 +67,15 @@ class HealthService {
       return [warn('meta', label, 'ما في Page Access Token — الرد على فيسبوك وإنستغرام والتعليقات متوقف.')];
     }
     try {
-      const me = await axios.get(`${GRAPH}/me`, { params: { access_token: cfg.page_access_token, fields: 'id,name,instagram_business_account{id,username}' }, timeout: 10000 });
+      const me = { data: await metaService.getPageIdentity(cfg.page_access_token) };
       await metaService.ensureOwnIds();
       const ig = me.data.instagram_business_account;
-      results.push(ok('meta', label, `متصل بصفحة "${me.data.name}"${ig ? ` + إنستغرام @${ig.username}` : ''}.`));
-      if (!ig) results.push(warn('meta_ig', 'حساب إنستغرام', 'ما في حساب إنستغرام أعمال مربوط بهذه الصفحة — رسائل وتعليقات إنستغرام ما رح توصل. اربطه من إعدادات الصفحة.'));
+      results.push(ok('meta', label, `متصل بصفحة "${me.data.name || me.data.id}"${ig ? ` + إنستغرام @${ig.username}` : ''}.`));
+      if (me.data.igError) {
+        results.push(warn('meta_ig', 'حساب إنستغرام', 'الرمز ما عنده صلاحية قراءة حساب الإنستغرام وتعليقات الصفحة (pages_read_engagement / instagram_basic). أضف الصلاحيات بتطبيق Meta وأنشئ رمز جديد.'));
+      } else if (!ig) {
+        results.push(warn('meta_ig', 'حساب إنستغرام', 'ما في حساب إنستغرام أعمال مربوط بهذه الصفحة — رسائل وتعليقات إنستغرام ما رح توصل. اربطه من إعدادات الصفحة.'));
+      }
     } catch (err) {
       const m = err.response?.data?.error?.message || err.message;
       return [fail('meta', label, /expired|Session has expired/i.test(m) ? `التوكن منتهي — اعمل Page Access Token دائم جديد. (${m})` : `التوكن غير صالح: ${m}`)];

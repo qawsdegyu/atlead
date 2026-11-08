@@ -43,8 +43,8 @@ class MetaService {
       if (ig?.username) patch.instagram_username = ig.username;
       if (Object.keys(patch).length && !tokenOverride) storageService.updateSettings({ meta: { ...patch, _ids_checked: true } });
       let subNote = '';
-      if (!tokenOverride) {
-        const sub = await this.subscribePage();
+      {
+        const sub = await this.subscribePage(tokenOverride);
         subNote = sub.success ? ' — تم اشتراك الصفحة بالرسائل والتعليقات ✅' : ` — ⚠️ تعذر اشتراك الصفحة بالويب هوك: ${sub.message}`;
       }
 
@@ -60,8 +60,8 @@ class MetaService {
       // but it CAN reply to messages. If we know the Page ID, verify what matters instead:
       // subscribing the Page to the webhook (pages_manage_metadata).
       const cfg = metaConfig();
-      if (code !== 190 && cfg.page_id && !tokenOverride) {
-        const sub = await this.subscribePage();
+      if (code !== 190 && cfg.page_id) {
+        const sub = await this.subscribePage(tokenOverride);
         if (sub.success) {
           storageService.updateSettings({ meta: { _ids_checked: true } });
           return {
@@ -132,12 +132,13 @@ class MetaService {
   }
 
   // Subscribe the Page to the webhook fields the bot needs (messages + comments).
-  async subscribePage() {
+  async subscribePage(tokenOverride = null) {
     const cfg = metaConfig();
-    if (!cfg.page_access_token || !cfg.page_id) return { success: false, message: 'Page token / Page ID غير متوفر' };
+    const token = tokenOverride || cfg.page_access_token;
+    if (!token || !cfg.page_id) return { success: false, message: 'Page token / Page ID غير متوفر' };
     try {
       await axios.post(`${GRAPH}/${cfg.page_id}/subscribed_apps`, null, {
-        params: { access_token: cfg.page_access_token, subscribed_fields: 'messages,messaging_postbacks,message_echoes,feed' },
+        params: { access_token: token, subscribed_fields: 'messages,messaging_postbacks,message_echoes,feed' },
         timeout: 10000
       });
       return { success: true };

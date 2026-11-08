@@ -214,7 +214,14 @@ router.get('/notifications/log', (req, res) => {
 });
 
 router.post('/settings/test-meta', async (req, res) => {
-  const result = await metaService.testConnection(unmask(req.body.page_access_token));
+  // Use what's typed in the form (token + Page ID) — and save it, so the bot can use it right away.
+  const token = unmask(req.body.page_access_token);
+  const pageId = String(req.body.page_id || '').trim();
+  const patch = {};
+  if (token) { patch.page_access_token = token; patch._ids_checked = false; }
+  if (/^\d{5,}$/.test(pageId)) patch.page_id = pageId;
+  if (Object.keys(patch).length) storageService.updateSettings({ meta: patch });
+  const result = await metaService.testConnection();
   res.json(result);
 });
 

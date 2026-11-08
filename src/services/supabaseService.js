@@ -1,9 +1,27 @@
 const { createClient } = require('@supabase/supabase-js');
 const storageService = require('./storageService');
 
+/**
+ * Accepts any form people paste and returns the project URL Supabase expects:
+ *   https://abc.supabase.co/rest/v1/            → https://abc.supabase.co
+ *   https://supabase.com/dashboard/project/abc  → https://abc.supabase.co
+ *   abc.supabase.co                              → https://abc.supabase.co
+ */
+function normalizeSupabaseUrl(raw) {
+  if (!raw) return raw;
+  let s = String(raw).trim().replace(/^["']|["']$/g, '');
+  const dash = s.match(/supabase\.com\/dashboard\/project\/([a-z0-9]{10,})/i);
+  if (dash) return `https://${dash[1]}.supabase.co`;
+  if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
+  try {
+    const u = new URL(s);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return s;
+  }
+}
 
-
-
+const cleanKey = (k) => (k ? String(k).trim().replace(/^["']|["']$/g, '') : k);
 
 class SupabaseService {
   constructor() {
@@ -15,8 +33,8 @@ class SupabaseService {
   getClient() {
     const settings = storageService.getSettings();
     const config = settings.supabase || {};
-    const url = config.url || process.env.SUPABASE_URL;
-    const key = config.service_role_key || config.anon_key || process.env.SUPABASE_KEY;
+    const url = normalizeSupabaseUrl(config.url || process.env.SUPABASE_URL);
+    const key = cleanKey(config.service_role_key || config.anon_key || process.env.SUPABASE_KEY);
 
     if (!url || !key || config.enabled === false) {
       return null;
@@ -41,8 +59,8 @@ class SupabaseService {
 
   async testConnection(urlOverride = null, keyOverride = null) {
     const settings = storageService.getSettings();
-    const url = urlOverride || settings.supabase?.url;
-    const key = keyOverride || settings.supabase?.service_role_key || settings.supabase?.anon_key;
+    const url = normalizeSupabaseUrl(urlOverride || settings.supabase?.url || process.env.SUPABASE_URL);
+    const key = cleanKey(keyOverride || settings.supabase?.service_role_key || settings.supabase?.anon_key || process.env.SUPABASE_KEY);
 
     if (!url || !key) {
       return { success: false, message: 'رابط Supabase URL أو المفتاح غير مدخل.' };

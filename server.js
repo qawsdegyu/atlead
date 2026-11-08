@@ -224,6 +224,11 @@ async function bootstrap() {
     await supabaseService.saveSettings(storageService.getSettings());
   }
 
+  if (storageService.isServerless()) {
+    console.warn('⚠️ Serverless hosting detected (Vercel): WhatsApp QR, 10s delayed replies, follow-ups, daily report and backups need an always-on server (Railway).');
+    return;
+  }
+
   // 3. Restore WhatsApp QR session (if previously linked)
   await waQrService.autoStart();
 
@@ -248,6 +253,10 @@ async function bootstrap() {
 }
 
 bootstrap().catch(err => console.error('Bootstrap error:', err.message));
+
+// Vercel (serverless) imports the app instead of running a server.
+module.exports = app;
+if (process.env.VERCEL) return;
 
 app.listen(PORT, () => {
   console.log(`====================================================`);

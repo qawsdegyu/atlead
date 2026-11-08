@@ -161,6 +161,9 @@ class HealthService {
 
   checkSecurity() {
     const out = [];
+    if (storageService.isServerless()) {
+      out.push(fail('hosting', 'الاستضافة (Vercel)', 'Vercel ما بيشغّل سيرفر دايم: ربط واتساب بالـ QR، والرد بعد 10 ثواني، والمتابعة، والتقرير اليومي، والنسخ الاحتياطي ما بيشتغلوا، والبيانات المحلية بتنمسح. انقل البوت على Railway (الخطوات بملف DEPLOY_RAILWAY.md).'));
+    }
     out.push(process.env.ADMIN_PASSWORD
       ? ok('admin', 'حماية لوحة التحكم', 'لوحة التحكم محمية بكلمة سر.')
       : warn('admin', 'حماية لوحة التحكم', 'ما في ADMIN_PASSWORD — أي حدا بيعرف الرابط بيدخل. ضيفه بملف .env قبل الرفع على النت.'));

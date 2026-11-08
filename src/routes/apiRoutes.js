@@ -18,7 +18,7 @@ const notificationService = require('../services/notificationService');
 
 // Multer storage for voice uploads & knowledge files
 const uploadDir = storageService.getUploadsDir();
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (err) { console.warn('[uploads] cannot create folder:', err.message); }
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),

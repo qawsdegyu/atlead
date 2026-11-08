@@ -2,7 +2,9 @@ const fs = require('fs');
 const path = require('path');
 
 // Persistent storage: DATA_DIR env, or the Railway volume automatically, else ./data.
-const CUSTOM_DATA_DIR = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || '';
+// On Vercel the project folder is read-only: /tmp is the only writable place (temporary!).
+const IS_SERVERLESS = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const CUSTOM_DATA_DIR = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || (IS_SERVERLESS ? path.join(require('os').tmpdir(), 'atlead-data') : '');
 const DATA_DIR = CUSTOM_DATA_DIR ? path.resolve(CUSTOM_DATA_DIR) : path.join(__dirname, '../../data');
 // Voice notes / images: inside the volume in production so they survive redeploys.
 const UPLOADS_DIR = CUSTOM_DATA_DIR ? path.join(DATA_DIR, 'uploads') : path.join(__dirname, '../../uploads');
@@ -277,6 +279,10 @@ class StorageService {
     state[key] = value;
     writeJsonFile(STATE_FILE, state);
     return value;
+  }
+
+  isServerless() {
+    return IS_SERVERLESS;
   }
 
   getDataDir() {

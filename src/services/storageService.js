@@ -1,8 +1,15 @@
 const fs = require('fs');
 const path = require('path');
 
-// DATA_DIR env → put data on a persistent volume in production (e.g. /data on Railway).
-const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, '../../data');
+// Persistent storage: DATA_DIR env, or the Railway volume automatically, else ./data.
+const CUSTOM_DATA_DIR = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || '';
+const DATA_DIR = CUSTOM_DATA_DIR ? path.resolve(CUSTOM_DATA_DIR) : path.join(__dirname, '../../data');
+// Voice notes / images: inside the volume in production so they survive redeploys.
+const UPLOADS_DIR = CUSTOM_DATA_DIR ? path.join(DATA_DIR, 'uploads') : path.join(__dirname, '../../uploads');
+const BACKUPS_DIR = CUSTOM_DATA_DIR ? path.join(DATA_DIR, 'backups') : path.join(__dirname, '../../backups');
+for (const dir of [DATA_DIR, UPLOADS_DIR]) {
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
+}
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const CONVERSATIONS_FILE = path.join(DATA_DIR, 'conversations.json');
 const LEADS_FILE = path.join(DATA_DIR, 'leads.json');
@@ -274,6 +281,14 @@ class StorageService {
 
   getDataDir() {
     return DATA_DIR;
+  }
+
+  getUploadsDir() {
+    return UPLOADS_DIR;
+  }
+
+  getBackupsDir() {
+    return BACKUPS_DIR;
   }
 
   getComments() {

@@ -164,7 +164,7 @@ class HealthService {
     out.push(process.env.ADMIN_PASSWORD
       ? ok('admin', 'حماية لوحة التحكم', 'لوحة التحكم محمية بكلمة سر.')
       : warn('admin', 'حماية لوحة التحكم', 'ما في ADMIN_PASSWORD — أي حدا بيعرف الرابط بيدخل. ضيفه بملف .env قبل الرفع على النت.'));
-    const dash = storageService.getSettings().notifications?.dashboard_url || '';
+    const dash = notificationService.getConfig().dashboardUrl || '';
     if (!dash || /localhost|127\.0\.0\.1/.test(dash)) {
       out.push(warn('public_url', 'رابط السيرفر', 'السيرفر على localhost — Meta ما بتقدر توصل للويب هوك. لازم ترفعه على دومين HTTPS (أو ngrok للتجربة)، وتحط الرابط بإعدادات الإيميل.'));
     } else if (!dash.startsWith('https://')) {

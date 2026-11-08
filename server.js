@@ -20,6 +20,9 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Public health check for the hosting platform (Railway) — no data exposed.
+app.get('/healthz', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()) }));
+
 // Webhooks must stay public (Meta calls them). Everything else = admin dashboard.
 app.use('/webhook', webhookRoutes);
 
@@ -46,7 +49,7 @@ app.use((req, res, next) => {
 
 // Static files (Dashboard UI & Uploads)
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(storageService.getUploadsDir()));
 
 // Mount routes
 app.use('/api', apiRoutes);

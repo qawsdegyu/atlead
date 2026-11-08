@@ -42,7 +42,7 @@ class NotificationService {
       gmailUser: (n.gmail_user || '').trim(),
       gmailPassword: (n.gmail_app_password || '').replace(/\s+/g, ''),
       recipients: (Array.isArray(n.recipients) ? n.recipients : []).map(e => String(e).trim()).filter(isEmail),
-      dashboardUrl: (n.dashboard_url || '').replace(/\/+$/, ''),
+      dashboardUrl: (n.dashboard_url && !/localhost|127\.0\.0\.1/.test(n.dashboard_url) ? n.dashboard_url : (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : n.dashboard_url || '')).replace(/\/+$/, ''),
       notifyNewMessages: n.notify_new_messages_after_handoff !== false
     };
   }

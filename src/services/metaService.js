@@ -19,7 +19,7 @@ const notificationService = require('./notificationService');
 
 const GRAPH_API_VERSION = 'v21.0';
 const GRAPH = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
+const UPLOADS_DIR = storageService.getUploadsDir();
 
 const metaConfig = () => storageService.getSettings().meta || {};
 const ECHO_SETTLE_MS = Number(process.env.ECHO_SETTLE_MS || 3000);

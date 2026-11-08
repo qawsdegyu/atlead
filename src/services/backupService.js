@@ -8,14 +8,14 @@ const path = require('path');
 const storageService = require('./storageService');
 const businessHours = require('./businessHours');
 
-// With DATA_DIR (persistent volume) backups live inside it, so they survive redeploys too.
-const BACKUP_DIR = process.env.DATA_DIR ? path.join(path.resolve(process.env.DATA_DIR), 'backups') : path.join(__dirname, '../../backups');
+// On a persistent volume backups live inside it, so they survive redeploys too.
+const BACKUP_DIR = storageService.getBackupsDir();
 const BACKUP_HOUR_MINUTES = 3 * 60;
 
 function copyDir(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    if (entry.name.endsWith('.tmp') || entry.name.includes('.corrupted-') || entry.name === 'backups') continue;
+    if (entry.name.endsWith('.tmp') || entry.name.includes('.corrupted-') || entry.name === 'backups' || entry.name === 'uploads') continue;
     const s = path.join(src, entry.name);
     const d = path.join(dest, entry.name);
     if (entry.isDirectory()) copyDir(s, d);

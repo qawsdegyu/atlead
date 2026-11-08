@@ -17,7 +17,7 @@ const makeWASocket = baileys.makeWASocket || baileys.default;
 const { DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, Browsers, normalizeMessageContent, jidNormalizedUser } = baileys;
 
 const logger = pino({ level: 'silent' });
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
+const UPLOADS_DIR = storageService.getUploadsDir();
 const MAX_MESSAGE_AGE_SECONDS = 120; // don't answer old history synced after reconnecting
 
 const digits = (s) => String(s || '').replace(/\D/g, '').replace(/^00/, '');

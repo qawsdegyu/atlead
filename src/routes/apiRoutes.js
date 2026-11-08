@@ -17,7 +17,7 @@ const crmService = require('../services/crmService');
 const notificationService = require('../services/notificationService');
 
 // Multer storage for voice uploads & knowledge files
-const uploadDir = path.join(__dirname, '../../uploads');
+const uploadDir = storageService.getUploadsDir();
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({

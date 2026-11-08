@@ -197,7 +197,7 @@ class WhatsAppService {
         timeout: 20000
       });
 
-      const uploadsDir = path.join(__dirname, '../../uploads');
+      const uploadsDir = storageService.getUploadsDir();
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
       const filePath = path.join(uploadsDir, `${ext === 'ogg' ? 'voice' : 'media'}_${Date.now()}_${mediaId}.${ext}`);

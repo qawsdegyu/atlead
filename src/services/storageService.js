@@ -66,7 +66,15 @@ function writeJsonFile(filePath, data) {
   }
 }
 
+// Every change is reported here (supabaseSync listens and mirrors it to Supabase).
+let changeListener = null;
+const notify = (type, id) => { try { if (changeListener && id) changeListener(type, id); } catch { /* never break a write */ } };
+
 class StorageService {
+  setChangeListener(fn) {
+    changeListener = fn;
+  }
+
   getSettings() {
     return readJsonFile(SETTINGS_FILE, {});
   }
@@ -116,6 +124,7 @@ class StorageService {
         updated_at: now
       };
       writeJsonFile(CONVERSATIONS_FILE, list);
+      notify('conversation', list[index].id);
       return list[index];
     } else {
       const newConv = {
@@ -138,6 +147,7 @@ class StorageService {
       };
       list.unshift(newConv);
       writeJsonFile(CONVERSATIONS_FILE, list);
+      notify('conversation', newConv.id);
       return newConv;
     }
   }
@@ -176,6 +186,7 @@ class StorageService {
     conv.updated_at = newMsg.created_at;
 
     writeJsonFile(CONVERSATIONS_FILE, list);
+    notify('conversation', convId);
     return newMsg;
   }
 
@@ -186,6 +197,7 @@ class StorageService {
     if (!msg) return null;
     Object.assign(msg, patch);
     writeJsonFile(CONVERSATIONS_FILE, list);
+    notify('conversation', convId);
     return msg;
   }
 
@@ -219,6 +231,7 @@ class StorageService {
       conv.pause_source = null;
     }
     writeJsonFile(CONVERSATIONS_FILE, list);
+    notify('conversation', convId);
     return conv;
   }
 
@@ -239,6 +252,7 @@ class StorageService {
         updated_at: now
       };
       writeJsonFile(LEADS_FILE, list);
+      notify('lead', list[index].id);
       return list[index];
     } else {
       const newLead = {
@@ -263,6 +277,7 @@ class StorageService {
       };
       list.unshift(newLead);
       writeJsonFile(LEADS_FILE, list);
+      notify('lead', newLead.id);
       return newLead;
     }
   }
@@ -309,6 +324,7 @@ class StorageService {
     if (index >= 0) {
       list[index] = { ...list[index], ...commentData };
       writeJsonFile(COMMENTS_FILE, list);
+      notify('comment', list[index].comment_id);
       return list[index];
     } else {
       const newComment = {
@@ -329,6 +345,7 @@ class StorageService {
       };
       list.unshift(newComment);
       writeJsonFile(COMMENTS_FILE, list);
+      notify('comment', newComment.comment_id);
       return newComment;
     }
   }

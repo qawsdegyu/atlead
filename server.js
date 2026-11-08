@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 
 const storageService = require('./src/services/storageService');
+// Registers the storage change listener right away: every change is mirrored to Supabase.
+const supabaseSync = require('./src/services/supabaseSync');
 const apiRoutes = require('./src/routes/apiRoutes');
 const webhookRoutes = require('./src/routes/webhookRoutes');
 
@@ -228,6 +230,9 @@ async function bootstrap() {
     console.warn('⚠️ Serverless hosting detected (Vercel): WhatsApp QR, 10s delayed replies, follow-ups, daily report and backups need an always-on server (Railway).');
     return;
   }
+
+  // 2b. Send everything to Supabase (backfills data saved before Supabase was connected)
+  setTimeout(() => supabaseSync.fullSync().catch(err => console.error('[Supabase] initial sync error:', err.message)), 10000);
 
   // 3. Restore WhatsApp QR session (if previously linked)
   await waQrService.autoStart();

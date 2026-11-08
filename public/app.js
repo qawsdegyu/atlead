@@ -772,6 +772,7 @@ async function loadSettings() {
       document.getElementById('bk-keep').value = String(s.backup?.keep_days ?? 14);
       document.getElementById('image-understanding-enabled').checked = s.ai?.image_understanding_enabled !== false;
       loadBackupInfo();
+      loadSupabaseSyncStatus();
 
       // AI
       document.getElementById('ai-provider').value = s.ai?.provider || 'gemini';
@@ -1329,4 +1330,36 @@ document.getElementById('btn-backup-now')?.addEventListener('click', async () =>
   const data = await (await fetch('/api/backup/now', { method: 'POST' })).json();
   showToast(data.message, data.success ? 'success' : 'error');
   loadBackupInfo();
+});
+
+// 11. SUPABASE SYNC STATUS
+async function loadSupabaseSyncStatus() {
+  const box = document.getElementById('supabase-sync-status');
+  if (!box) return;
+  try {
+    const s = await (await fetch('/api/supabase/status')).json();
+    if (!s.enabled) {
+      box.innerHTML = '⚠️ Supabase مش مربوط — المحادثات محفوظة على السيرفر بس. أول ما تربطه، كل البيانات القديمة بتنرفع لحالها.';
+      return;
+    }
+    const r = s.remote || {};
+    const row = (label, local, remote) => `<div>${label}: <b>${remote ?? '?'}</b> محفوظ بـ Supabase من أصل ${local}</div>`;
+    box.innerHTML =
+      row('المحادثات', s.local.conversations, r.conversations) +
+      row('الرسائل', s.local.messages, r.messages) +
+      row('العملاء', s.local.leads, r.leads) +
+      row('التعليقات', s.local.comments, r.comments) +
+      (s.pending ? `<div style="color:#fbbf24;">⏳ ${s.pending} تغيير بانتظار الحفظ (بيعيد المحاولة تلقائياً)</div>` : '<div style="color:#34d399;">✅ كل تغيير بينحفظ تلقائياً خلال ثانيتين</div>') +
+      (s.last_full_sync ? `<div>آخر فحص كامل: ${formatTime(s.last_full_sync)}</div>` : '') +
+      (s.last_error ? `<div style="color:#f87171;">${escapeHtml(s.last_error.message)}</div>` : '');
+  } catch (e) {
+    box.textContent = 'تعذر قراءة حالة المزامنة';
+  }
+}
+
+document.getElementById('btn-supabase-sync')?.addEventListener('click', async () => {
+  showToast('جاري حفظ كل البيانات بـ Supabase...', 'info');
+  const data = await (await fetch('/api/supabase/sync', { method: 'POST' })).json();
+  showToast(data.message, data.success ? 'success' : 'error');
+  loadSupabaseSyncStatus();
 });

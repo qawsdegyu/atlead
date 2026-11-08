@@ -127,7 +127,13 @@ class HealthService {
     if (!cfg.service_role_key && cfg.anon_key) {
       return warn('supabase', label, 'شغالة، بس انت مستخدم anon key — الأفضل Service Role Key.');
     }
-    return ok('supabase', label, 'متصلة وكل الجداول والأعمدة موجودة ✅');
+    const sync = await require('./supabaseSync').status();
+    const r = sync.remote || {};
+    const counts = `${r.conversations ?? '?'} محادثة، ${r.messages ?? '?'} رسالة، ${r.leads ?? '?'} عميل، ${r.comments ?? '?'} تعليق محفوظين`;
+    if (sync.pending > 0 || sync.last_error) {
+      return warn('supabase', label, `متصلة — ${counts}. في ${sync.pending} تغيير بانتظار الحفظ (بيعيد المحاولة كل دقيقة)${sync.last_error ? ': ' + sync.last_error.message : ''}.`);
+    }
+    return ok('supabase', label, `متصلة، وكل المحادثات بتنحفظ تلقائياً ✅ — ${counts}.`);
   }
 
   async checkSheets() {

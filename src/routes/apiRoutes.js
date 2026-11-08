@@ -119,9 +119,21 @@ router.post('/settings', (req, res) => {
   if (body.meta?.page_access_token) body.meta._ids_checked = false;
 
   const updated = storageService.updateSettings(body);
+  // Supabase just connected/changed → push all existing data to it.
+  if (body.supabase) setTimeout(() => require('../services/supabaseSync').fullSync().catch(() => {}), 1000);
   if (body.meta?.page_access_token) metaService.ensureOwnIds().catch(() => {});
   if (body.whatsapp?.mode === 'cloud_api') waQrService.stop().catch(() => {});
   res.json({ success: true, message: 'تم حفظ وتحديث الإعدادات بنجاح!', settings: maskSettings(updated) });
+});
+
+// --- SUPABASE SYNC ---
+router.get('/supabase/status', async (req, res) => {
+  res.json({ success: true, ...(await require('../services/supabaseSync').status()) });
+});
+
+router.post('/supabase/sync', async (req, res) => {
+  const result = await require('../services/supabaseSync').fullSync();
+  res.json(result);
 });
 
 router.post('/settings/test-supabase', async (req, res) => {

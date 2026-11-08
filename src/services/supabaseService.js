@@ -28,6 +28,17 @@ class SupabaseService {
     this._client = null;
     this._clientKey = null;
     this._convUuidCache = new Map(); // local conversation id -> supabase uuid
+    this._lastHash = { conversation: new Map(), lead: new Map(), comment: new Map() }; // skip unchanged writes
+  }
+
+  // Normalised URL of the connected project (used to detect a switch to another database).
+  currentTarget() {
+    const config = storageService.getSettings().supabase || {};
+    return normalizeSupabaseUrl(config.url || process.env.SUPABASE_URL) || null;
+  }
+
+  _hash(record) {
+    return require('crypto').createHash('sha1').update(JSON.stringify(record)).digest('hex');
   }
 
   getClient() {
@@ -220,7 +231,7 @@ class SupabaseService {
         is_bot_active: conv.is_bot_active !== false,
         handoff_at: conv.handoff_at || null,
         handoff_reason: conv.handoff_reason || null,
-        last_message_at: conv.last_message_at || new Date().toISOString(),
+        last_message_at: conv.last_message_at || conv.updated_at || conv.created_at || null,
         metadata: { local_id: conv.id },
         // profile / memory
         local_id: conv.id,
@@ -247,8 +258,15 @@ class SupabaseService {
         follow_up_count: conv.follow_up_count || 0,
         last_follow_up_at: conv.last_follow_up_at || null
       };
+      const hash = this._hash(record);
+      if (this._lastHash.conversation.get(conv.id) === hash && this._convUuidCache.has(conv.id)) {
+        return { id: this._convUuidCache.get(conv.id), unchanged: true };
+      }
       const data = await this._upsert('conversations', record, 'channel,external_user_id', BASE_CONVERSATION_KEYS);
-      if (data?.id) this._convUuidCache.set(conv.id, data.id);
+      if (data?.id) {
+        this._convUuidCache.set(conv.id, data.id);
+        this._lastHash.conversation.set(conv.id, hash);
+      }
       return data;
     } catch (err) {
       console.error('Supabase saveConversation error:', err.message);
@@ -264,37 +282,77 @@ class SupabaseService {
     return saved?.id || null;
   }
 
-  async saveMessage(msg, convOrId = null) {
-    if (!this.getClient() || !msg) return null;
-    try {
-      const conv = typeof convOrId === 'string' ? storageService.getConversationById(convOrId) : convOrId;
-      const conversationUuid = conv ? await this._resolveConversationUuid(conv) : null;
-      const quoted = msg.reply_to_id ? storageService.getConversationById(conv?.id)?.messages?.find(m => m.id === msg.reply_to_id) : null;
+  _messageRecord(msg, conv, conversationUuid) {
+    const quoted = msg.reply_to_id ? conv?.messages?.find(m => m.id === msg.reply_to_id) : null;
+    return {
+      conversation_id: conversationUuid,
+      sender: msg.sender,
+      content: msg.content || '',
+      media_type: msg.media_type || 'text',
+      media_url: msg.media_url || null,
+      is_voice: !!msg.is_voice,
+      voice_transcript: msg.voice_transcript || null,
+      audio_duration_seconds: msg.audio_duration || null,
+      raw_payload: { local_id: msg.id, reply_to_id: msg.reply_to_id || null },
+      created_at: msg.created_at || new Date().toISOString(),
+      local_id: msg.id,
+      conversation_local_id: conv?.id || null,
+      external_message_id: msg.external_message_id || null,
+      reply_to_external_id: quoted?.external_message_id || null,
+      reply_to_content: msg.reply_to_content || null,
+      delivery_status: msg.delivery_status || null,
+      is_follow_up: !!msg.is_follow_up
+    };
+  }
 
-      const record = {
-        conversation_id: conversationUuid,
-        sender: msg.sender,
-        content: msg.content || '',
-        media_type: msg.media_type || 'text',
-        media_url: msg.media_url || null,
-        is_voice: !!msg.is_voice,
-        voice_transcript: msg.voice_transcript || null,
-        audio_duration_seconds: msg.audio_duration || null,
-        raw_payload: { local_id: msg.id, reply_to_id: msg.reply_to_id || null },
-        created_at: msg.created_at || new Date().toISOString(),
-        local_id: msg.id,
-        conversation_local_id: conv?.id || null,
-        external_message_id: msg.external_message_id || null,
-        reply_to_external_id: quoted?.external_message_id || null,
-        reply_to_content: msg.reply_to_content || null,
-        delivery_status: msg.delivery_status || null,
-        is_follow_up: !!msg.is_follow_up
-      };
-      return await this._upsert('messages', record, 'local_id', BASE_MESSAGE_KEYS);
-    } catch (err) {
-      console.error('Supabase saveMessage error:', err.message);
-      return null;
+  /**
+   * Messages are written by the sync (supabaseSync.js) in order and in batches,
+   * with automatic retry. Calling this just makes sure the conversation is queued.
+   */
+  async saveMessage(msg, convOrId = null) {
+    const convId = typeof convOrId === 'string' ? convOrId : convOrId?.id;
+    if (convId) require('./supabaseSync').markDirty('conversation', convId);
+    return null;
+  }
+
+  // Upsert many messages at once (chunks of 200). Returns true when all were stored.
+  async saveMessagesBulk(msgs, conv, conversationUuid) {
+    const client = this.getClient();
+    if (!client || !msgs.length) return !!client;
+    const records = msgs.map(m => this._messageRecord(m, conv, conversationUuid));
+    for (let i = 0; i < records.length; i += 200) {
+      let chunk = records.slice(i, i + 200);
+      let { error } = await client.from('messages').upsert(chunk, { onConflict: 'local_id' });
+      if (error && (error.code === 'PGRST204' || error.code === '42703' || /column/i.test(error.message))) {
+        if (!this._warnedSchema) {
+          console.warn('⚠️ Supabase schema is outdated — run supabase_schema.sql again in the SQL Editor.');
+          this._warnedSchema = true;
+        }
+        chunk = chunk.map(r => { const b = {}; for (const k of BASE_MESSAGE_KEYS) if (k in r) b[k] = r[k]; return b; });
+        ({ error } = await client.from('messages').insert(chunk));
+      }
+      if (error) {
+        console.warn('Supabase messages upsert warning:', error.message);
+        return false;
+      }
     }
+    return true;
+  }
+
+  // Row counts in Supabase (for the dashboard status).
+  async countRows() {
+    const client = this.getClient();
+    if (!client) return null;
+    const out = {};
+    for (const table of ['conversations', 'messages', 'leads', 'comments']) {
+      try {
+        const { count, error } = await client.from(table).select('*', { count: 'exact', head: true });
+        out[table] = error ? null : count;
+      } catch {
+        out[table] = null;
+      }
+    }
+    return out;
   }
 
   async saveLead(lead) {
@@ -336,7 +394,11 @@ class SupabaseService {
         const uuid = await this._resolveConversationUuid(lead.conversation_id);
         if (uuid) record.conversation_id = uuid;
       }
-      return await this._upsert('leads', record, 'local_id', BASE_LEAD_KEYS);
+      const hash = this._hash(record);
+      if (this._lastHash.lead.get(lead.id) === hash) return { unchanged: true };
+      const data = await this._upsert('leads', record, 'local_id', BASE_LEAD_KEYS);
+      if (data) this._lastHash.lead.set(lead.id, hash);
+      return data;
     } catch (err) {
       console.error('Supabase saveLead error:', err.message);
       return null;
@@ -364,7 +426,11 @@ class SupabaseService {
         conversation_local_id: comment.conversation_id || null,
         processed_at: comment.processed_at || null
       };
-      return await this._upsert('comments', record, 'comment_id', BASE_COMMENT_KEYS);
+      const hash = this._hash(record);
+      if (this._lastHash.comment.get(comment.comment_id) === hash) return { unchanged: true };
+      const data = await this._upsert('comments', record, 'comment_id', BASE_COMMENT_KEYS);
+      if (data) this._lastHash.comment.set(comment.comment_id, hash);
+      return data;
     } catch (err) {
       console.error('Supabase saveComment error:', err.message);
       return null;

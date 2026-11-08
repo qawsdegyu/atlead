@@ -47,6 +47,7 @@ class SchedulerService {
         await require('./crmService').upsertLead(conv);
       }
     }));
+    await step('supabase sync', () => require('./supabaseSync').tick());
     await step('follow-up', () => followUpService.runOnce(getAdapter));
     await step('daily report', () => reportService.maybeSend());
     await step('backup', () => backupService.maybeRun());

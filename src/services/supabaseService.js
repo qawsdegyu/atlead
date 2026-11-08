@@ -210,6 +210,10 @@ class SupabaseService {
     }
     if (error) {
       console.warn(`Supabase ${table} upsert warning:`, error.message);
+      if (/row-level security/i.test(error.message) && !this._warnedKey) {
+        console.warn('⚠️ SUPABASE_KEY is the public (anon/publishable) key — use the Secret / service_role key so the bot can save data.');
+        this._warnedKey = true;
+      }
       return null;
     }
     return data;

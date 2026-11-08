@@ -127,6 +127,14 @@ class HealthService {
     if (!cfg.service_role_key && cfg.anon_key) {
       return warn('supabase', label, 'شغالة، بس انت مستخدم anon key — الأفضل Service Role Key.');
     }
+    // Reading works even with the public key (RLS just returns nothing) — so test a real WRITE.
+    const { error: writeError } = await client.from('app_settings').upsert({ key: '_healthcheck', value: { at: new Date().toISOString() } }, { onConflict: 'key' });
+    if (writeError) {
+      return fail('supabase', label, /row-level security|permission denied|42501/i.test(writeError.message)
+        ? 'المفتاح المستخدم هو المفتاح العام (anon / publishable) وما بيقدر يحفظ إشي. حط المفتاح السري بدالُه: Supabase ← Project Settings ← API Keys ← Secret key (sb_secret_...) أو service_role.'
+        : `فشل الحفظ بـ Supabase: ${writeError.message}`);
+    }
+
     const sync = await require('./supabaseSync').status();
     const r = sync.remote || {};
     const counts = `${r.conversations ?? '?'} محادثة، ${r.messages ?? '?'} رسالة، ${r.leads ?? '?'} عميل، ${r.comments ?? '?'} تعليق محفوظين`;

@@ -1,0 +1,29 @@
+{
+  "name": "atlead-chat",
+  "version": "1.0.0",
+  "description": "atlead AI sales chatbot — WhatsApp (QR), Instagram & Facebook, CRM, Google Sheets, Gmail alerts",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "axios": "^1.21.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "multer": "^2.5.0",
+    "nodemailer": "^10.4.0",
+    "pino": "^10.4.0",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

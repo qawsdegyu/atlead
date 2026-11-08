@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>atlead | منصة إدارة أنظمة المبيعات الذكية والشات بوت</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-badge">at</div>
+        <div class="brand-text">
+          <h1>atlead.</h1>
+          <span>From Leads to Revenue</span>
+        </div>
+      </div>
+
+      <ul class="nav-links">
+        <li class="nav-item active" data-tab="inbox">
+          <i class="fa-solid fa-comments"></i>
+          <span>صندوق المحادثات الموحد</span>
+        </li>
+        <li class="nav-item" data-tab="crm">
+          <i class="fa-solid fa-users-gear"></i>
+          <span>إدارة الصفقات والـ CRM</span>
+        </li>
+        <li class="nav-item" data-tab="comments">
+          <i class="fa-solid fa-comment-dots"></i>
+          <span>التعليقات والتحويل للخاص</span>
+        </li>
+        <li class="nav-item" data-tab="simulator">
+          <i class="fa-solid fa-robot"></i>
+          <span>مختبر تجربة البوت والفويس</span>
+        </li>
+        <li class="nav-item" data-tab="knowledge">
+          <i class="fa-solid fa-book-open"></i>
+          <span>قاعدة المعرفة والأعمال السابقة</span>
+        </li>
+        <li class="nav-item" data-tab="settings">
+          <i class="fa-solid fa-sliders"></i>
+          <span>إعدادات الربط والـ APIs</span>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div class="system-status">
+          <span>النظام: متصل ويعمل</span>
+          <div class="status-dot"></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+      <!-- TOP NAVBAR -->
+      <header class="top-navbar">
+        <div class="top-navbar-title">
+          <h2 id="current-tab-title">صندوق المحادثات الموحد</h2>
+        </div>
+
+        <div class="top-badges">
+          <div class="badge-pill info" id="pill-meta" title="حالة ربط Meta (فيسبوك وإنستغرام)">
+            <i class="fa-brands fa-meta"></i>
+            <span>Meta API</span>
+          </div>
+          <div class="badge-pill success" id="pill-whatsapp" title="حالة ربط واتساب">
+            <i class="fa-brands fa-whatsapp"></i>
+            <span>WhatsApp</span>
+          </div>
+          <div class="badge-pill warning" id="pill-supabase" title="حالة قاعدة بيانات Supabase">
+            <i class="fa-solid fa-database"></i>
+            <span>Supabase</span>
+          </div>
+          <div class="badge-pill info" id="pill-sheets" title="حالة ربط Google Sheets">
+            <i class="fa-solid fa-table"></i>
+            <span>Google Sheets</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- 1. INBOX TAB (Omnichannel Inbox) -->
+      <section class="view-panel active" id="view-inbox">
+        <div class="inbox-layout">
+
+          <!-- Left: Conversation List -->
+          <div class="chat-list-pane">
+            <div class="chat-list-header">
+              <div class="search-input-wrap">
+                <i class="fa-solid fa-search"></i>
+                <input type="text" id="conv-search" class="search-input" placeholder="بحث عن عميل أو هاتف...">
+              </div>
+              <div class="filter-tags">
+                <span class="filter-chip active" data-filter="all">الكل</span>
+                <span class="filter-chip" data-filter="whatsapp">واتساب</span>
+                <span class="filter-chip" data-filter="instagram_dm">إنستغرام</span>
+                <span class="filter-chip" data-filter="facebook_messenger">ماسنجر</span>
+                <span class="filter-chip" data-filter="deal_closing">جاهز للديل 🎯</span>
+              </div>
+            </div>
+
+            <ul class="conversation-scroll" id="conversation-list">
+              <!-- Rendered via JS -->
+            </ul>
+          </div>
+
+          <!-- Middle: Chat Messages -->
+          <div class="chat-main-pane">
+            <div class="chat-header">
+              <div class="chat-user-info">
+                <div class="channel-avatar whatsapp" id="active-chat-avatar">
+                  <i class="fa-brands fa-whatsapp"></i>
+                </div>
+                <div>
+                  <h3 id="active-chat-name" style="font-size: 15px;">اختر محادثة لعرضها</h3>
+                  <span id="active-chat-channel" style="font-size: 12px; color: var(--text-muted);">-</span>
+                </div>
+              </div>
+
+              <div id="active-chat-badge-area">
+                <!-- Bot status badge -->
+              </div>
+            </div>
+
+            <div class="chat-messages-container" id="chat-messages">
+              <div style="text-align: center; color: var(--text-muted); margin-top: 100px;">
+                <i class="fa-regular fa-comments" style="font-size: 40px; margin-bottom: 12px; opacity: 0.4;"></i>
+                <p>اختر محادثة من القائمة للبدء أو اختبار النظام</p>
+              </div>
+            </div>
+
+            <!-- Manual Reply Input -->
+            <form class="chat-input-area" id="manual-reply-form">
+              <input type="text" id="manual-reply-text" class="chat-input" placeholder="اكتب رداً يدوياً للعميل كـ موظف بشري..." autocomplete="off">
+              <button type="submit" class="btn btn-primary">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>إرسال</span>
+              </button>
+            </form>
+          </div>
+
+          <!-- Right: Customer & Deal Insight Panel -->
+          <div class="chat-side-pane">
+            
+            <!-- Bot State Control -->
+            <div class="bot-status-card" id="bot-toggle-card">
+              <div class="toggle-switch-wrapper">
+                <div>
+                  <h4 style="font-size: 14px;">الرد الآلي للشات بوت</h4>
+                  <span style="font-size: 11px; color: var(--text-muted);" id="bot-status-label">مفعل</span>
+                </div>
+                <button type="button" class="btn btn-danger btn-sm" id="btn-toggle-bot">
+                  <i class="fa-solid fa-pause"></i> إيقاف البوت
+                </button>
+              </div>
+              <div id="handoff-alert-box" style="display: none; font-size: 11.5px; color: #fbbf24; background: rgba(245, 158, 11, 0.1); padding: 8px 10px; border-radius: 6px;">
+                <i class="fa-solid fa-bell"></i> العميل وصل لمرحلة الديل وتم إيقاف البوت تلقائياً حتى يستلم الموظف البشري.
+              </div>
+            </div>
+
+            <!-- Lead Qualification Info -->
+            <div class="glass-card" style="padding: 16px; margin-bottom: 0;">
+              <h4 style="font-size: 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-id-card-clip" style="color: var(--primary);"></i>
+                بيانات وتأهيل العميل
+              </h4>
+
+              <div class="lead-metric">
+                <span class="lead-metric-title">مرحلة العميل:</span>
+                <span class="lead-metric-value" id="side-lead-stage">-</span>
+              </div>
+              <div class="lead-metric">
+                <span class="lead-metric-title">التصنيف:</span>
+                <span class="lead-metric-value" id="side-lead-class">-</span>
+              </div>
+              <div class="lead-metric">
+                <span class="lead-metric-title">نسبة الشراء والاهتمام:</span>
+                <span class="lead-metric-value" id="side-lead-score">-</span>
+              </div>
+
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="side-score-bar" style="width: 20%;"></div>
+              </div>
+
+              <div style="margin-top: 14px;">
+                <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">المشكلة المحددة:</span>
+                <p id="side-lead-problem" style="font-size: 12.5px; color: #e2e8f0; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">-</p>
+              </div>
+
+              <div style="margin-top: 10px;">
+                <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">الحل المقترح:</span>
+                <p id="side-lead-solution" style="font-size: 12.5px; color: #38bdf8; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">-</p>
+              </div>
+
+              <div style="margin-top: 16px; display: flex; gap: 8px;">
+                <button class="btn btn-secondary" style="flex: 1; font-size: 12px;" id="btn-sync-current-lead">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                  <span>ترحيل لـ Google Sheet</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 2. CRM & DEALS TAB -->
+      <section class="view-panel" id="view-crm">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <div>
+            <h3 style="font-size: 18px;">سجل العملاء وإدارة الصفقات (Leads & Deals CRM)</h3>
+            <p style="font-size: 13px; color: var(--text-muted);">بيانات العملاء، نسب الشراء، ومراحل الاتفاق المتزامنة مع Google Sheets و Supabase</p>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-secondary" id="btn-open-sheet-script-modal">
+              <i class="fa-brands fa-google"></i>
+              <span>طريقة ربط Google Sheet</span>
+            </button>
+            <button class="btn btn-primary" id="btn-sync-all-sheets">
+              <i class="fa-solid fa-arrows-rotate"></i>
+              <span>مزامنة كافة الصفقات مع Google Sheet</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Metrics Overview -->
+        <div class="grid-4" style="margin-bottom: 24px;">
+          <div class="stat-card">
+            <div>
+              <div class="stat-title">إجمالي المحادثات</div>
+              <div class="stat-val" id="stat-total-convs">0</div>
+            </div>
+            <div class="stat-icon" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8;">
+              <i class="fa-solid fa-comments"></i>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div>
+              <div class="stat-title">عملاء مؤهلين (Hot Leads)</div>
+              <div class="stat-val" id="stat-hot-leads" style="color: #fb7185;">0</div>
+            </div>
+            <div class="stat-icon" style="background: rgba(244, 63, 94, 0.15); color: #fb7185;">
+              <i class="fa-solid fa-fire"></i>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div>
+              <div class="stat-title">صفقات جاهزة للإغلاق (Deals)</div>
+              <div class="stat-val" id="stat-handed-deals" style="color: #34d399;">0</div>
+            </div>
+            <div class="stat-icon" style="background: rgba(16, 185, 129, 0.15); color: #34d399;">
+              <i class="fa-solid fa-handshake"></i>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div>
+              <div class="stat-title">مرحّلة لـ Google Sheet</div>
+              <div class="stat-val" id="stat-synced-sheets" style="color: #fbbf24;">0</div>
+            </div>
+            <div class="stat-icon" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24;">
+              <i class="fa-solid fa-file-excel"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Deals Table -->
+        <div class="data-table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>اسم العميل</th>
+                <th>رقم الهاتف / الحساب</th>
+                <th>القناة</th>
+                <th>المرحلة</th>
+                <th>التصنيف</th>
+                <th>نسبة الشراء والاهتمام</th>
+                <th>المشكلة المحددة</th>
+                <th>الحل المقترح</th>
+                <th>حالة الشراء</th>
+                <th>الموظف</th>
+                <th>تزامن Google Sheet</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="crm-leads-table-body">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 3. COMMENTS & AUTO-DM TAB -->
+      <section class="view-panel" id="view-comments">
+        <div class="grid-2" style="margin-bottom: 24px;">
+          <div>
+            <h3 style="font-size: 18px;">ردود التعليقات والتحويل التلقائي للخاص (Auto-DM Engine)</h3>
+            <p style="font-size: 13px; color: var(--text-muted);">
+              يقوم البوت بالرد على تعليقات فيسبوك وإنستغرام تلقائياً، وفي حال كان المعلق مهتماً بالخدمة يرسل له رسالة خاصة (DM) فوراً لبدء التأهيل وإغلاق الصفقة!
+            </p>
+          </div>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px;">
+            <button class="btn btn-primary" id="btn-simulate-comment-modal">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>تجربة محاكاة تعليق جديد وتحويله للخاص</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <h4 style="font-size: 15px; margin-bottom: 16px;">
+            <i class="fa-solid fa-list-check" style="color: var(--accent-cyan); margin-left: 8px;"></i>
+            سجل التعليقات الواردة وإجراءات التحويل للخاص
+          </h4>
+
+          <div class="data-table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>المنصة</th>
+                  <th>صاحب التعليق</th>
+                  <th>نص التعليق</th>
+                  <th>تحليل الاهتمام</th>
+                  <th>الرد العام على التعليق</th>
+                  <th>الرسالة الخاصة (DM المرسلة)</th>
+                  <th>التاريخ</th>
+                </tr>
+              </thead>
+              <tbody id="comments-table-body">
+                <!-- Rendered via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. BOT SIMULATOR & VOICE LAB TAB -->
+      <section class="view-panel" id="view-simulator">
+        <div class="grid-2">
+
+          <!-- Left: Interactive Test Chat -->
+          <div class="glass-card" style="display: flex; flex-direction: column; height: 750px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div>
+                <h3 style="font-size: 16px;">مختبر تجربة الشات بوت (Simulator)</h3>
+                <p style="font-size: 12px; color: var(--text-muted);">جرب الحديث مع البوت كتابياً أو عبر تسجيل فويس وشاهد كيف يطبق قواعد atlead</p>
+              </div>
+              <button class="btn btn-secondary btn-sm" id="btn-reset-simulator">
+                <i class="fa-solid fa-rotate-right"></i> إعادة تعيين
+              </button>
+            </div>
+
+            <div class="chat-messages-container" id="sim-messages" style="background: rgba(0,0,0,0.2); border-radius: var(--radius-md); border: 1px solid var(--border-color); flex: 1;">
+              <!-- Simulated messages -->
+            </div>
+
+            <!-- Voice upload or text send -->
+            <div style="margin-top: 14px; display: flex; flex-direction: column; gap: 10px;">
+              
+              <!-- Quick test prompts -->
+              <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;">
+                <button class="btn btn-secondary btn-sm sim-quick-btn" data-text="مرحبا، شو الأسعار عندكم؟">اسأل عن الأسعار</button>
+                <button class="btn btn-secondary btn-sm sim-quick-btn" data-text="شو المشاريع والأعمال اللي اشتغلتوها قبل هيك؟">اسأل عن سوابق الأعمال</button>
+                <button class="btn btn-secondary btn-sm sim-quick-btn" data-text="تمام ممتاز، أنا موافق وبدي أحجز موعد استشارة معكم لنتفق ونبدأ الشغل">جرب مرحلة الديل والإغلاق (Handoff)</button>
+              </div>
+
+              <!-- Input row -->
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="sim-text-input" class="chat-input" placeholder="اكتب رسالة لتجربة رد البوت...">
+                <button class="btn btn-primary" id="btn-send-sim-text">
+                  <i class="fa-solid fa-paper-plane"></i>
+                </button>
+
+                <!-- Voice Note simulation button -->
+                <label class="btn btn-success" style="cursor: pointer;" title="رفع تسجيل صوتي (فويس) لاختباره">
+                  <i class="fa-solid fa-microphone"></i>
+                  <input type="file" id="sim-voice-upload" accept="audio/*" style="display: none;">
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: AI Live Reasoning & Deal Inspector -->
+          <div class="glass-card" style="height: 750px; overflow-y: auto;">
+            <h3 style="font-size: 16px; margin-bottom: 6px;">
+              <i class="fa-solid fa-brain" style="color: #818cf8; margin-left: 8px;"></i>
+              تحليل الذكاء الاصطناعي الحي (AI Inspector)
+            </h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+              يعرض لك هذا المربع تفاصيل تفكير البوت، تصنيف العميل، وحالة نقطة الإغلاق والاتفاق (Deal Closing).
+            </p>
+
+            <div class="lead-metric">
+              <span class="lead-metric-title">مرحلة العميل الحالية (Stage):</span>
+              <span class="lead-metric-value" id="sim-inspect-stage" style="color: #38bdf8;">new</span>
+            </div>
+
+            <div class="lead-metric">
+              <span class="lead-metric-title">التصنيف (Classification):</span>
+              <span class="lead-metric-value" id="sim-inspect-class">Cold</span>
+            </div>
+
+            <div class="lead-metric">
+              <span class="lead-metric-title">نسبة الشراء والاهتمام المتوقعة:</span>
+              <span class="lead-metric-value" id="sim-inspect-score" style="color: #34d399;">25%</span>
+            </div>
+
+            <div class="progress-bar-bg" style="margin-bottom: 16px;">
+              <div class="progress-bar-fill" id="sim-inspect-score-bar" style="width: 25%;"></div>
+            </div>
+
+            <div class="lead-metric">
+              <span class="lead-metric-title">حالة تشغيل البوت (Bot Active):</span>
+              <span class="lead-metric-value" id="sim-inspect-active" style="color: #34d399;">مفعل 🟢</span>
+            </div>
+
+            <div class="lead-metric">
+              <span class="lead-metric-title">تحويل للبشري / ديل (Handoff Triggered):</span>
+              <span class="lead-metric-value" id="sim-inspect-handoff" style="color: var(--text-muted);">لا (False)</span>
+            </div>
+
+            <div style="margin-top: 16px;">
+              <span style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">المشكلة المكتشفة:</span>
+              <div id="sim-inspect-problem" style="padding: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; font-size: 13px;">-</div>
+            </div>
+
+            <div style="margin-top: 12px;">
+              <span style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">الحل المقترح من atlead:</span>
+              <div id="sim-inspect-solution" style="padding: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; font-size: 13px; color: #38bdf8;">-</div>
+            </div>
+
+            <!-- Handover Confirmation banner -->
+            <div id="sim-handoff-banner" style="display: none; margin-top: 20px; padding: 16px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px;">
+              <h4 style="color: #fbbf24; font-size: 14px; margin-bottom: 6px;">
+                <i class="fa-solid fa-circle-check"></i> تم الوصول لمرحلة الديل بنجاح!
+              </h4>
+              <p style="font-size: 12.5px; color: #fef08a;">
+                أصدر البوت عبارة التحويل الرسمية لمسؤول المبيعات (م. مهند)، وقام النظام <strong>بإيقاف البوت تلقائياً</strong> وترحيل العميل إلى Supabase وجوجل شيت بنجاح. لن يقوم البوت بالرد على أي رسائل قادمة من هذا العميل حتى يستلم الفريق البشري.
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 5. KNOWLEDGE BASE & PORTFOLIO TAB -->
+      <section class="view-panel" id="view-knowledge">
+        <div style="margin-bottom: 24px;">
+          <h3 style="font-size: 18px;">قاعدة المعرفة وسوابق الأعمال (Knowledge Base & Portfolio)</h3>
+          <p style="font-size: 13px; color: var(--text-muted);">الملفات وسوابق الأعمال المحملة في عقل الشات بوت لتقديم إجابات ذكية وعرض نماذج الأعمال للعملاء</p>
+        </div>
+
+        <div class="grid-2">
+          
+          <!-- Knowledge Specs Card -->
+          <div class="glass-card">
+            <h4 style="font-size: 15px; margin-bottom: 14px; color: #38bdf8;">
+              <i class="fa-solid fa-file-pdf" style="margin-left: 8px;"></i>
+              ملف قاعدة المعرفة الرسمية (atlead Sales Chatbot KB)
+            </h4>
+            <p style="font-size: 13px; color: #cbd5e1; line-height: 1.7; margin-bottom: 12px;">
+              تم استخراج وفهرسة 21 صفحة من ملف إرشادات وتوجيهات البيع للشات بوت، وتشمل:
+            </p>
+            <ul style="font-size: 12.5px; color: var(--text-secondary); line-height: 2; padding-right: 20px;">
+              <li><strong>التموضع (Positioning):</strong> بناء أنظمة مبيعات متكاملة ومخصصة وحلول رقمية.</li>
+              <li><strong>شخصية البوت:</strong> موظف مبيعات أردني محترف وودود، لهجة بيضاء، متواضع وواضح.</li>
+              <li><strong>القاعدة الذهبية:</strong> الإجابة أولاً ثم طرح سؤال استكشافي واحد لفهم المشكلة.</li>
+              <li><strong>سياسة الأسعار:</strong> ممنوع إعطاء أسعار ثابتة بالشات؛ الخطوة الأولى استشارة مجانية 30 دقيقة.</li>
+              <li><strong>نقطة الإغلاق والتحويل:</strong> التحويل لمسؤول المبيعات (م. مهند) وإيقاف البوت تماماً.</li>
+            </ul>
+          </div>
+
+          <!-- Portfolio Highlights Card -->
+          <div class="glass-card">
+            <h4 style="font-size: 15px; margin-bottom: 14px; color: #34d399;">
+              <i class="fa-solid fa-briefcase" style="margin-left: 8px;"></i>
+              سوابق الأعمال والخبرات (Atlead Portfolio - 41 صفحة)
+            </h4>
+            <p style="font-size: 13px; color: #cbd5e1; line-height: 1.7; margin-bottom: 12px;">
+              محمل في عقل البوت كافة تفاصيل المشاريع والأنظمة الرقمية التسعة المكتملة، وأهمها:
+            </p>
+            <ul style="font-size: 12.5px; color: var(--text-secondary); line-height: 2; padding-right: 20px;">
+              <li><strong>AGS Technology (agsco.shop):</strong> منصة تجارة إلكترونية B2B لمعدات السلامة العامة وأنظمة القياس بـ 166 منتج.</li>
+              <li><strong>Moe's PureBite (moespurebite.com):</strong> منصة طلبات إلكترونية لمطبخ متخصص.</li>
+              <li><strong>أنظمة RAG وذكاء اصطناعي:</strong> أنظمة تدريب واستشارات ذكية ومساعدات حجز مواعيد.</li>
+              <li><strong>تكامل CRM وأتمتة العمليات:</strong> ربط المحادثات مع جداول جوجل وقواعد البيانات.</li>
+            </ul>
+          </div>
+
+        </div>
+
+        <!-- System Prompt Preview -->
+        <div class="glass-card" style="margin-top: 10px;">
+          <h4 style="font-size: 14px; margin-bottom: 10px;">
+            <i class="fa-solid fa-code" style="color: var(--accent-indigo); margin-left: 8px;"></i>
+            التوجيهات البرمجية الحية للبوت (System Prompt Active)
+          </h4>
+          <textarea class="form-control" id="kb-system-prompt-preview" rows="8" readonly style="font-family: monospace; font-size: 12px; line-height: 1.6;"></textarea>
+        </div>
+      </section>
+
+      <!-- 6. SETTINGS & INTEGRATIONS HUB TAB -->
+      <section class="view-panel" id="view-settings">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+          <div>
+            <h3 style="font-size: 18px;">مركز الربط وإدارة المفاتيح والـ APIs (Integrations Hub)</h3>
+            <p style="font-size: 13px; color: var(--text-muted);">
+              تحكم بجميع مفاتيح الربط لأرقام واتساب، إنستغرام، فيسبوك، سوبر بيز، وجوجل شيت وحفظها فوراً
+            </p>
+          </div>
+          <button class="btn btn-primary" id="btn-save-all-settings">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>حفظ وتحديث الإعدادات</span>
+          </button>
+        </div>
+
+        <!-- System health check -->
+        <div class="glass-card" style="margin-bottom: 20px;">
+          <h4 style="font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+            <span><i class="fa-solid fa-stethoscope" style="color: #34d399; margin-left: 8px;"></i> فحص النظام الكامل</span>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-run-health"><i class="fa-solid fa-play"></i> افحص كل شيء</button>
+          </h4>
+          <p class="form-hint" style="margin-bottom: 10px;">بعد ما تحفظ إعداداتك، اضغط الزر: بنفحص كل ربط على حساباتك الحقيقية (AI، واتساب، Meta، الداتابيز، الشيت، Gmail) وبنحكيلك بالضبط شو ناقص.</p>
+          <div id="health-results"></div>
+        </div>
+
+        <form id="settings-form">
+          <div class="grid-2">
+
+            <!-- Meta (Facebook & Instagram) Settings -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa-brands fa-meta" style="color: #0084FF; margin-left: 8px;"></i> إعدادات فيسبوك وإنستغرام (Meta API)</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-test-meta-conn">فحص الاتصال</button>
+              </h4>
+
+              <div class="form-group">
+                <label class="form-label">Page Access Token (رمز وصول الصفحة)</label>
+                <input type="password" id="meta-access-token" class="form-control" placeholder="EAA...">
+                <span class="form-hint">رمز الوصول الخاص بصفحة فيسبوك وحساب إنستغرام للأعمال المرتبط بها.</span>
+              </div>
+
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="form-label">Page ID (معرف الصفحة)</label>
+                  <input type="text" id="meta-page-id" class="form-control" placeholder="1049281...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Instagram Account ID</label>
+                  <input type="text" id="meta-ig-id" class="form-control" placeholder="1784140...">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">App Secret (اختياري — للتحقق من توقيع الويب هوك)</label>
+                <input type="password" id="meta-app-secret" class="form-control" placeholder="من إعدادات التطبيق في Meta Developers">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Webhook Verify Token</label>
+                <input type="text" id="meta-verify-token" class="form-control" value="attlead_meta_verify_token_2026">
+                <span class="form-hint">رمز التحقق الذي تدخله في Meta Developer Portal عند إعداد الـ Webhook.</span>
+              </div>
+
+              <div class="form-group" style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;">
+                <label class="form-label" style="font-size: 12px;">Webhook Callback URL (رابط الويب هوك الخاص بك):</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="meta-webhook-url-display" class="form-control" style="font-size: 11px;" readonly value="http://localhost:3000/webhook/meta">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('meta-webhook-url-display').value); showToast('تم نسخ الرابط!', 'info');">نسخ</button>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 16px; margin-top: 14px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                  <input type="checkbox" id="meta-auto-reply-comments" checked>
+                  <span>الرد الآلي على التعليقات</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                  <input type="checkbox" id="meta-auto-dm-on-interest" checked>
+                  <span>إرسال رسالة خاصة (DM) للمهتمين</span>
+                </label>
+              </div>
+
+              <div class="form-group" style="margin-top: 14px;">
+                <label class="form-label">الرد العام على التعليق (يُستخدم إذا لم يتوفر مفتاح AI)</label>
+                <input type="text" id="meta-comment-reply-template" class="form-control">
+              </div>
+              <div class="form-group">
+                <label class="form-label">الرسالة الخاصة الأولى لصاحب التعليق (إذا لم يتوفر مفتاح AI)</label>
+                <textarea id="meta-auto-dm-template" class="form-control" rows="2"></textarea>
+                <span class="form-hint">مع مفتاح Gemini/OpenAI، البوت يكتب الرد العام والرسالة الخاصة حسب سؤال كل شخص.</span>
+              </div>
+            </div>
+
+            <!-- WhatsApp Settings -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa-brands fa-whatsapp" style="color: #25D366; margin-left: 8px;"></i> ربط واتساب</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-test-whatsapp-conn">فحص الاتصال</button>
+              </h4>
+
+              <div class="form-group">
+                <label class="form-label">طريقة الربط</label>
+                <select id="wa-mode" class="form-control">
+                  <option value="qr">QR كود — ربط رقمك مباشرة كجهاز مرتبط (مثل واتساب ويب)</option>
+                  <option value="cloud_api">WhatsApp Cloud API الرسمي (Meta)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">رقمك على واتساب (Linked Phone Number)</label>
+                <input type="text" id="wa-linked-phone" class="form-control" value="00962780908299">
+              </div>
+
+              <!-- QR mode -->
+              <div id="wa-qr-section">
+                <div class="wa-qr-box">
+                  <div id="wa-qr-status" class="wa-qr-status">جاري فحص الحالة...</div>
+                  <img id="wa-qr-img" alt="WhatsApp QR" style="display:none;">
+                  <div id="wa-pairing-code" class="wa-pairing-code" style="display:none;"></div>
+                  <div id="wa-qr-help" class="form-hint" style="display:none;">
+                    افتح واتساب على هاتفك ← الإعدادات ← الأجهزة المرتبطة ← ربط جهاز، ثم امسح الكود.
+                  </div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:10px;">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-wa-connect"><i class="fa-solid fa-qrcode"></i> توليد QR</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-wa-pair"><i class="fa-solid fa-key"></i> ربط بكود بدل QR</button>
+                    <button type="button" class="btn btn-danger btn-sm" id="btn-wa-logout" style="display:none;"><i class="fa-solid fa-link-slash"></i> فصل الرقم</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Cloud API mode -->
+              <div id="wa-cloud-section" style="display:none;">
+                <div class="form-group">
+                  <label class="form-label">Phone Number ID (معرف رقم الهاتف في Meta)</label>
+                  <input type="text" id="wa-phone-id" class="form-control" placeholder="109283748291...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">WhatsApp Permanent Access Token</label>
+                  <input type="password" id="wa-token" class="form-control" placeholder="EAA...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Webhook Verify Token</label>
+                  <input type="text" id="wa-verify-token" class="form-control" value="attlead_whatsapp_verify_token_2026">
+                </div>
+                <div class="form-group" style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;">
+                  <label class="form-label" style="font-size: 12px;">WhatsApp Webhook Callback URL:</label>
+                  <div style="display: flex; gap: 8px;">
+                    <input type="text" id="wa-webhook-url-display" class="form-control" style="font-size: 11px;" readonly value="http://localhost:3000/webhook/whatsapp">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('wa-webhook-url-display').value); showToast('تم نسخ الرابط!', 'info');">نسخ</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bot reply behaviour -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 16px;">
+                <i class="fa-solid fa-reply" style="color: #38bdf8; margin-left: 8px;"></i>
+                سلوك الرد (التأخير والرد المقتبس)
+              </h4>
+              <div class="form-group">
+                <label class="form-label">مدة الانتظار قبل الرد (بالثواني)</label>
+                <input type="number" id="bot-reply-delay" class="form-control" min="0" max="120" value="10">
+                <span class="form-hint">البوت ينتظر هذه المدة بعد آخر رسالة من العميل. إذا بعث العميل أكثر من رسالة ورا بعض، بيرد عليهم كلهم مرة وحدة — هذا بيحمي الرقم من الحظر.</span>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                  <input type="checkbox" id="bot-quote-replies" checked>
+                  <span>الرد كـ "رد على الرسالة" (اقتباس رسالة العميل فوق الرد)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                  <input type="checkbox" id="bot-typing-indicator" checked>
+                  <span>إظهار "يكتب الآن..." وعلامة القراءة قبل الرد</span>
+                </label>
+              </div>
+
+              <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color);">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                  <input type="checkbox" id="bot-pause-on-human" checked>
+                  <span><strong>إيقاف البوت تلقائياً لما يرد موظف على العميل</strong></span>
+                </label>
+                <span class="form-hint" style="display:block; margin: 6px 0 10px;">سواء رد الموظف من لوحة التحكم، أو من الواتساب على الجوال/واتساب ويب، أو من صندوق رسائل فيسبوك/تطبيق إنستغرام.</span>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label">مدة الإيقاف</label>
+                  <select id="bot-human-pause-hours" class="form-control">
+                    <option value="0">لحد ما أرجّعه يدوياً (موصى به)</option>
+                    <option value="1">ساعة وحدة</option>
+                    <option value="4">4 ساعات</option>
+                    <option value="12">12 ساعة</option>
+                    <option value="24">24 ساعة</option>
+                    <option value="72">3 أيام</option>
+                  </select>
+                  <span class="form-hint">بعد انتهاء المدة، أول رسالة جديدة من العميل بيرد عليها البوت. العملاء المحوّلين للموظف (مرحلة الشراء) ما بيرجعلهم البوت أبداً إلا يدوياً.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Supabase Database Settings -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa-solid fa-database" style="color: #3ecf8e; margin-left: 8px;"></i> قاعدة بيانات Supabase</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-test-supabase-conn">فحص اتصال Supabase</button>
+              </h4>
+
+              <div class="form-group">
+                <label class="form-label">Supabase Project URL</label>
+                <input type="text" id="supa-url" class="form-control" placeholder="https://xyzcompany.supabase.co">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Supabase Service Role / Anon Key</label>
+                <input type="password" id="supa-key" class="form-control" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: center;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                  <input type="checkbox" id="supa-enabled" checked>
+                  <span>تفعيل حفظ الرسائل والمحادثات في Supabase أولاً بأول</span>
+                </label>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-show-sql-schema">
+                  <i class="fa-solid fa-file-code"></i> عرض كود الـ SQL لجداول Supabase
+                </button>
+              </div>
+            </div>
+
+            <!-- Google Sheets CRM Settings -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa-solid fa-table" style="color: #10b981; margin-left: 8px;"></i> ربط Google Sheets (كل تفاصيل السيلز)</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-test-sheet-conn">فحص الربط وتجهيز الشيت</button>
+              </h4>
+
+              <div class="form-group">
+                <label class="form-label">رابط الشيت (أو Spreadsheet ID)</label>
+                <input type="text" id="sheet-id" class="form-control" placeholder="https://docs.google.com/spreadsheets/d/.../edit">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">اسم الورقة (Tab)</label>
+                <input type="text" id="sheet-name" class="form-control" value="Leads">
+                <span class="form-hint">إذا مش موجودة بتنعمل تلقائياً مع عناوين الأعمدة.</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">ملف Service Account (JSON)</label>
+                <textarea id="sheet-sa-json" class="form-control" rows="4" style="font-family: monospace; font-size: 11px; direction: ltr;" placeholder='{"type": "service_account", "client_email": "...", "private_key": "..."}'></textarea>
+                <span class="form-hint">Google Cloud ← فعّل Google Sheets API ← Service Accounts ← Keys ← Add key ← JSON، والصق محتوى الملف هون.</span>
+              </div>
+
+              <div class="form-group" id="sheet-sa-email-box" style="display:none; background: rgba(16,185,129,0.1); padding: 10px; border-radius: 8px;">
+                <label class="form-label" style="font-size: 12px;">اعمل Share للشيت مع هذا الإيميل كـ <b>Editor</b>:</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="sheet-sa-email" class="form-control" style="font-size: 12px; direction: ltr;" readonly>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('sheet-sa-email').value); showToast('تم نسخ الإيميل!', 'info');">نسخ</button>
+                </div>
+              </div>
+
+              <details style="margin-bottom: 12px;">
+                <summary style="cursor: pointer; font-size: 12.5px; color: var(--text-muted);">طريقة بديلة: Google Apps Script Webhook</summary>
+                <div class="form-group" style="margin-top: 10px;">
+                  <input type="text" id="sheet-webhook-url" class="form-control" placeholder="https://script.google.com/macros/s/.../exec">
+                  <span class="form-hint">تُستخدم فقط إذا ما في Service Account.</span>
+                </div>
+              </details>
+
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                <input type="checkbox" id="sheet-auto-sync" checked>
+                <span>تحديث صف العميل تلقائياً بعد كل رسالة (المرحلة، نسبة الشراء، شو طلب، الملخص...)</span>
+              </label>
+            </div>
+
+            <!-- Email notifications -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa-solid fa-envelope" style="color: #ea4335; margin-left: 8px;"></i> إشعارات الإيميل لفريق المبيعات (Gmail)</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-test-email">إرسال إيميل تجريبي</button>
+              </h4>
+
+              <div class="form-group">
+                <label class="form-label">إيميلات الإدارة (بيوصلها كل تحويل + التقرير اليومي)</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="email" id="notify-email-input" class="form-control" placeholder="sales@gmail.com" style="direction: ltr;">
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-add-notify-email"><i class="fa-solid fa-plus"></i> إضافة</button>
+                </div>
+                <div id="notify-email-list" class="email-chips"></div>
+              </div>
+
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="form-label">Gmail المرسل</label>
+                  <input type="email" id="gmail-user" class="form-control" placeholder="yourbot@gmail.com" style="direction: ltr;">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">App Password</label>
+                  <input type="password" id="gmail-app-password" class="form-control" placeholder="xxxx xxxx xxxx xxxx" style="direction: ltr;">
+                </div>
+              </div>
+              <span class="form-hint" style="display:block; margin: -6px 0 12px;">حساب Google ← Security ← فعّل 2-Step Verification ← App passwords ← أنشئ كلمة سر والصقها هون (مش كلمة سر الإيميل).</span>
+
+              <div class="form-group">
+                <label class="form-label">رابط لوحة التحكم (اختياري — لزر "فتح المحادثة" بالإيميل)</label>
+                <input type="text" id="dashboard-url" class="form-control" placeholder="https://bot.yourdomain.com" style="direction: ltr;">
+              </div>
+
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                  <input type="checkbox" id="notify-enabled" checked>
+                  <span>تفعيل إشعارات الإيميل</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                  <input type="checkbox" id="notify-new-messages" checked>
+                  <span>بلّغني إذا العميل المحوّل بعث رسالة جديدة (مرة كل 30 دقيقة كحد أقصى)</span>
+                </label>
+              </div>
+
+              <div style="margin-top: 14px;">
+                <label class="form-label" style="font-size: 12px;">آخر الإشعارات</label>
+                <div id="notify-log" class="notify-log">-</div>
+              </div>
+            </div>
+
+            <!-- Sales team -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 12px;"><i class="fa-solid fa-users" style="color: #a78bfa; margin-left: 8px;"></i> فريق المبيعات (توزيع العملاء)</h4>
+              <p class="form-hint" style="margin-bottom: 10px;">العميل اللي بيتحوّل بينسند لموظف بالدور، والبوت بيحكي للعميل اسم الموظف، والإيميل بيوصل للموظف نفسه (+ إيميلات الإدارة). إذا القائمة فاضية، الإيميل بيوصل للإدارة بس.</p>
+              <div id="team-list"></div>
+              <div class="grid-2" style="margin-top: 10px;">
+                <input type="text" id="team-new-name" class="form-control" placeholder="اسم الموظف (مثلاً: م. مهند)">
+                <div style="display: flex; gap: 8px;">
+                  <input type="email" id="team-new-email" class="form-control" placeholder="email@gmail.com" style="direction: ltr;">
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-add-team"><i class="fa-solid fa-plus"></i></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Business hours -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 12px;"><i class="fa-solid fa-clock" style="color: #38bdf8; margin-left: 8px;"></i> ساعات الدوام</h4>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="bh-enabled" checked><span><strong>تفعيل ساعات الدوام</strong> (البوت بيرد 24 ساعة، بس بيعرف إمتى الموظف متوفر)</span></label>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0;">
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="bh-day" value="0"> الأحد</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="bh-day" value="1"> الاثنين</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="bh-day" value="2"> الثلاثاء</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="bh-day" value="3"> الأربعاء</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="bh-day" value="4"> الخميس</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="bh-day" value="5"> الجمعة</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="bh-day" value="6"> السبت</label>
+              </div>
+              <div class="grid-2">
+                <div class="form-group"><label class="form-label">من</label><input type="time" id="bh-start" class="form-control" value="09:00"></div>
+                <div class="form-group"><label class="form-label">لغاية</label><input type="time" id="bh-end" class="form-control" value="17:00"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">رسالة التحويل خارج الدوام</label>
+                <textarea id="bh-after-msg" class="form-control" rows="3"></textarea>
+                <span class="form-hint">{rep} = اسم الموظف، {time} = إمتى رح يتواصل (مثلاً "بكرا الساعة 09:00").</span>
+              </div>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="bh-hold-emails" ><span>خلّي إيميلات الموظفين تنبعت أول الدوام بدل ما توصل بالليل</span></label>
+            </div>
+
+            <!-- Follow-ups -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa-solid fa-paper-plane" style="color: #f59e0b; margin-left: 8px;"></i> متابعة العملاء اللي سكتوا</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-followup-preview">مين رح تنبعتله؟</button>
+              </h4>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="fu-enabled" checked><span><strong>إرسال رسالة متابعة تلقائية للعميل المهتم اللي ما رد</strong></span></label>
+              <div class="grid-2" style="margin-top: 12px;">
+                <div class="form-group">
+                  <label class="form-label">بعد سكوت العميل بـ</label>
+                  <select id="fu-after-hours" class="form-control">
+                    <option value="2">ساعتين</option><option value="6">6 ساعات</option><option value="12">12 ساعة</option>
+                    <option value="20">20 ساعة (موصى به)</option><option value="23">23 ساعة</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">لما تكون نسبة الشراء على الأقل (%)</label>
+                  <input type="number" id="fu-min-prob" class="form-control" min="10" max="95" value="60">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">أقصى عدد رسائل متابعة لكل عميل</label>
+                <select id="fu-max" class="form-control"><option value="1">رسالة وحدة</option><option value="2">رسالتين</option></select>
+              </div>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="fu-use-ai" checked><span>البوت يكتب رسالة المتابعة حسب محادثة كل عميل (يحتاج مفتاح AI)</span></label>
+              <div class="form-group" style="margin-top: 10px;">
+                <label class="form-label">نص المتابعة الاحتياطي</label>
+                <textarea id="fu-template" class="form-control" rows="2"></textarea>
+                <span class="form-hint">{name} = اسم العميل، {topic} = الشي اللي سأل عنه. الرسائل بتنبعت بس بأوقات الدوام، رسالة وحدة كل دقيقة كحد أقصى، وقبل ما تخلص الـ 24 ساعة اللي بتسمح فيها واتساب وميتا بالرد.</span>
+              </div>
+              <div id="fu-preview" style="font-size: 12px;"></div>
+            </div>
+
+            <!-- Daily report + backup -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 12px;"><i class="fa-solid fa-chart-line" style="color: #34d399; margin-left: 8px;"></i> التقرير اليومي والنسخ الاحتياطي</h4>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="rep-enabled" checked><span><strong>إرسال تقرير يومي لإيميلات الإدارة</strong></span></label>
+              <div class="grid-2" style="margin-top: 10px;">
+                <div class="form-group"><label class="form-label">وقت التقرير</label><input type="time" id="rep-time" class="form-control" value="20:00"></div>
+                <div class="form-group" style="display: flex; align-items: flex-end; gap: 8px;">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-report-now">ابعته هلق</button>
+                  <a class="btn btn-secondary btn-sm" href="/api/reports/daily/preview" target="_blank">معاينة</a>
+                </div>
+              </div>
+              <div style="border-top: 1px solid var(--border-color); margin-top: 8px; padding-top: 12px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="bk-enabled" checked><span><strong>نسخة احتياطية يومية تلقائية</strong> (الساعة 3 الفجر، بمجلد backups)</span></label>
+                <div class="grid-2" style="margin-top: 10px;">
+                  <div class="form-group">
+                    <label class="form-label">احتفظ بالنسخ لمدة</label>
+                    <select id="bk-keep" class="form-control"><option value="7">7 أيام</option><option value="14">14 يوم</option><option value="30">30 يوم</option><option value="90">90 يوم</option></select>
+                  </div>
+                  <div class="form-group" style="display: flex; align-items: flex-end;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-backup-now">نسخة احتياطية هلق</button>
+                  </div>
+                </div>
+                <div id="bk-last" class="form-hint"></div>
+              </div>
+            </div>
+
+            <!-- AI & Voice Settings -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 16px;">
+                <i class="fa-solid fa-microchip" style="color: var(--accent-amber); margin-left: 8px;"></i>
+                إعدادات الذكاء الاصطناعي ومعالجة الصوت (AI & Voice Engine)
+              </h4>
+
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="form-label">مزود الذكاء الاصطناعي (AI Provider)</label>
+                  <select id="ai-provider" class="form-control">
+                    <option value="gemini">Google Gemini (موصى به - يدعم الفويس والنص الفوري)</option>
+                    <option value="openai">OpenAI (GPT-4o + Whisper)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">الموديل (Model)</label>
+                  <input type="text" id="ai-model" class="form-control" value="gemini-2.5-flash">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Google Gemini API Key</label>
+                <input type="password" id="gemini-api-key" class="form-control" placeholder="AIzaSy...">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">OpenAI API Key (اختياري)</label>
+                <input type="password" id="openai-api-key" class="form-control" placeholder="sk-proj-...">
+              </div>
+
+              <div style="display: flex; gap: 16px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                  <input type="checkbox" id="voice-transcription-enabled" checked>
+                  <span>تفعيل الرد على الرسائل الصوتية (الفويسّات)</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
+                  <input type="checkbox" id="image-understanding-enabled" checked>
+                  <span>فهم الصور اللي بيبعتها العميل (سكرين شوت، منتج، ورقة...)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Deal Closing & Handoff Rules -->
+            <div class="glass-card">
+              <h4 style="font-size: 15px; margin-bottom: 16px;">
+                <i class="fa-solid fa-handshake" style="color: #f43f5e; margin-left: 8px;"></i>
+                قواعد الإغلاق والتحويل للبشري (Deal Closing Rules)
+              </h4>
+
+              <div class="form-group">
+                <label class="form-label">اسم ممثل المبيعات الرسمي للتحويل</label>
+                <input type="text" id="handoff-rep-name" class="form-control" value="م. مهند من قسم المبيعات">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">رسالة التحويل الرسمية عند نقطة الاتفاق (Handoff Message)</label>
+                <textarea id="handoff-message-text" class="form-control" rows="3">تمام، {rep} في شركة atlead رح يتواصل معك بأسرع وقت لمتابعة كافة التفاصيل وترتيب كل شيء معك. شكراً لاهتمامك وثقتك.</textarea>
+                <span class="form-hint">{rep} = اسم الموظف المسؤول عن العميل (أو الاسم اللي فوق إذا ما في فريق).</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">التحويل للموظف عند وصول نسبة الشراء إلى (%)</label>
+                <input type="number" id="handoff-threshold" class="form-control" min="1" max="100" value="85">
+                <span class="form-hint">بيتحول العميل كمان إذا وافق على استشارة/ديمو أو طلب يحكي مع شخص، حتى لو النسبة أقل.</span>
+              </div>
+
+              <div style="font-size: 12.5px; background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.3); padding: 10px; border-radius: 8px;">
+                <i class="fa-solid fa-lock"></i>
+                <strong>بعد التحويل البوت بيوقف نهائياً مع هذا العميل</strong> — على كل رسائله وتعليقاته، وبيوصل إيميل للموظف بكل تفاصيله. الموظف بس اللي بيرد (وبيقدر يرجّع البوت يدوياً من صندوق المحادثات).
+              </div>
+            </div>
+
+          </div>
+        </form>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- MODAL: Google Apps Script Code -->
+  <div id="modal-script" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); z-index: 10000; align-items: center; justify-content: center;">
+    <div class="glass-card" style="width: 700px; max-width: 90%; max-height: 85vh; display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #34d399;"><i class="fa-brands fa-google"></i> كود ربط Google Sheets الفوري</h3>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('modal-script').style.display = 'none';">✕ إغلاق</button>
+      </div>
+      <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px;">
+        افتح جدول Google Sheet، اضغط من الأعلى <strong>Extensions -> Apps Script</strong>، الصق هذا الكود واضغط Deploy كـ Web App:
+      </p>
+      <textarea id="apps-script-code-box" class="form-control" rows="14" readonly style="font-family: monospace; font-size: 11px;"></textarea>
+      <div style="margin-top: 14px; display: flex; justify-content: flex-end;">
+        <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('apps-script-code-box').value); showToast('تم نسخ الكود!', 'success');">
+          <i class="fa-solid fa-copy"></i> نسخ الكود
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Supabase SQL Schema -->
+  <div id="modal-sql" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); z-index: 10000; align-items: center; justify-content: center;">
+    <div class="glass-card" style="width: 750px; max-width: 90%; max-height: 85vh; display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 16px; color: #3ecf8e;"><i class="fa-solid fa-database"></i> مخطط قاعدة بيانات Supabase (SQL Schema)</h3>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('modal-sql').style.display = 'none';">✕ إغلاق</button>
+      </div>
+      <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px;">
+        انسخ هذا الاستعلام ونفذه في <strong>Supabase SQL Editor</strong> لإنشاء كافة الجداول والفهارس المطلوبة:
+      </p>
+      <textarea id="sql-schema-code-box" class="form-control" rows="14" readonly style="font-family: monospace; font-size: 11px;"></textarea>
+      <div style="margin-top: 14px; display: flex; justify-content: flex-end;">
+        <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('sql-schema-code-box').value); showToast('تم نسخ استعلام SQL!', 'success');">
+          <i class="fa-solid fa-copy"></i> نسخ كود SQL
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Runtime data (customers, settings with API keys, WhatsApp session) — lives on the server / Supabase
+data/*
+!data/knowledge/
+backups/
+uploads/
+*.tmp
+
+# Company documents (not needed to run the bot; repo is public)
+*.pdf
+extracted_kb.txt
+extracted_portfolio.txt

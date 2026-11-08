@@ -256,9 +256,8 @@ bootstrap().catch(err => console.error('Bootstrap error:', err.message));
 
 // Vercel (serverless) imports the app instead of running a server.
 module.exports = app;
-if (process.env.VERCEL) return;
 
-app.listen(PORT, () => {
+if (!process.env.VERCEL) app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 atlead Sales Chatbot & Omnichannel CRM is Running!`);
   console.log(`🌐 Dashboard URL: http://localhost:${PORT}`);

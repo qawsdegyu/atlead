@@ -7,14 +7,27 @@ const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
 const pino = require('pino');
-const baileys = require('@whiskeysockets/baileys');
 const storageService = require('./storageService');
 const replyEngine = require('./replyEngine');
 const aiService = require('./aiService');
-const { useDbAuthState, clearAuthState, hasSavedSession } = require('./waAuthStore');
-
-const makeWASocket = baileys.makeWASocket || baileys.default;
-const { DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, Browsers, normalizeMessageContent, jidNormalizedUser } = baileys;
+// Baileys (WhatsApp library) is loaded only when WhatsApp is actually used:
+// keeps startup light and lets the dashboard run on serverless hosts.
+let baileys = null;
+let authStore = null;
+let makeWASocket, DisconnectReason = {}, fetchLatestBaileysVersion, downloadMediaMessage, Browsers, normalizeMessageContent;
+function loadBaileys() {
+  if (baileys) return;
+  if (storageService.isServerless()) {
+    throw new Error('ربط واتساب بالـ QR بده سيرفر شغال دايماً (Railway) — ما بيشتغل على Vercel');
+  }
+  baileys = require('@whiskeysockets/baileys');
+  makeWASocket = baileys.makeWASocket || baileys.default;
+  ({ DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, Browsers, normalizeMessageContent } = baileys);
+  authStore = require('./waAuthStore');
+}
+const useDbAuthState = (...a) => { loadBaileys(); return authStore.useDbAuthState(...a); };
+const clearAuthState = (...a) => { loadBaileys(); return authStore.clearAuthState(...a); };
+const hasSavedSession = (...a) => { loadBaileys(); return authStore.hasSavedSession(...a); };
 
 const logger = pino({ level: 'silent' });
 const UPLOADS_DIR = storageService.getUploadsDir();
@@ -69,6 +82,7 @@ class WaQrService {
     if (this.sock && (this.status === 'connected' || this.status === 'connecting' || this.status === 'qr')) {
       return this.getStatus();
     }
+    loadBaileys();
     this.manualStop = false;
     this.status = 'connecting';
     this.lastError = null;
@@ -195,6 +209,7 @@ class WaQrService {
   }
 
   async logout() {
+    if (storageService.isServerless()) return this.getStatus();
     this.manualStop = true;
     clearTimeout(this.reconnectTimer);
     try {

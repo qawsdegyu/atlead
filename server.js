@@ -25,6 +25,35 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Public health check for the hosting platform (Railway) — no data exposed.
 app.get('/healthz', (req, res) => res.json({ ok: true, uptime: Math.round(process.uptime()) }));
 
+// Public legal pages required by Meta to publish the app (Live mode).
+const legalPage = (title, body) => `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} — atlead</title>
+<style>body{font-family:system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.7;color:#222}h1{font-size:1.6rem}h2{font-size:1.15rem;margin-top:1.6em}</style>
+</head><body><h1>${title}</h1><p><em>Last updated: ${new Date().toISOString().slice(0, 10)}</em></p>${body}</body></html>`;
+
+app.get('/privacy', (req, res) => res.send(legalPage('Privacy Policy', `
+<p>atlead ("we") operates an automated sales assistant that replies to messages and comments sent to our Facebook Page, Instagram account and WhatsApp number.</p>
+<h2>Data we collect</h2>
+<p>When you message or comment on our accounts we receive your name, your platform user ID, the content of your messages (text and images), and any contact details you choose to share (such as phone number or email).</p>
+<h2>How we use it</h2>
+<p>We use this data only to answer your questions, follow up on your request, and let our sales team contact you. We do not sell your data or use it for advertising.</p>
+<h2>Storage and retention</h2>
+<p>Conversations are stored in our secured database and internal sales records for as long as needed to serve you, and deleted on request.</p>
+<h2>Sharing</h2>
+<p>Data is processed by our service providers (Meta, hosting, database and AI providers) only to operate this service.</p>
+<h2>Your rights / deletion</h2>
+<p>You can ask us to delete your data at any time — see <a href="/data-deletion">Data Deletion Instructions</a>.</p>
+<h2>Contact</h2>
+<p>Send us a message on our Facebook Page or Instagram account.</p>`)));
+
+app.get('/data-deletion', (req, res) => res.send(legalPage('Data Deletion Instructions', `
+<p>To delete all data atlead holds about you, send the message <strong>"delete my data"</strong> to our Facebook Page or Instagram account, or contact us through the Page.</p>
+<p>We will delete your conversation history and contact details from our systems within 30 days and confirm once done.</p>
+<p>You can also remove the app's access from Facebook: Settings &amp; Privacy → Settings → Apps and Websites.</p>`)));
+
+app.get('/terms', (req, res) => res.send(legalPage('Terms of Service', `
+<p>By messaging atlead's accounts you agree that replies may be generated automatically by an AI assistant and reviewed by our team. Information provided by the assistant is for general guidance; final offers and prices are confirmed by our sales team.</p>`)));
+
 // Webhooks must stay public (Meta calls them). Everything else = admin dashboard.
 app.use('/webhook', webhookRoutes);
 

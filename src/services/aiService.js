@@ -214,7 +214,7 @@ class AiService {
         proposed_solution: null,
         lead_stage: conversation.lead_stage || 'discovery',
         classification: conversation.classification || 'Cold',
-        buying_probability: Number(conversation.interest_score) || 20,
+        buying_probability: Number(conversation.interest_score) || 0,
         handoff_triggered: false,
         customer_name: null,
         customer_phone: null,
@@ -249,7 +249,7 @@ class AiService {
 - التردد/الاعتراضات: ${conversation.objections || 'لا يوجد'}
 - ملخص ما حصل: ${conversation.customer_summary || 'محادثة جديدة'}
 - مرحلة العميل السابقة: ${conversation.lead_stage || 'new'}
-- نسبة الشراء السابقة: ${conversation.interest_score || 20}%
+- نسبة الشراء السابقة: ${Number(conversation.interest_score) || 0}%
 ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} يوم من آخر رسالة — كمّل معه من وين ما وقفتوا.` : ''}
 
 قم بتحليل الرسالة، وتوليد الرد المناسب حسب قواعد atlead الدقيقة، وتحديد حالة العميل وتصنيفه، وما إذا وصل لمرحلة الديل/التحويل للبشري.

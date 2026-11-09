@@ -143,6 +143,12 @@ class ReplyEngine {
     if (contact.email && !fresh.customer_email) contactPatch.customer_email = contact.email;
     if (Object.keys(contactPatch).length) storageService.saveConversation({ id: conv.id, ...contactPatch });
 
+    // New customer → record them right away (0%), so they reach the CRM / Sheet / Form
+    // at first contact, not only after the bot's first reply.
+    if (!storageService.getLeads().some(l => l.conversation_id === conv.id)) {
+      crmService.upsertLead(storageService.getConversationById(conv.id)).catch(err => console.error('[CRM] first-contact lead:', err.message));
+    }
+
     conv = this._resumeIfPauseExpired(storageService.getConversationById(conv.id));
     if (conv.is_bot_active === false) {
       // Handed off / staff is talking to them: the bot does NOT answer. Alert the sales team instead.

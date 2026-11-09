@@ -137,7 +137,7 @@ class StorageService {
         customer_handle: convData.customer_handle || '',
         lead_stage: convData.lead_stage || 'new',
         classification: convData.classification || 'Cold',
-        interest_score: convData.interest_score || 20,
+        interest_score: convData.interest_score ?? 0, // new customers start at 0% and rise as the AI learns more
         is_bot_active: convData.is_bot_active !== undefined ? convData.is_bot_active : true,
         handoff_at: convData.handoff_at || null,
         handoff_reason: convData.handoff_reason || null,
@@ -267,7 +267,7 @@ class StorageService {
         proposed_solution: leadData.proposed_solution || '',
         lead_stage: leadData.lead_stage || 'New',
         classification: leadData.classification || 'Cold',
-        buying_probability: leadData.buying_probability || 20,
+        buying_probability: Number(leadData.buying_probability) || 0,
         deal_status: leadData.deal_status || 'in_progress',
         notes: leadData.notes || '',
         google_sheet_synced: !!leadData.google_sheet_synced,

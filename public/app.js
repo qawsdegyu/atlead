@@ -683,12 +683,37 @@ async function loadKnowledge() {
     const res = await fetch('/api/knowledge');
     const data = await res.json();
     if (data.success) {
-      document.getElementById('kb-system-prompt-preview').value = JSON.stringify(data.knowledge, null, 2);
+      document.getElementById('kb-system-prompt-preview').value = data.system_prompt || '';
+      const extra = document.getElementById('kb-extra-text');
+      if (extra) extra.value = data.extra_text || '';
+      const status = document.getElementById('kb-docs-status');
+      if (status) {
+        status.textContent = `محمّل: ${data.documents.map(d => `${d.title} (${d.chars.toLocaleString()} حرف)`).join(' • ')} • ${data.faq_count} سؤال شائع بأجوبة معتمدة`;
+      }
     }
   } catch (err) {
     console.error('Error kb:', err);
   }
 }
+
+document.getElementById('kb-extra-save')?.addEventListener('click', async () => {
+  const btn = document.getElementById('kb-extra-save');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/knowledge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ extra_text: document.getElementById('kb-extra-text').value })
+    });
+    const data = await res.json();
+    showToast(data.message || (data.success ? 'تم الحفظ' : 'فشل الحفظ'), data.success ? 'success' : 'error');
+    if (data.success) loadKnowledge();
+  } catch (err) {
+    showToast('فشل الحفظ: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // 6. SETTINGS TAB
 async function loadSettings() {

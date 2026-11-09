@@ -218,54 +218,54 @@ ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} ي
       };
     }
 
-    // Check pricing inquiry
-    if (t.includes('سعر') || t.includes('اسعار') || t.includes('بكم') || t.includes('تكلفه') || t.includes('price') || t.includes('cost')) {
-      return {
-        reply_text: 'أهلاً بك! كل نظام بنبنيه في atlead بيكون مخصص ومفصل تماماً حسب حجم شركتك والأنظمة اللي بتستخدمها، لهيك ما بنعطي باقات جاهزة. الخطوة الأولى بنعمل جلسة استشارة مجانية مدتها 30 دقيقة نفهم فيها طبيعة التحديات عندك ونعطيك خطة عمل وتكلفة دقيقة. شو نوع شغلك بالظبط؟',
-        identified_problem: 'استفسار عن الأسعار والباقات',
-        proposed_solution: 'جلسة استشارة مجانية لتقييم الاحتياج وتحديد التكلفة',
-        lead_stage: 'discovery',
-        classification: 'Warm',
-        buying_probability: 55,
-        handoff_triggered: false
-      };
-    }
-
-    // Check portfolio / previous work inquiry
-    if (t.includes('سابقه') || t.includes('اعمالكم') || t.includes('مشاريعكم') || t.includes('portfolio') || t.includes('شو عملتوا') || t.includes('زبائنكم') || t.includes('خبراتكم')) {
-      return {
-        reply_text: 'نفذنا بفضل الله أكثر من 9 مشاريع وأنظمة رقمية متقدمة لشركات في قطاعات مختلفة، مثل منصة التجارة الإلكترونية B2B لشركة AGS Technology (agsco.shop) لمعدات السلامة مع كتالوج 166 منتج، وموقع ومنصة الطلبات Moe\'s PureBite، بالإضافة لأنظمة مبيعات ذكية وأتمتة للعديد من الأنشطة. شو المجال أو المشكلة اللي حابب نحلها عندك لنعطيك تفاصيل مشابهة؟',
-        identified_problem: 'الاطلاع على سوابق الأعمال والمشاريع',
-        proposed_solution: 'عرض دراسات الحالة المماثلة لنشاط العميل',
-        lead_stage: 'discovery',
-        classification: 'Warm',
-        buying_probability: 60,
-        handoff_triggered: false
-      };
-    }
-
-    // Check what is atlead / services inquiry
-    if (t.includes('مين انتو') || t.includes('مين شركه') || t.includes('شو بتعملو') || t.includes('خدماتكم') || t.includes('شو الخدمات')) {
-      return {
-        reply_text: 'أهلاً وسهلاً بك! إحنا في شركة atlead متخصصين في بناء وتصميم أنظمة المبيعات الذكية (AI Sales Systems) وأتمتة العمليات وتأهيل العملاء للشركات حتى نحول استفساراتكم لمبيعات فعلية. شو أكتر تحدي بيواجهكم حالياً بالمبيعات أو بمتابعة العملاء؟',
-        identified_problem: 'التعرف على خدمات الشركة وتخصصها',
-        proposed_solution: 'AI Sales Systems',
-        lead_stage: 'discovery',
-        classification: 'Warm',
-        buying_probability: 40,
-        handoff_triggered: false
-      };
-    }
-
-    // General welcoming reply
-    return {
-      reply_text: 'أهلاً وسهلاً بك! معك المساعد الذكي من شركة atlead. كيف بنقدر نساعدك ونطور مبيعات شركتك اليوم؟ شو نوع البزنس تبعكم؟',
+    // Replies this bot already sent in this conversation — never send the same one twice.
+    const sentReplies = (conversation.messages || [])
+      .filter(m => m.sender !== 'customer' && m.sender !== 'agent')
+      .map(m => m.content || '');
+    const alreadySent = (reply) => sentReplies.some(s => normalizeArabic(s) === normalizeArabic(reply));
+    const base = {
       identified_problem: null,
       proposed_solution: null,
-      lead_stage: 'new',
-      classification: 'Cold',
-      buying_probability: 30,
+      lead_stage: 'discovery',
+      classification: 'Warm',
+      buying_probability: 40,
       handoff_triggered: false
+    };
+
+    // Answer from the company knowledge files (approved FAQ).
+    const faq = knowledgeService.findFaqAnswer(text, { exclude: sentReplies });
+    if (faq) {
+      const pricing = /سعر|تكلف|كلفه|price|cost/.test(normalizeArabic(faq.q));
+      return {
+        ...base,
+        reply_text: faq.a,
+        identified_problem: pricing ? 'استفسار عن الأسعار' : faq.q,
+        proposed_solution: pricing ? 'جلسة استشارة مجانية لتحديد الحل والتكلفة' : null,
+        buying_probability: pricing ? 55 : 45
+      };
+    }
+
+    // First message: welcome.
+    const welcome = 'أهلاً وسهلاً! معك المساعد الذكي من atlead. إحنا بنبني أنظمة مبيعات ذكية ومخصصة للشركات. شو نوع شغلك، وشو أكتر شي بيتعبك بالمبيعات أو بمتابعة العملاء؟';
+    if (!sentReplies.length && !alreadySent(welcome)) {
+      return { ...base, reply_text: welcome, lead_stage: 'new', classification: 'Cold', buying_probability: 30 };
+    }
+
+    // Otherwise: a discovery question / honest "not available" — rotate so nothing repeats.
+    const options = [
+      'تمام، خليني أفهمك أكتر: شو نوع شغلك، وكم استفسار تقريباً بيوصلكم بالأسبوع؟',
+      'فهمت عليك. شو أكتر جزء بيتعبك هسا: الرد على العملاء، المتابعة معهم، ولا تنظيم بياناتهم؟',
+      'هاي المعلومة مش متوفرة عندي بدقة حالياً حتى أجاوبك بشكل كامل، بس بقدر أخلي فريق atlead يتواصل معك ويعطيك كل التفاصيل. حابب أرتبلك هالشي؟',
+      'على أي قناة بيوصلكم أغلب العملاء: واتساب، إنستغرام، فيسبوك، ولا الموقع؟',
+      'إذا حابب، بنقدر نرتبلك جلسة استشارة مجانية 30 دقيقة أونلاين مع الفريق نفهم فيها احتياجك ونعطيك خطة وتكلفة دقيقة. شو رأيك؟'
+    ];
+    const isGreeting = /^(مرحبا|مرحب|هلا|اهلا|اهلين|السلام|سلام|مسا|صباح|hi|hello|hey|هاي)/.test(t);
+    const next = options.find(o => !alreadySent(o) && !(isGreeting && o.includes('مش متوفرة')));
+    if (next) return { ...base, reply_text: next };
+    return {
+      ...base,
+      reply_text: 'خليني أحول سؤالك لفريق atlead عشان يجاوبك بدقة. ممكن تبعتلي رقمك وأفضل وقت للتواصل؟',
+      buying_probability: 50
     };
   }
 

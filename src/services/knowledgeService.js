@@ -1,11 +1,32 @@
 const fs = require('fs');
 const path = require('path');
 
-const KB_FILE = path.join(__dirname, '../../data/knowledge/atlead_kb.json');
+const KB_DIR = path.join(__dirname, '../../data/knowledge');
+const KB_FILE = path.join(KB_DIR, 'atlead_kb.json');
+// Clean text extracted from the company PDFs (Sales Chatbot KB + Company Portfolio).
+const DOC_FILES = [
+  { file: 'kb_document.txt', title: 'ملف قاعدة المعرفة ودليل المبيعات (atlead Sales Chatbot Knowledge Base)' },
+  { file: 'portfolio_document.txt', title: 'ملف تعريف الشركة وسوابق الأعمال (atlead Company Portfolio)' }
+];
+const FAQ_FILE = path.join(KB_DIR, 'faq.json');
+
+function normalize(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[إأآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[ً-ٰٟـ]/g, '')
+    .replace(/[^\p{L}\p{N}\s@.]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 class KnowledgeService {
   constructor() {
     this.kbData = null;
+    this.documents = null;
+    this.faq = null;
     this.loadKB();
   }
 
@@ -18,6 +39,16 @@ class KnowledgeService {
     } catch (err) {
       console.error('Error loading Knowledge Base:', err.message);
     }
+    this.documents = DOC_FILES
+      .filter(d => fs.existsSync(path.join(KB_DIR, d.file)))
+      .map(d => ({ title: d.title, text: fs.readFileSync(path.join(KB_DIR, d.file), 'utf-8') }));
+    try {
+      this.faq = fs.existsSync(FAQ_FILE) ? JSON.parse(fs.readFileSync(FAQ_FILE, 'utf-8')) : [];
+    } catch (err) {
+      console.error('Error loading FAQ:', err.message);
+      this.faq = [];
+    }
+    console.log(`[Knowledge] Loaded ${this.documents.length} documents (${this.documents.reduce((n, d) => n + d.text.length, 0)} chars) and ${this.faq.length} FAQ entries.`);
   }
 
   getKnowledgeBase() {
@@ -25,11 +56,66 @@ class KnowledgeService {
     return this.kbData;
   }
 
+  getDocuments() {
+    if (!this.documents) this.loadKB();
+    return this.documents;
+  }
+
+  getFaq() {
+    if (!this.faq) this.loadKB();
+    return this.faq;
+  }
+
+  // Extra knowledge the admin writes in the dashboard (settings.knowledge.extra_text).
+  getExtraKnowledge() {
+    try {
+      return String(require('./storageService').getSettings().knowledge?.extra_text || '').trim();
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * Best FAQ answer for a customer message, or null.
+   * Scores keyword hits (whole phrase match on normalized text); avoids answers already sent.
+   */
+  findFaqAnswer(message, { exclude = [] } = {}) {
+    const t = ` ${normalize(message)} `;
+    if (!t.trim()) return null;
+    const sent = new Set(exclude.map(normalize));
+    let best = null;
+    for (const item of this.getFaq()) {
+      let score = 0;
+      for (const kw of item.keywords || []) {
+        const k = normalize(kw);
+        if (k && t.includes(k)) score += k.split(' ').length + 1;
+      }
+      if (!score || sent.has(normalize(item.a))) continue;
+      if (!best || score > best.score) best = { ...item, score };
+    }
+    return best;
+  }
+
   getSystemPrompt() {
     const kb = this.getKnowledgeBase();
     if (!kb) {
       return "أنت المساعد الذكي لشركة atlead المتخصصة في أنظمة المبيعات الذكية.";
     }
+
+    const docs = this.getDocuments();
+    const extra = this.getExtraKnowledge();
+    const faq = this.getFaq();
+    const reference = `
+=== المرجع الرسمي (مصدر الحقيقة الوحيد) ===
+تحت هذا السطر النص الكامل لملفات الشركة المعتمدة. جاوب من هذه الملفات فقط:
+- إذا المعلومة موجودة فيها، جاوب منها بصياغتك وبلهجة أردنية مختصرة (2-4 جمل) ولا تنسخ الجداول حرفياً.
+- إذا المعلومة مش موجودة، لا تخترع أبداً: استخدم عبارة "المعلومة غير المتوفرة" من القاعدة 7.
+- النص مستخرج آلياً من PDF، فممكن تلاقي ترتيب كلمات غريب بسيط؛ افهم المعنى.
+- لا تكرر نفس الرد اللي بعته قبل بنفس المحادثة؛ إذا العميل كرر سؤاله، جاوبه بطريقة مختلفة أو اسأله سؤال يوضح قصده.
+${faq.length ? `\n--- أسئلة شائعة بأجوبة معتمدة ---\n${faq.map(f => `س: ${f.q}\nج: ${f.a}`).join('\n\n')}\n` : ''}
+${extra ? `\n--- معلومات إضافية من إدارة atlead (أحدث من الملفات، والأولوية لها) ---\n${extra}\n` : ''}
+${docs.map(d => `\n--- ${d.title} ---\n${d.text}`).join('\n')}
+`;
 
     return `
 أنت المساعد الذكي والمستشار البيعي الرسمي لشركة "atlead" (تُكتب دائماً بالأحرف الصغيرة atlead - شعارنا: From Leads to Revenue).
@@ -96,7 +182,7 @@ atlead شركة متخصصة في تصميم وبناء أنظمة المبيع�
 - ستصلك "بيانات العميل المحفوظة" من المحادثات السابقة. إذا العميل راجع بعد فترة، كمّل معه من وين ما وصلتوا ولا تعيد الترحيب أو الأسئلة اللي جاوب عليها سابقاً.
 - حدّث customer_summary و customer_requests بحيث تحتوي المعلومات القديمة + الجديدة.
 - إذا العميل جاهز للشراء/الاستشارة لكن ما أعطى رقم هاتفه (خاصة على إنستغرام وفيسبوك)، اطلب رقمه بلطف قبل التحويل حتى يقدر الموظف يتواصل معه.
-`;
+${reference}`;
   }
 }
 

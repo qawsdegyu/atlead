@@ -488,8 +488,20 @@ router.post('/simulator/voice', upload.single('audio'), async (req, res) => {
 
 // Knowledge Base info
 router.get('/knowledge', (req, res) => {
-  const kb = knowledgeService.getKnowledgeBase();
-  res.json({ success: true, knowledge: kb });
+  const docs = knowledgeService.getDocuments();
+  res.json({
+    success: true,
+    documents: docs.map(d => ({ title: d.title, chars: d.text.length })),
+    faq_count: knowledgeService.getFaq().length,
+    extra_text: knowledgeService.getExtraKnowledge(),
+    system_prompt: knowledgeService.getSystemPrompt()
+  });
+});
+
+router.post('/knowledge', (req, res) => {
+  const extra = String(req.body?.extra_text ?? '').slice(0, 20000);
+  storageService.updateSettings({ knowledge: { extra_text: extra } });
+  res.json({ success: true, message: 'تم حفظ المعلومات الإضافية — البوت صار يستخدمها بالردود ✅' });
 });
 
 module.exports = router;

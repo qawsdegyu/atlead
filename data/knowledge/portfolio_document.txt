@@ -1,0 +1,727 @@
+--- صفحة 1 ---
+atlead. atlead.
+Ai Sales Systems Ai Sales Systems Ai Sales Systems Ai Sales Systems
+FROM LEADS FROM LEADS FROM LEADS FROM LEADS
+TO REVENUE TO REVENUE TO REVENUE TO REVENUE
+Company Profile Company Profile Company Profile Company Profile
+
+--- صفحة 2 ---
+A B O U T A T L E A D
+Who We Are
+Atlead is a company specialized in designing and building AI
+Sales Systems, automating business processes, and developing Atlead Doesn't Just Sell Chatbots
+custom digital solutions for companies.
+We build complete solutions tailored to each company's
+needs:
+We help companies improve how they receive leads, understand their needs, qualify
+Lead qualification
+them, manage communication and follow-up, and raise the efficiency of their sales
+Conversational assistants and knowledge (RAG)
+operations.
+Automated follow-up and CRM automation
+We don't offer technology for technology's sake. We start by understanding the problem
+Appointment booking and performance reporting
+our client faces, then design the right solution — whether it relies on artificial intelligence,
+Custom websites and web systems
+traditional automation, or system integration.
+F R O M L E A D S T O R E V E N U E
+F R O M L E A D S T O R E V E N U E 2
+
+--- صفحة 3 ---
+O U R M I S S I O N & V A L U E
+Our Mission & the Value We Deliver
+We turn complex, repetitive business processes into intelligent, organized systems
+that help companies operate more efficiently and achieve measurable results.
+01 02 03
+We Start with the Problem The Right Solution, Not Just a Measurable Results
+Tool
+We understand the client's actual challenge We define clear indicators that help
+before choosing any tool or technology. management measure the impact of the
+AI, traditional automation, or system
+solution.
+integration — whatever the case requires.
+F R O M L E A D S T O R E V E N U E 3
+
+--- صفحة 4 ---
+W H A T W E D E L I V E R
+Key Deliverables
+From a problem that wastes opportunities to a measurable business outcome
+Problem Solution Business Impact
+Delayed inquiries, lost follow-ups, and An organized sales system connecting intake, Operational efficiency and measurable
+scattered data qualification, and follow-up results
+01 02 03 04
+Better Lead Management Faster Response Time Smarter Lead Automated Follow-ups
+Qualification
+Organize lead data and manage Reduce delays in replying to Organize and follow up with
+their sources customer inquiries Identify the most suitable and customers automatically
+purchase-ready customers
+05 06 07 08
+Improved Customer Operational Efficiency Centralized Information Measurable Performance
+Experience
+Reduce manual work and Connect information and data in Indicators and reports that help
+Customers get information and repetitive tasks one place management measure
+services faster performance
+F R O M L E A D S T O R E V E N U E 4
+
+--- صفحة 5 ---
+O U R S E R V I C E S
+Our Services at a Glance
+Five service groups, delivered as a complete system or as standalone components based on each client's needs
+A B C D E
+AI Sales Systems AI Chatbots & RAG Systems AI Appointment & Web Design &
+Conversational AI Booking Systems Development
+Eight sales management Smart conversational AI that answers from the Smart management of Websites and web
+systems: lead assistants tailored to the client's approved bookings, appointments, systems built as part of
+qualification, assistants, company's business and information sources. and reminders. the sales and operations
+follow-up, CRM, information sources. ecosystem.
+reporting, and
+integration.
+We don't sell one tool for everyone: we choose the right components for each company and connect them into a working system.
+F R O M L E A D S T O R E V E N U E 5
+
+--- صفحة 6 ---
+A · A I S A L E S S Y S T E M S
+AI Sales Systems (1/2)
+We design and build complete sales systems, or standalone components based on client needs
+01 02
+AI Lead Qualification System AI Sales Chatbot
+A system that receives lead data, asks the right questions, collects key A smart assistant that engages with customers, answers common questions,
+information, then analyzes the answers and classifies leads against defined collects customer data and needs, and routes the conversation to a sales
+criteria such as need, budget, and purchase readiness. representative when needed.
+03 04
+AI Sales Assistant Automated Follow-up System
+An internal assistant for the sales team that searches approved company Organizes customer follow-up after first contact, sending reminders or follow-up
+information, helps staff access product, service, and policy data, summarizes messages based on clear timing rules, conditions, and customer consent.
+conversations, and prepares draft replies.
+F R O M L E A D S T O R E V E N U E 6
+
+--- صفحة 7 ---
+A · A I S A L E S S Y S T E M S
+AI Sales Systems (2/2)
+05 06
+CRM Automation Sales Pipeline Assistant
+Connects lead sources to your CRM, creates records automatically, updates Tracks deal stages, detects stalled opportunities, and alerts the sales team to
+sales stages, assigns leads to staff, and reduces manual entry and duplicate customers who need follow-up.
+data.
+07 08
+Sales Reporting & Analytics Sales Workflow Integration
+Reports and dashboards tracking sales indicators. Connects different sales tools such as CRM, email, calendar, website, WhatsApp,
+and internal systems, according to available capabilities and integrations.
+Number of leads Lead sources Response speed Conversion rates
+Deal stages Reasons for lost deals
+F R O M L E A D S T O R E V E N U E 7
+
+--- صفحة 8 ---
+B · A I C H A T B O T S & C O N V E R S A T I O N A L A I
+Smart Conversational Assistants
+We build conversational assistants tailored to each company's business, information sources, and the nature of its customers' questions
+01 02
+Tailored to Your Business
+Customer Support Chatbots Website AI Assistants
+There is no single assistant that fits An assistant for customer service that answers An assistant on the company website that guides
+everyone. Each assistant is customized recurring inquiries visitors and collects their data
+according to:
+03 04
+The company's business
+Product Inquiry Assistants Lead Generation Chatbots
+Its information sources
+An assistant for inquiries about products and An assistant that collects and qualifies lead data
+services
+The nature of its customers'
+questions
+05
+With handoff to a human agent when
+Internal Employee Assistants
+needed.
+An internal assistant giving employees quick access
+to information
+F R O M L E A D S T O R E V E N U E 8
+
+--- صفحة 9 ---
+C · R A G S Y S T E M S — R E T R I E V A L - A U G M E N T E D G E N E R A T I O N
+RAG Systems Built on Your Knowledge
+AI that answers from the client's own information sources — not from guesswork
+Information sources the system can draw from
+PDF & Word files Product catalogs Databases Company policies & procedures FAQs Internal documents
+Use cases What sets this type of system apart
+An assistant that answers product-specification questions from the
+1
+company catalog Retrieves information from trusted sources
+An internal assistant for employees that searches company policies and
+procedures
+2
+Shows the source of the answer when supported
+A customer service assistant grounded in approved information
+3
+Handles unavailable information without inventing answers
+A sales assistant that helps staff reach the right information
+F R O M L E A D S T O R E V E N U E 9
+
+--- صفحة 10 ---
+D · A I A P P O I N T M E N T & B O O K I N G S Y S T E M S
+Smart Booking & Appointment Systems
+From the first booking request to the appointment reminder, with no repetitive manual coordination
+1 Receive booking requests
+Example sectors
+2 Identify the type of service requested
+Clinics Training centers Consultations
+3 Show available slots through a connected calendar
+Service centers Real estate & viewings
+4 Record the booking
+Connected calendar + company rules + automatic reminders =
+5 Send a confirmation to the customer
+higher attendance and less coordination.
+6 Send reminders before the appointment
+7 Reschedule or cancel appointments per company rules
+F R O M L E A D S T O R E V E N U E 1 0
+
+--- صفحة 11 ---
+E · W E B D E S I G N & D E V E L O P M E N T
+Designing & Developing Websites and Systems
+Custom websites and web systems tailored to the nature of the business
+Business Websites E-commerce Websites B2B Platforms Custom Web
+Applications
+Corporate websites Online stores B2B platforms
+Tailored web apps
+Booking Websites Customer Portals Admin Dashboards Website AI Integration
+Reservation sites Client portals Management dashboards AI built into the website
+A website is more than a showcase. It can be part of the company's sales and operations system: it receives requests,
+qualifies customers, books appointments, and feeds your data directly.
+F R O M L E A D S T O R E V E N U E 1 1
+
+--- صفحة 12 ---
+H O W O U R S Y S T E M S W O R K
+How Do Our Systems Work?
+Five diagrams showing the typical workflow of our core systems
+01
+AI Lead Qualification System
+From the client source to the sales team
+02
+AI Chatbot
+From the customer message to the reply and handoff
+03
+RAG System
+From documents to a grounded answer
+04
+AI Appointment System
+From inquiry to appointment reminder
+05
+Web Design & Development
+From requirements to maintenance and support
+These are sample diagrams; each path is customized to the company's tools and processes.
+F R O M L E A D S T O R E V E N U E 1 2
+
+--- صفحة 13 ---
+W O R K F L O W 0 1 · A I L E A D Q U A L I F I C A T I O N S Y S T E M
+Lead Qualification System
+Leads are classified against criteria defined by the company, not by arbitrary assessment
+Website WhatsApp Social Media
+1 2 3 4 5 6 7 8
+Lead Source Lead AI Conversation Data Extraction Lead Scoring & CRM Sales Team Qualified Lead
+Information & Questions Qualification Registration Notification → Sales Follow-
+Potential customer Extracting
+Capture up
+source Smart dialogue information Scoring and Recording in the Notifying the sales
+Capturing inquiry and questions classification CRM team Qualified lead →
+data Sales
+Leads classified against company-defined criteria
+Need Budget Readiness
+F R O M L E A D S T O R E V E N U E 1 3
+
+--- صفحة 14 ---
+W O R K F L O W 0 2 · A I C H A T B O T
+AI Sales Chatbot
+The assistant answers from approved information and hands the conversation to a human agent when needed
+1 2 3 4 5 6 7
+Website / Customer Message AI Intent Retrieve Approved Generate Response Answer Customer Conversation
+WhatsApp / Other Recognition Information Summary & Lead
+Customer message Generating the reply Replying to the
+Channel Registration
+Understanding Fetching approved customer
+Channel customer intent information only Summary and lead
+registration
+If needed
+Human Agent Handoff
+Approved sources only
+Handoff to a human agent when
+No fabricated answers
+needed
+F R O M L E A D S T O R E V E N U E 1 4
+
+--- صفحة 15 ---
+W O R K F L O W 0 3 · R A G S Y S T E M
+RAG System
+Two separate phases: preparing the knowledge base, then user question and retrieval
+A · Knowledge Base Preparation Preparing the knowledge base
+1 2 3 4 5
+Company Documents / Document Processing Text Extraction & Chunking Embeddings Vector Database
+PDFs / Knowledge Base
+Processing documents Extracting and splitting text Converting text to vectors Vector database
+Company documents
+Retrieve similar chunks
+B · Question & Answer User question and retrieval
+6 7 8 9
+User Question Relevant Information LLM Generates Grounded Answer with Source
+Retrieval Answer Reference
+User question
+Retrieving relevant information Source-grounded answer Answer with source (when
+available)
+F R O M L E A D S T O R E V E N U E 1 5
+
+--- صفحة 16 ---
+W O R K F L O W 0 4 · A I A P P O I N T M E N T S Y S T E M
+Smart Appointment System
+Includes a reschedule or cancel path based on company rules
+1 2 3 4 5
+Customer Inquiry AI Assistant Understand Required Check Calendar Show Available Slots
+Service Availability
+Customer inquiry Smart assistant Showing available slots
+Understanding the requested Checking calendar availability
+service
+6 7 8 9
+Reschedule / Cancel
+Customer Selects Time Confirm Booking Send Confirmation Automatic Reminder
+Per company rules
+Customer selects a time Confirming the booking Sending confirmation Automatic reminder Returns to the calendar
+availability check ↩
+F R O M L E A D S T O R E V E N U E 1 6
+
+--- صفحة 17 ---
+W O R K F L O W 0 5 · W E B D E S I G N & D E V E L O P M E N T
+Designing & Developing Websites and Systems
+From understanding requirements to maintenance and support
+1 2 3 4
+Client Requirements Business Analysis UI/UX Design Development
+Client requirements Business analysis UI/UX design Development
+5 6 7 8
+Integrations & Automation Testing & Optimization Deployment Maintenance & Support
+Integrations and automation Testing and optimization Launch Maintenance and support
+F R O M L E A D S T O R E V E N U E 1 7
+
+--- صفحة 18 ---
+O U R A P P R O A C H
+How We Work
+A six-phase methodology that always starts from the client's problem
+01 02 03
+Discover Analyze Design
+We understand the client's business, problem, We analyze the workflow and identify weak We define the right solution and design the
+and current processes. points and opportunities for improvement. architecture and workflow.
+04 05 06
+Build Test & Deploy Measure & Optimize
+We develop the system and connect it to the We test the solution in realistic scenarios, then We measure results and improve the system
+required tools and platforms. launch it once verified. based on performance and feedback.
+Every project starts from the client's problem — not from assuming that AI is always the answer.
+F R O M L E A D S T O R E V E N U E 1 8
+
+--- صفحة 19 ---
+I N D U S T R I E S W E S E R V E
+Industries We Serve
+Atlead isn't limited to one sector; we tailor each solution to the nature of the industry, its operations, and the actual problem.
+01 02 03
+Wholesale & Distribution Import & Trading Logistics & Shipping
+04 05 06
+Real Estate Education & Training Healthcare & Clinics
+07 08 09
+Retail & E-commerce Professional Services Automotive
+Target industries for which we can develop tailored solutions; not necessarily industries where we have delivered documented projects.
+F R O M L E A D S T O R E V E N U E 1 9
+
+--- صفحة 20 ---
+O U R P R E V I O U S W O R K & T E C H N I C A L E X P E R I E N C E
+Our Previous Work
+Nine digital projects we delivered previously, showcasing hands-on experience building digital products and systems: websites, stores, platforms,
+and smart assistants.
+Our Previous Work
+Solutions Atlead Offers Future Capabilities
+This section: digital projects we delivered The preceding sections: services and systems Announced when available, without any prior
+previously, reflecting our practical Atlead currently offers. claims.
+experience in building and delivery.
+F R O M L E A D S T O R E V E N U E 2 0
+
+--- صفحة 21 ---
+P R E V I O U S W O R K · I N D E X
+The Nine Projects
+Technical experience of the team through Operix
+01 02 03
+AGS Technology Moe's PureBite BITE UP
+B2B E-commerce Restaurants Healthy Food
+04 05 06
+Yahia Redwan Sana' AI Murshid Poly
+E-learning EdTech Educational Platform
+07
+08 09
+CNE Family
+Murshid Links Operix
+Student Community
+Digital Identity Company Website
+Platform
+F R O M L E A D S T O R E V E N U E 2 1
+
+--- صفحة 22 ---
+P R O J E C T 0 1 · B 2 B E - C O M M E R C E · S A F E T Y & M E A S U R E M E N T E Q U I P M E N T
+AGS Technology
+Accuracy General Safety Co.
+agsco.shop
+A complete online store for a supplier of safety equipment, measurement devices,
+and alarm and firefighting systems in Jordan. It brings together a product catalog,
+shopping cart, quote requests, inspection booking, customer accounts, and an
+admin dashboard in a single system.
+Before After: What We Built
+The catalog was scattered across An up-to-date online catalog with
+images, files, and messages categories and search
+166 6 24/7
+Every quotation was prepared Quote requests arrive ready, with
+manually from scratch quantities and details
+products in the catalog main categories store running non-stop
+Reaching new customers depended A digital presence any factory or
+on personal acquaintances institution can reach
+F R O M L E A D S T O R E V E N U E 2 2
+
+--- صفحة 23 ---
+A G S T E C H N O L O G Y · 0 1 — S Y S T E M S C R E E N S H O T S
+Key Features & Highlights
+Catalog of 166 products in 6 categories
+Shopping cart and checkout
+Request a quote for bulk quantities
+Work-environment inspection booking
+Customer accounts and order tracking
+Admin dashboard
+User Journey
+Product catalog with categories and counters
+1 The customer picks a category and browses products
+2 Opens a product and reviews specifications and price
+3 Adds to cart or requests a quote
+Signs in and tracks the order, while management receives it in the
+4 Quote request form Inspection & installation services page
+dashboard
+F R O M L E A D S T O R E V E N U E 2 3
+
+--- صفحة 24 ---
+P R O J E C T 0 2 · R E S T A U R A N T S · O N L I N E O R D E R I N G
+Moe's PureBite
+A 100% gluten-free kitchen
+moespurebite.com
+An ordering website for a 100% gluten-free kitchen in Amman, designed for people
+with celiac disease. It displays the full menu with photos and prices, collects the
+order in a cart sent ready-made to WhatsApp, and includes a subscriptions page
+and the Jordan Food and Drug Administration license certificate.
+Before After: What We Built
+Customers asked about the menu An up-to-date menu on a single link
+and prices in private messages
+An organized order message 100% 7 1
+Mistakes in verbal orders generated automatically
+Difficulty proving safety to celiac The certificate and About page build
+gluten-free menu sections tap to send the order
+customers trust
+F R O M L E A D S T O R E V E N U E 2 4
+
+--- صفحة 25 ---
+M O E ' S P U R E B I T E · 0 2 — S Y S T E M S C R E E N S H O T S
+Key Features & Highlights
+Digital menu with sections, photos, and prices
+Order cart sent via WhatsApp
+Alerts for items that need advance ordering
+Meal subscriptions page
+Display of the official license certificate
+Kitchen location on Google Maps
+User Journey
+License certificate at the top of the menu
+1 Opens the menu and chooses a section
+2 Taps + on the desired item
+3 Reviews the cart and adds notes
+4 Taps “Complete order via WhatsApp”
+Menu with pre-order notice Cart and order checkout via WhatsApp
+F R O M L E A D S T O R E V E N U E 2 5
+
+--- صفحة 26 ---
+P R O J E C T 0 3 · H E A L T H Y F O O D · B R A N D & O R D E R I N G
+BITE UP
+Healthy protein desserts
+biteup.online
+A website for a healthy protein-dessert brand in Amman. It lists 20 items with
+calories and protein for each, an interactive nutrition comparison, supermarket
+points of sale, a WhatsApp order cart, and a smart assistant that answers visitors
+instantly.
+Before After: What We Built
+Questions about nutrition values and All nutrition information published
+prices came through messages and clear
+20 4+ 24/7
+No single place showing all items A smart assistant that replies
+instantly
+People didn't know where to find the
+items on the menu points of sale in Amman assistant answering
+product A points-of-sale page with Google
+Maps instantly
+F R O M L E A D S T O R E V E N U E 2 6
+
+--- صفحة 27 ---
+B I T E U P · 0 3 — S Y S T E M S C R E E N S H O T S
+Key Features & Highlights
+20-item menu with calories and protein
+Interactive nutrition comparison
+Points of sale with directions
+WhatsApp order cart
+Smart assistant “Ask BITE UP”
+Instagram integration
+User Journey
+Menu with filters
+1 Explores the menu and items
+2 Compares nutrition values across flavors
+3 Adds to cart and reviews the order
+4 Sends the order via WhatsApp or asks the assistant
+Nutrition comparison Smart assistant “Ask BITE UP”
+F R O M L E A D S T O R E V E N U E 2 7
+
+--- صفحة 28 ---
+P R O J E C T 0 4 · E - L E A R N I N G · C O U R S E S A L E S
+Yahia Redwan
+Online extortion protection package
+yahiaredwan.com
+A sales and registration page for a training package by lawyer Yahia Redwan on
+protection from online extortion: 5 courses (legal, technical, psychological) with
+specialist trainers, a launch offer, Google sign-in, a subscription form with
+payment receipt upload, and a smart course assistant.
+Before After: What We Built
+Consultations were one-to-one and One page that explains, persuades,
+time-limited and sells
+5 3 100
+Marketing through scattered posts Online registration, payment, and
+receipt upload
+Payment confirmed manually via
+courses in one package experts: law, security, seats in the launch offer
+messages Scalable income from the same
+content psychology
+F R O M L E A D S T O R E V E N U E 2 8
+
+--- صفحة 29 ---
+Y A H I A R E D W A N · 0 4 — S Y S T E M S C R E E N S H O T S
+Key Features & Highlights
+5 courses with specialist trainers
+Launch offer for the first 100 subscribers
+Sign in with Google or email
+Subscription form with payment receipt upload
+Smart assistant answering questions about the package
+Terms, privacy, and refund pages
+User Journey
+Detailed course tracks
+1 Reads the five course tracks
+2 Meets the trainers and reads the FAQ
+3 Clicks “Reserve your seat” and creates an account
+4 Uploads the payment receipt and their subscription is activated
+Package experts Final offer and booking button
+F R O M L E A D S T O R E V E N U E 2 9
+
+--- صفحة 30 ---
+P R O J E C T 0 5 · E D T E C H · I N V E S T M E N T P I T C H
+Sana' AI
+Sana' · Hidden Skills Technologies
+sanaskills.tech
+An introductory website and investment pitch for the “Sana’” project: hidden
+technologies that integrate learning into the child’s environment instead of the
+screen, designed for children with mild intellectual disabilities and attention
+difficulties. It includes the four pillars, a child’s-day journey, an interactive lab, a
+social impact calculator, and a roadmap.
+Before After: What We Built
+An idea on paper that was hard to One link presenting the vision,
+explain quickly technology, and impact
+4 4 3
+No link to send to supporters An interactive experience that
+persuades within minutes
+The pitch relied on verbal
+technology pillars implementation phases tracks: investor, institution,
+explanation A ready foundation for competitions
+and development families
+F R O M L E A D S T O R E V E N U E 3 0
+
+--- صفحة 31 ---
+S A N A ' A I · 0 5 — S Y S T E M S C R E E N S H O T S
+Key Features & Highlights
+The four pillars of hidden technologies
+A child’s-day journey as a visual story
+Interactive lab with clickable hotspots
+Social impact calculator
+A 4-phase roadmap
+Privacy and ethics charter
+User Journey
+The four pillars
+1 Learns about the vision and philosophy
+2 Browses the four pillars
+3 Tries the interactive lab by clicking
+4 Adjusts the impact calculator and chooses their track
+Interactive lab Social impact calculator
+F R O M L E A D S T O R E V E N U E 3 1
+
+--- صفحة 32 ---
+P R O J E C T 0 6 · E D U C A T I O N A L P L A T F O R M · A L - B A L Q A U N I V E R S I T Y S T U D E N T S
+Murshid Poly
+Murshid Poly · The Academic Platform
+murshidpoly.com
+A free academic platform for students of the Faculty of Technological Engineering
+(Polytechnic) at Al-Balqa Applied University: a course bulletin updated every
+minute with alerts when sections open, a conflict-free schedule planner, a GPA
+calculator, a vault of summaries and exams, interactive study plans, and a guide
+to instructors and buildings.
+Before After: What We Built
+Manually checking the university Instant alerts via email and
+bulletin and missing sections notification
+240+ 179 16
+Paper schedules and conflicts A ready schedule sorted by quality
+Files scattered across WhatsApp Everything in one place, in Arabic
+study files instructors in the directory majors
+groups
+F R O M L E A D S T O R E V E N U E 3 2
+
+--- صفحة 33 ---
+M U R S H I D P O L Y · 0 6 — S Y S T E M S C R E E N S H O T S
+Key Features & Highlights
+Course bulletin with section-opening alerts
+Conflict-free schedule planner
+GPA calculator using the university's system
+Vault of summaries and exams
+Interactive study plans
+Directory of instructors and buildings
+User Journey
+GPA calculator
+1 The student picks their major
+2 Browses the course bulletin and enables alerts
+3 Generates their study schedule
+4 Calculates their GPA and downloads summaries
+Majors and plans Course bulletin
+F R O M L E A D S T O R E V E N U E 3 3
+
+--- صفحة 34 ---
+P R O J E C T 0 7 · S T U D E N T C O M M U N I T Y P L A T F O R M
+CNE Family
+Computer & Network Engineering platform
+cnefamily.tech
+The official platform for the Computer and Network Engineering student team at
+Al-Balqa University: 84 courses organized by plan and year, 4 specialization tracks,
+an academic progress tracker, student service links, outstanding members, and a
+team membership application form.
+Before After: What We Built
+Plans and links scattered across A clear “starting point” on a single link
+accounts and groups
+An interactive progress tracker 84 4 4
+Each student tracked their progress
+An organized, visible team
+on paper
+study courses specialization tracks student services
+New students didn't know where to
+start
+F R O M L E A D S T O R E V E N U E 3 4
+
+--- صفحة 35 ---
+C N E F A M I L Y · 0 7 — S Y S T E M S C R E E N S H O T S
+Key Features & Highlights
+84 courses organized by year
+Downloadable tree-style plans
+Academic progress tracker
+Links to the portal, Moodle, and bulletin
+Outstanding members board
+Dark and light modes
+User Journey
+Study plans for both majors
+1 Chooses their major: Computer or Networks
+2 Opens the study plan
+3 Marks completed courses in the tracker
+4 Uses quick links to services
+Academic progress tracker Main interface
+F R O M L E A D S T O R E V E N U E 3 5
+
+--- صفحة 36 ---
+P R O J E C T 0 8 · D I G I T A L I D E N T I T Y · L I N K S P A G E
+Murshid Links
+Murshid's official links page
+operixsysm.online
+An official Link-in-Bio page for the Murshid Poly platform: a single entry point
+bringing together the official website, Instagram account, and the links of
+technical partner Operix, with a lightweight, fast design that is mobile-friendly and
+matches the platform's own identity.
+Before After: What We Built
+Only one link allowed in the bio All channels in one place
+Risk of fake accounts An official page in the platform's 6 1 100%
+identity
+Visits lost between platforms
+A fast mobile experience
+official links bio link mobile-friendly
+F R O M L E A D S T O R E V E N U E 3 6
+
+--- صفحة 37 ---
+M U R S H I D L I N K S · 0 8 — S Y S T E M S C R E E N S H O T S
+Key Features & Highlights
+All official channels on a single page
+Platform identity instead of ready-made templates
+Instant loading on mobile
+Introduction to the technical partner
+User Journey
+1 Taps the link in the bio
+Links page on desktop and mobile
+2 Chooses the channel they want
+3 Goes straight to it
+F R O M L E A D S T O R E V E N U E 3 7
+
+--- صفحة 38 ---
+P R O J E C T 0 9 · C O M P A N Y W E B S I T E · T E C H S E R V I C E S
+Operix
+The official website of Operix
+operixsys.online
+The official website of Operix in Amman. It introduces its services (business
+websites, stores, custom systems, Operix Inbox, website assistants, digital menus,
+maintenance, booking systems), showcases work, client testimonials, and the
+team, with a project-start form and a smart assistant that answers visitors in
+Arabic and English.
+Before After: What We Built
+Work showcased through scattered A website presenting services, work,
+messages and images and team
+8 2
+Repeated questions from every new An assistant answering common
+client questions
+services languages: Arabic and English
+No unified place to start a project One form receiving project requests
+F R O M L E A D S T O R E V E N U E 3 8
+
+--- صفحة 39 ---
+O P E R I X · 0 9 — S Y S T E M S C R E E N S H O T S
+Key Features & Highlights
+8 services in an animated visual showcase
+Published works gallery
+Client testimonials
+Smart assistant answering visitors
+“Start your project” form
+Arabic and English
+User Journey
+Services in a visual showcase
+1 Browses the services
+2 Reviews the work and client testimonials
+3 Asks the assistant about their project
+4 Fills in the “Start your project” form
+Smart assistant answering a visitor Published works gallery
+F R O M L E A D S T O R E V E N U E 3 9
+
+--- صفحة 40 ---
+W H Y A T L E A D
+Why Atlead
+Six principles that define how we work
+01 02 03
+Problem-First Approach Customized Solutions Business-Oriented
+Technology
+We start from the client's problem We don't rely on one solution for all
+companies
+We link technology to business outcomes
+04 05 06
+Integrated Systems Practical Implementation Measurable Impact
+We connect tools and processes in one We care about execution and real-world We define indicators to measure the solution's
+complete system experience, not just promises impact
+F R O M L E A D S T O R E V E N U E 4 0
+
+--- صفحة 41 ---
+C O N T A C T U S
+Let's Build Your Next Sales
+System
+Is your company facing a challenge in managing customers, following up on sales, or
+carrying out repetitive processes?
+Let's understand the challenge you face and explore how technology, automation, and
+AI can help you reach a better result.
+Book your free consultation with Atlead Scan the code to start a WhatsApp chat
+Instagram · @atlead.ai WhatsApp · +962 78 225 5280
+F R O M L E A D S T O R E V E N U E

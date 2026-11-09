@@ -496,9 +496,17 @@
 
   function apply() {
     busy = true;
+    // The layout is designed right-to-left, so it stays as is; only the text
+    // direction of English strings is fixed (no ":Stage" style punctuation flips).
     document.documentElement.lang = lang;
-    document.documentElement.dir = lang === 'en' ? 'ltr' : 'rtl';
     document.body.classList.toggle('lang-en', lang === 'en');
+    if (!document.getElementById('i18n-style')) {
+      const st = document.createElement('style');
+      st.id = 'i18n-style';
+      st.textContent = 'body.lang-en :is(p,span,label,h1,h2,h3,h4,h5,h6,small,td,th,button,a,li,option,summary,strong,b,em,div.form-hint,.form-label){unicode-bidi:plaintext;}' +
+        'body.lang-en :is(input,textarea)::placeholder{direction:ltr;}';
+      document.head.appendChild(st);
+    }
     walk(document.body);
     const t = document.querySelector('title');
     if (t) translateTextNode(t.firstChild);

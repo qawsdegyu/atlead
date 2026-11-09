@@ -216,6 +216,147 @@ class MetaService {
     }
   }
 
+  // ---- Diagnostics -------------------------------------------------------
+  // Last webhook events Meta sent us (kept in memory) — proves whether Instagram /
+  // comments events actually arrive.
+  logWebhookEvent(event) {
+    if (!this._webhookLog) this._webhookLog = [];
+    this._webhookLog.unshift({ at: new Date().toISOString(), ...event });
+    if (this._webhookLog.length > 60) this._webhookLog.length = 60;
+  }
+
+  getWebhookLog() {
+    return this._webhookLog || [];
+  }
+
+  /**
+   * Asks Meta directly what works: token permissions, app webhook subscriptions,
+   * Instagram messaging access, and comment read/reply access.
+   */
+  async diagnose() {
+    const cfg = metaConfig();
+    const token = cfg.page_access_token;
+    const checks = [];
+    const add = (key, label, ok, detail, fix = '') => checks.push({ key, label, ok, detail, fix });
+    const get = async (path, params = {}) => (await axios.get(`${GRAPH}/${path}`, { params: { access_token: token, ...params }, timeout: 15000 })).data;
+    const errMsg = (e) => e.response?.data?.error?.message || e.message;
+    if (!token || !cfg.page_id) {
+      add('token', 'رمز الصفحة', false, 'ما في Page Token أو Page ID محفوظ.', 'اربط الصفحة من بطاقة Meta.');
+      return { checks, webhook_log: this.getWebhookLog() };
+    }
+
+    // 1) Token permissions (needs App Secret for an app access token)
+    let scopes = [];
+    let appId = null;
+    if (cfg.app_secret) {
+      try {
+        appId = (await get('app', { fields: 'id' })).id;
+        const dbg = (await axios.get(`${GRAPH}/debug_token`, {
+          params: { input_token: token, access_token: `${appId}|${cfg.app_secret}` }, timeout: 15000
+        })).data?.data || {};
+        scopes = dbg.scopes || [];
+        add('token', 'صلاحية الرمز', !!dbg.is_valid,
+          `${dbg.is_valid ? 'صالح' : 'غير صالح'} — ${dbg.expires_at ? (dbg.expires_at === 0 ? 'دائم' : `ينتهي ${new Date(dbg.expires_at * 1000).toISOString().slice(0, 10)}`) : 'دائم'}`);
+      } catch (e) {
+        add('token', 'صلاحية الرمز', false, errMsg(e));
+      }
+    }
+    const need = {
+      pages_messaging: 'رسائل الماسنجر',
+      instagram_basic: 'قراءة حساب الإنستا',
+      instagram_manage_messages: 'رسائل الإنستا (DM)',
+      instagram_manage_comments: 'الرد على تعليقات الإنستا',
+      pages_read_engagement: 'قراءة منشورات الصفحة',
+      pages_read_user_content: 'قراءة تعليقات الفيس',
+      pages_manage_engagement: 'الرد على تعليقات الفيس',
+      pages_manage_metadata: 'الاشتراك بالويب هوك'
+    };
+    if (scopes.length) {
+      const missing = Object.keys(need).filter(s => !scopes.includes(s));
+      add('scopes', 'صلاحيات الرمز', missing.length === 0,
+        missing.length ? `ناقص: ${missing.map(s => `${s} (${need[s]})`).join('، ')}` : `كل الصلاحيات موجودة (${Object.keys(need).length}).`,
+        missing.length ? 'اعمل رمز مستخدم جديد من Graph API Explorer وفيه الصلاحيات الناقصة، والصقه بخانة Page Access Token واضغط فحص الاتصال.' : '');
+    }
+
+    // 2) App-level webhook subscriptions (which objects/fields Meta sends us)
+    if (appId && cfg.app_secret) {
+      try {
+        const subs = (await axios.get(`${GRAPH}/${appId}/subscriptions`, { params: { access_token: `${appId}|${cfg.app_secret}` }, timeout: 15000 })).data?.data || [];
+        const fieldsOf = (obj) => (subs.find(s => s.object === obj)?.fields || []).map(f => f.name);
+        const page = fieldsOf('page');
+        const ig = fieldsOf('instagram');
+        add('app_page_webhook', 'ويب هوك الصفحة (فيسبوك)', page.includes('messages') && page.includes('feed'),
+          page.length ? `مشترك بـ: ${page.join(', ')}` : 'مش مشترك',
+          !page.includes('feed') ? 'فعّل حقل feed لكائن Page بإعدادات Webhooks بالتطبيق (هذا اللي بيجيب تعليقات الفيس).' : '');
+        add('app_ig_webhook', 'ويب هوك الإنستا', ig.includes('messages') && ig.includes('comments'),
+          ig.length ? `مشترك بـ: ${ig.join(', ')}` : 'مش مشترك',
+          !(ig.includes('messages') && ig.includes('comments')) ? 'فعّل messages و comments لكائن Instagram بإعدادات Webhooks بالتطبيق.' : '');
+      } catch (e) {
+        add('app_webhooks', 'اشتراكات الويب هوك بالتطبيق', false, errMsg(e));
+      }
+    }
+
+    // 3) Page subscription
+    try {
+      const fields = await this.getPageSubscription();
+      add('page_sub', 'اشتراك الصفحة بالتطبيق', fields.includes('messages') && fields.includes('feed'), `مشتركة بـ: ${fields.join(', ') || 'ولا اشي'}`);
+    } catch (e) {
+      add('page_sub', 'اشتراك الصفحة بالتطبيق', false, errMsg(e));
+    }
+
+    // 4) Instagram account + messaging access
+    if (!cfg.instagram_account_id) {
+      add('ig_account', 'حساب الإنستا', false, 'ما في حساب إنستغرام أعمال مربوط بالصفحة.', 'اربط الإنستا بالصفحة ثم اضغط فحص الاتصال.');
+    } else {
+      try {
+        const ig = await get(cfg.instagram_account_id, { fields: 'id,username' });
+        add('ig_account', 'حساب الإنستا', true, `@${ig.username}`);
+      } catch (e) {
+        add('ig_account', 'حساب الإنستا', false, errMsg(e));
+      }
+      try {
+        const conv = await get(`${cfg.page_id}/conversations`, { platform: 'instagram', limit: 3, fields: 'id,updated_time' });
+        add('ig_dm', 'رسائل الإنستا (DM)', true, `الوصول شغال — ${conv.data?.length || 0} محادثة ظاهرة.`);
+      } catch (e) {
+        const m = errMsg(e);
+        add('ig_dm', 'رسائل الإنستا (DM)', false, m,
+          /access to messages|connected tools|not enabled|messaging/i.test(m)
+            ? 'من تطبيق الإنستا: الإعدادات ← الرسائل والردود ← الأدوات المتصلة ← فعّل "السماح بالوصول إلى الرسائل".'
+            : 'تأكد إن الرمز فيه instagram_manage_messages وإن الإنستا مربوط بالصفحة.');
+      }
+      try {
+        const media = await get(`${cfg.instagram_account_id}/media`, { fields: 'id,comments_count', limit: 5 });
+        const withComments = (media.data || []).find(m => m.comments_count > 0);
+        if (withComments) {
+          await get(`${withComments.id}/comments`, { limit: 1 });
+          add('ig_comments', 'تعليقات الإنستا', true, 'القراءة شغالة.');
+        } else {
+          add('ig_comments', 'تعليقات الإنستا', true, `${(media.data || []).length} منشور — ما في تعليقات لنفحصها.`);
+        }
+      } catch (e) {
+        add('ig_comments', 'تعليقات الإنستا', false, errMsg(e), 'لازم صلاحية instagram_manage_comments بالرمز.');
+      }
+    }
+
+    // 5) Facebook comments read access
+    try {
+      const feed = await get(`${cfg.page_id}/posts`, { fields: 'id,comments.limit(1){id}', limit: 3 });
+      add('fb_comments', 'تعليقات الفيس', true, `${(feed.data || []).length} منشور مقروء.`);
+    } catch (e) {
+      add('fb_comments', 'تعليقات الفيس', false, errMsg(e), 'لازم pages_read_engagement و pages_read_user_content بالرمز.');
+    }
+
+    // 6) App mode
+    if (appId) {
+      try {
+        const app = (await axios.get(`${GRAPH}/${appId}`, { params: { fields: 'name', access_token: `${appId}|${cfg.app_secret}` }, timeout: 10000 })).data;
+        add('app', 'التطبيق', true, `${app.name} — منشور. ملاحظة: بدون App Review البوت بيرد بس على حسابات إلها دور بالتطبيق (أدمن/مختبر).`);
+      } catch { /* optional */ }
+    }
+
+    return { checks, webhook_log: this.getWebhookLog() };
+  }
+
   async getPageSubscription() {
     const cfg = metaConfig();
     const res = await axios.get(`${GRAPH}/${cfg.page_id}/subscribed_apps`, { params: { access_token: cfg.page_access_token }, timeout: 10000 });

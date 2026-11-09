@@ -993,6 +993,32 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
 });
 
 // Test Connection Buttons
+document.getElementById('btn-meta-diagnose')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btn-meta-diagnose');
+  const box = document.getElementById('meta-diagnose-result');
+  btn.disabled = true;
+  box.style.display = 'block';
+  box.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> عم نسأل Meta مباشرة...';
+  try {
+    const data = await (await fetch('/api/meta/diagnose')).json();
+    if (!data.success) throw new Error(data.message);
+    const rows = data.checks.map(c => `
+      <div style="padding: 6px 0; border-bottom: 1px solid var(--border-color);">
+        ${c.ok ? '✅' : '❌'} <strong>${escapeHtml(c.label)}:</strong> ${escapeHtml(c.detail || '')}
+        ${!c.ok && c.fix ? `<div style="color: var(--accent-amber); font-size: 12px;">👉 ${escapeHtml(c.fix)}</div>` : ''}
+      </div>`).join('');
+    const log = (data.webhook_log || []).slice(0, 15).map(e =>
+      `<div>${escapeHtml(new Date(e.at).toLocaleTimeString())} — <strong>${escapeHtml(e.object)}</strong> ${escapeHtml(e.kind)} ${escapeHtml(e.detail || '')}</div>`).join('');
+    box.innerHTML = rows + `
+      <div style="margin-top: 10px;"><strong>آخر أحداث وصلت من Meta (منذ آخر تشغيل للسيرفر):</strong></div>
+      ${log || '<div style="color: var(--text-muted);">ولا حدث لهلأ — ابعت رسالة أو تعليق تجريبي واضغط الزر مرة ثانية.</div>'}`;
+  } catch (err) {
+    box.innerHTML = `❌ ${escapeHtml(err.message)}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 document.getElementById('btn-test-meta-conn')?.addEventListener('click', async () => {
   const token = document.getElementById('meta-access-token').value;
   showToast('جاري فحص اتصال Meta API...', 'info');

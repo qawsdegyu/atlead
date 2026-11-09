@@ -228,6 +228,14 @@ router.post('/settings/test-meta', async (req, res) => {
   res.json(result);
 });
 
+router.get('/meta/diagnose', async (req, res) => {
+  try {
+    res.json({ success: true, ...(await metaService.diagnose()) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.post('/settings/test-whatsapp', async (req, res) => {
   const { phone_number_id, access_token } = req.body;
   const result = await whatsappService.testConnection(phone_number_id || null, unmask(access_token));

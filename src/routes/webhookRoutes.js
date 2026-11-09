@@ -44,12 +44,26 @@ router.post('/meta', async (req, res) => {
   const appSecret = storageService.getSettings().meta?.app_secret;
   if (!isValidSignature(req, appSecret)) {
     console.warn('[Meta Webhook] Invalid signature — ignored');
+    metaService.logWebhookEvent({ object: req.body?.object || '?', kind: 'rejected', detail: 'توقيع غير صحيح (App Secret مش مطابق)' });
     return res.sendStatus(401);
   }
   res.status(200).send('EVENT_RECEIVED');
 
   try {
     const body = req.body;
+    for (const entry of body.entry || []) {
+      for (const ev of entry.messaging || []) {
+        metaService.logWebhookEvent({
+          object: body.object,
+          kind: ev.message?.is_echo ? 'echo' : ev.message ? 'message' : ev.postback ? 'postback' : Object.keys(ev).filter(k => !['sender', 'recipient', 'timestamp'].includes(k)).join(',') || 'other',
+          detail: ev.message?.text ? String(ev.message.text).slice(0, 60) : (ev.message?.attachments?.[0]?.type || '')
+        });
+      }
+      for (const ch of entry.changes || []) {
+        metaService.logWebhookEvent({ object: body.object, kind: `change:${ch.field}`, detail: String(ch.value?.message || ch.value?.text || ch.value?.item || '').slice(0, 60) });
+      }
+    }
+    console.log(`[Meta Webhook] ${body.object}: ${(body.entry || []).map(e => `${(e.messaging || []).length} msg / ${(e.changes || []).map(c => c.field).join(',') || '0 changes'}`).join(' | ')}`);
     if (body.object !== 'page' && body.object !== 'instagram') return;
     const isInstagram = body.object === 'instagram';
     const channel = isInstagram ? 'instagram_dm' : 'facebook_messenger';

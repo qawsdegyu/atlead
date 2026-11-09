@@ -57,25 +57,74 @@ app.get('/terms', (req, res) => res.send(legalPage('Terms of Service', `
 // Webhooks must stay public (Meta calls them). Everything else = admin dashboard.
 app.use('/webhook', webhookRoutes);
 
-// Admin protection: set ADMIN_PASSWORD (and optionally ADMIN_USER) in .env
-// before putting the dashboard online. The browser will ask for username/password.
+// Admin protection: set ADMIN_PASSWORD (and optionally ADMIN_USER) in the environment.
+// Two ways in: a login page (/login → signed session cookie) or HTTP Basic auth.
+const crypto = require('crypto');
+const SESSION_COOKIE = 'atl_admin';
+const SESSION_DAYS = 30;
+const safeEqual = (a, b) => {
+  const ba = Buffer.from(String(a)); const bb = Buffer.from(String(b));
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+};
+const sign = (value) => crypto.createHmac('sha256', String(process.env.ADMIN_PASSWORD)).update(value).digest('hex');
+const makeSession = () => {
+  const exp = String(Date.now() + SESSION_DAYS * 864e5);
+  return `${exp}.${sign(exp)}`;
+};
+const validSession = (raw) => {
+  const [exp, sig] = String(raw || '').split('.');
+  return !!exp && !!sig && Number(exp) > Date.now() && safeEqual(sig, sign(exp));
+};
+const readCookie = (req, name) => {
+  const m = String(req.headers.cookie || '').split(/;\s*/).find(c => c.startsWith(name + '='));
+  return m ? decodeURIComponent(m.slice(name.length + 1)) : '';
+};
+
+const loginPage = (error = '') => `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>تسجيل الدخول — atlead</title>
+<style>body{font-family:system-ui,sans-serif;background:#f4f5f7;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+form{background:#fff;padding:32px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);width:300px}
+h1{font-size:1.3rem;margin:0 0 20px}label{display:block;font-size:.9rem;margin:12px 0 4px}
+input{width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:1rem}
+button{margin-top:20px;width:100%;padding:11px;border:0;border-radius:8px;background:#4f46e5;color:#fff;font-size:1rem;cursor:pointer}
+.err{color:#c00;font-size:.9rem;margin-top:10px}</style></head><body>
+<form method="post" action="/login"><h1>لوحة تحكم atlead</h1>
+<label>اسم المستخدم</label><input name="username" autocomplete="username" value="admin">
+<label>كلمة السر</label><input name="password" type="password" autocomplete="current-password" autofocus>
+${error ? `<div class="err">${error}</div>` : ''}<button type="submit">دخول</button></form></body></html>`;
+
+app.get('/login', (req, res) => res.send(loginPage()));
+app.post('/login', (req, res) => {
+  const password = process.env.ADMIN_PASSWORD;
+  const user = process.env.ADMIN_USER || 'admin';
+  if (!password) return res.redirect('/');
+  const { username = '', password: pass = '' } = req.body || {};
+  if (safeEqual(String(username).trim(), user) && safeEqual(pass, password)) {
+    res.set('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(makeSession())}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}`);
+    return res.redirect('/');
+  }
+  res.status(401).send(loginPage('اسم المستخدم أو كلمة السر غلط'));
+});
+app.get('/logout', (req, res) => {
+  res.set('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+  res.redirect('/login');
+});
+
 app.use((req, res, next) => {
   const password = process.env.ADMIN_PASSWORD;
   if (!password) return next();
+  if (validSession(readCookie(req, SESSION_COOKIE))) return next();
   const user = process.env.ADMIN_USER || 'admin';
-  const header = req.headers.authorization || '';
-  const [scheme, encoded] = header.split(' ');
+  const [scheme, encoded] = (req.headers.authorization || '').split(' ');
   if (scheme === 'Basic' && encoded) {
     const [u, ...rest] = Buffer.from(encoded, 'base64').toString('utf8').split(':');
-    const p = rest.join(':');
-    const ok = (a, b) => {
-      const ba = Buffer.from(String(a)); const bb = Buffer.from(String(b));
-      return ba.length === bb.length && require('crypto').timingSafeEqual(ba, bb);
-    };
-    if (ok(u, user) && ok(p, password)) return next();
+    if (safeEqual(u, user) && safeEqual(rest.join(':'), password)) return next();
   }
-  res.set('WWW-Authenticate', 'Basic realm="atlead admin", charset="UTF-8"');
-  res.status(401).send('Authentication required');
+  // Browsers get the login page; API calls get a plain 401.
+  if (req.method === 'GET' && !req.path.startsWith('/api') && (req.headers.accept || '').includes('text/html')) {
+    return res.redirect('/login');
+  }
+  res.status(401).json({ success: false, message: 'Authentication required' });
 });
 
 // Static files (Dashboard UI & Uploads)

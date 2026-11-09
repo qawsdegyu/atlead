@@ -469,7 +469,7 @@ router.post('/simulator/voice', upload.single('audio'), async (req, res) => {
   const conv = getOrCreateSimConversation(req.body.conversation_id, 'عميل صوتي (Voice Test)');
 
   const transcript = await aiService.transcribeAudio(req.file.path, req.file.mimetype || 'audio/ogg');
-  const messageText = transcript || '__VOICE_TRANSCRIPTION_FAILED__';
+  const messageText = transcript || aiService.VOICE_FAILED_TEXT;
 
   storageService.addMessage(conv.id, {
     sender: 'customer',
@@ -500,6 +500,15 @@ router.get('/knowledge', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ success: false, message: `تعذر تحميل قاعدة المعرفة: ${err.message}` });
+  }
+});
+
+router.post('/knowledge/docs', async (req, res) => {
+  try {
+    const doc = await knowledgeService.createDocument(req.body || {});
+    res.json({ success: true, document: doc, message: 'تمت إضافة الوثيقة — البوت صار يجاوب منها ✅' });
+  } catch (err) {
+    res.status(400).json({ success: false, message: `تعذر إضافة الوثيقة: ${err.message}` });
   }
 });
 

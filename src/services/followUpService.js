@@ -38,6 +38,19 @@ class FollowUpService {
     return Number.isFinite(t) && t > 0 ? t : 85;
   }
 
+  /**
+   * When this customer would get the next automatic follow-up if they stay silent
+   * (ISO time), or null if they won't get one.
+   */
+  nextFollowUpAt(conv, now = Date.now()) {
+    const cfg = this.getConfig();
+    if (!cfg.enabled || !conv || conv.is_bot_active === false) return null;
+    const prob = Number(conv.interest_score) || 0;
+    if (prob < cfg.minProbability || prob >= this.handoffThreshold()) return null;
+    if ((Number(conv.follow_up_count) || 0) >= cfg.maxPerCustomer) return null;
+    return new Date(now + cfg.afterHours * 3600 * 1000).toISOString();
+  }
+
   findCandidates(now = Date.now()) {
     const cfg = this.getConfig();
     const threshold = this.handoffThreshold();
@@ -129,6 +142,7 @@ class FollowUpService {
       id: conv.id,
       follow_up_count: (fresh.follow_up_count || 0) + 1,
       last_follow_up_at: new Date().toISOString(),
+      next_follow_up_at: this.nextFollowUpAt({ ...fresh, follow_up_count: (fresh.follow_up_count || 0) + 1 }),
       notes: [fresh.notes, `لم يرد العميل بعد آخر رسالة؛ تم إرسال متابعة رقم ${(fresh.follow_up_count || 0) + 1}`].filter(Boolean).join(' | ')
     });
     supabaseService.saveMessage(msg, conv.id).catch(() => {});

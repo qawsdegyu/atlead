@@ -247,7 +247,7 @@ class MetaService {
           voiceTranscript = await aiService.transcribeAudio(localPath, 'audio/mp4');
         }
       }
-      incomingText = voiceTranscript || 'رسالة صوتية من العميل';
+      incomingText = voiceTranscript || aiService.VOICE_FAILED_TEXT;
     } else if (messageData.sticker_id) {
       incomingText = messageData.text || '👍'; // Messenger "like" button arrives as a sticker image
     } else if (attachment?.type === 'image') {

@@ -85,7 +85,7 @@ class WhatsAppService {
               mediaUrl = `/uploads/${path.basename(audioPath)}`;
               voiceTranscript = await aiService.transcribeAudio(audioPath, (media?.mime_type || 'audio/ogg').split(';')[0]);
             }
-            incomingText = voiceTranscript || '__VOICE_TRANSCRIPTION_FAILED__';
+            incomingText = voiceTranscript || aiService.VOICE_FAILED_TEXT;
           } else if (msgObj.type === 'image') {
             mediaType = 'image';
             const imgPath = await this.downloadMedia(msgObj.image?.id, 'jpg');

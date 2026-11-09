@@ -158,10 +158,22 @@ class HealthService {
     return ok('supabase', label, `متصلة، وكل المحادثات بتنحفظ تلقائياً ✅ — ${counts}.`);
   }
 
+  async checkKnowledge() {
+    const label = 'قاعدة المعرفة (مصدر ردود البوت)';
+    const ks = require('./knowledgeService');
+    if (ks.remoteKnowledgeStatus === 'not_loaded') await ks.loadFromSupabase();
+    const docs = ks.getRuntimeDocuments();
+    const chars = docs.reduce((n, d) => n + String(d.text || '').length, 0);
+    if (!docs.length) return fail('knowledge', label, 'ولا وثيقة مفعّلة — البوت ما عنده معلومات يجاوب منها. فعّل وثيقة من صفحة قاعدة المعرفة.');
+    const source = ks.remoteKnowledgeStatus === 'loaded' ? 'Supabase' : 'الملفات المحلية (Supabase ما تحمّل)';
+    const msg = `${docs.length} وثيقة (${chars.toLocaleString()} حرف) + ${ks.getFaq().length} سؤال شائع — المصدر: ${source}.`;
+    return ks.remoteKnowledgeStatus === 'loaded' ? ok('knowledge', label, msg) : warn('knowledge', label, msg);
+  }
+
   async checkSheets() {
-    const label = 'Google Sheets';
+    const label = 'Google Sheets / Form';
     if (!googleSheetsService.isConfigured()) {
-      return warn('sheets', label, 'مش مربوط — بيانات العملاء ما رح تنزل على الشيت.');
+      return warn('sheets', label, 'مش مربوط — بيانات العملاء ما رح تنزل على الشيت أو الفورم.');
     }
     if (storageService.getSettings().google_sheets?.auto_sync === false) {
       const r = await googleSheetsService.testConnection();
@@ -262,6 +274,7 @@ class HealthService {
       safe('Meta', 'meta', () => this.checkMeta()),
       safe('Supabase', 'supabase', () => this.checkSupabase()),
       safe('Google Sheets', 'sheets', () => this.checkSheets()),
+      safe('قاعدة المعرفة', 'knowledge', () => this.checkKnowledge()),
       safe('Gmail', 'email', () => this.checkEmail())
     ]);
     const all = [...results.flat(), ...this.checkBotRules(), ...this.checkSecurity()];

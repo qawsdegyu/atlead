@@ -37,7 +37,22 @@ const OPENAI_COMPATIBLE = {
   groq: { base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' }
 };
 
+const VOICE_FAILED_TEXT = '🎤 رسالة صوتية (تعذّر تفريغها)';
+const VOICE_MARKERS = [VOICE_FAILED_TEXT, '__VOICE_TRANSCRIPTION_FAILED__', 'رسالة صوتية من العميل'];
+
 class AiService {
+  get VOICE_FAILED_TEXT() { return VOICE_FAILED_TEXT; }
+
+  isVoiceFailed(text) {
+    return VOICE_MARKERS.some(m => String(text || '').includes(m));
+  }
+
+  cleanVoiceMarker(text) {
+    let t = String(text || '');
+    for (const m of VOICE_MARKERS) t = t.split(m).join('');
+    return t.replace(/\n{2,}/g, '\n').trim();
+  }
+
   /**
    * Every usable AI key (dashboard fields + environment variables), typed by prefix,
    * with the provider chosen in the dashboard first. A key pasted into the "wrong"
@@ -162,13 +177,16 @@ class AiService {
   }
 
   async generateReply(conversation, incomingMessage) {
-    // Never treat an untranslated voice note as a normal text question. That
-    // caused the old generic welcome/fallback answer instead of an honest retry.
-    if (String(incomingMessage || '').trim() === '__VOICE_TRANSCRIPTION_FAILED__') {
+    // A voice note we couldn't transcribe is never treated as a normal question
+    // (that used to trigger a generic welcome). Alone → honest retry request;
+    // mixed with text → the AI sees a clear note instead of a raw marker.
+    const voiceFailed = this.isVoiceFailed(incomingMessage);
+    incomingMessage = this.cleanVoiceMarker(incomingMessage);
+    if (voiceFailed && !String(incomingMessage).trim()) {
       return {
-        reply_text: 'استلمت رسالتك الصوتية، بس ما قدرت أفرّغ الكلام بدقة حالياً. ابعثها مرة ثانية بوضوح أو اكتب سؤالك، وما رح أخمّن على طلبك.',
-        identified_problem: 'تعذر تفريغ الرسالة الصوتية بدقة',
-        proposed_solution: 'إعادة إرسال التسجيل الصوتي أو كتابة السؤال',
+        reply_text: 'وصلتني رسالتك الصوتية، بس ما قدرت أسمعها بوضوح 🙏 ممكن تعيدها أو تكتبلي سؤالك؟',
+        identified_problem: null,
+        proposed_solution: null,
         lead_stage: conversation.lead_stage || 'discovery',
         classification: conversation.classification || 'Cold',
         buying_probability: Number(conversation.interest_score) || 20,
@@ -178,12 +196,14 @@ class AiService {
         source: 'voice_transcription_failed'
       };
     }
+    if (voiceFailed) incomingMessage = `${incomingMessage}
+(ملاحظة: العميل بعث كمان رسالة صوتية ما انفهمت — اطلب منه يعيدها إذا لزم)`;
     const systemPrompt = knowledgeService.getSystemPrompt();
 
     // Prepare message history
     const history = (conversation.messages || []).slice(-20).map(m => ({
       role: m.sender === 'customer' ? 'user' : 'model',
-      text: `${m.sender === 'customer' ? 'العميل: ' : m.sender === 'agent' ? 'موظف المبيعات: ' : 'المساعد: '}${m.content}`
+      text: `${m.sender === 'customer' ? 'العميل: ' : m.sender === 'agent' ? 'موظف المبيعات: ' : 'المساعد: '}${this.isVoiceFailed(m.content) ? '[رسالة صوتية ما انفهمت]' : m.content}`
     }));
 
     const lastMsgAt = conversation.messages?.length ? conversation.messages[conversation.messages.length - 1].created_at : null;
@@ -249,7 +269,11 @@ ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} ي
           ? (Array.isArray(parsed.customer_requests) ? parsed.customer_requests.join('، ') : String(parsed.customer_requests))
           : null,
         customer_summary: parsed.customer_summary || null,
-        objections: parsed.objections || null
+        objections: parsed.objections || null,
+        company_name: parsed.company_name || null,
+        customer_email: parsed.customer_email || null,
+        consultation_requested: parsed.consultation_requested === true,
+        demo_requested: parsed.demo_requested === true
       };
     } catch (e) {
       console.warn('Failed to parse AI JSON, using fallback parser:', e.message);

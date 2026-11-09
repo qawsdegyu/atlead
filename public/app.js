@@ -700,7 +700,11 @@ async function loadKnowledge() {
             </div>
             <input class="form-control kb-doc-title" value="${escapeHtml(doc.title || '')}" style="margin-bottom:8px;" aria-label="عنوان الوثيقة">
             <textarea class="form-control kb-doc-content" rows="10" aria-label="محتوى الوثيقة">${escapeHtml(doc.content || '')}</textarea>
-            <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer;">
+                <input type="checkbox" class="kb-doc-active" ${doc.is_active !== false ? 'checked' : ''}>
+                <span>البوت بيجاوب من هاي الوثيقة</span>
+              </label>
               <button type="button" class="btn btn-primary kb-doc-save"><i class="fa-solid fa-floppy-disk"></i> حفظ الوثيقة</button>
             </div>
           </div>`).join('');
@@ -712,7 +716,8 @@ async function loadKnowledge() {
               method: 'PUT', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 title: card.querySelector('.kb-doc-title').value,
-                content: card.querySelector('.kb-doc-content').value
+                content: card.querySelector('.kb-doc-content').value,
+                is_active: card.querySelector('.kb-doc-active').checked
               })
             });
             const result = await res.json();
@@ -728,6 +733,31 @@ async function loadKnowledge() {
     console.error('Error kb:', err);
   }
 }
+
+document.getElementById('kb-new-doc-save')?.addEventListener('click', async () => {
+  const btn = document.getElementById('kb-new-doc-save');
+  const title = document.getElementById('kb-new-doc-title').value.trim();
+  const content = document.getElementById('kb-new-doc-content').value.trim();
+  if (!title || !content) return showToast('اكتب عنوان ومحتوى للوثيقة', 'error');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/knowledge/docs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, content })
+    });
+    const data = await res.json();
+    showToast(data.message || (data.success ? 'تمت الإضافة' : 'فشلت الإضافة'), data.success ? 'success' : 'error');
+    if (data.success) {
+      document.getElementById('kb-new-doc-title').value = '';
+      document.getElementById('kb-new-doc-content').value = '';
+      loadKnowledge();
+    }
+  } catch (err) {
+    showToast('فشلت الإضافة: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 document.getElementById('kb-extra-save')?.addEventListener('click', async () => {
   const btn = document.getElementById('kb-extra-save');

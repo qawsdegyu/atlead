@@ -1,4 +1,5 @@
 const axios = require('axios');
+const crypto = require('crypto');
 
 const ENTRY = {
   id: '2069490885', name: '321793735', phone: '1529699744', email: '1001366343',
@@ -53,11 +54,22 @@ class GoogleFormService {
     const url = endpoint(cfg.form_url);
     if (!url) return { success: false, message: 'Google Form غير مربوط.' };
     if (!lead?.id) return { success: false, message: 'بيانات العميل ناقصة.' };
-    const body = new URLSearchParams(formValues(lead));
-    const fingerprint = `${lead.id}|${body.toString()}`;
-    if (this.sent.get(lead.id) === fingerprint) return { success: true, skipped: true, message: 'السجل مطابق لآخر نسخة في Google Form.' };
+    const values = formValues(lead);
+    const body = new URLSearchParams(values);
+    // A form can only ADD responses (never edit one), so a new row is sent only when
+    // something meaningful about the customer changed — not on every message.
+    // The fingerprint ignores timestamps and is stored on the lead, so it survives restarts.
+    const volatile = new Set([`entry.${ENTRY.lastContact}`, `entry.${ENTRY.nextFollowUp}`, `entry.${ENTRY.summary}`, `entry.${ENTRY.requests}`]);
+    const stable = Object.entries(values).filter(([k]) => !volatile.has(k)).map(([k, v]) => `${k}=${v}`).join('&');
+    const fingerprint = crypto.createHash('sha1').update(stable).digest('hex');
+    const storageService = require('./storageService');
+    const stored = storageService.getLeads().find(l => l.id === lead.id)?.google_form_fp;
+    if (!lead._manual && (this.sent.get(lead.id) === fingerprint || stored === fingerprint)) {
+      return { success: true, skipped: true, message: 'ما في تغيير مهم على العميل — ما انضاف صف جديد.' };
+    }
     const response = await axios.post(url, body.toString(), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 20000, maxRedirects: 3, validateStatus: s => s >= 200 && s < 400 });
     this.sent.set(lead.id, fingerprint);
+    storageService.saveLead({ id: lead.id, google_form_fp: fingerprint });
     return { success: true, message: 'تمت إضافة بيانات العميل إلى Google Form ✅', status: response.status };
   }
   async test(url) {

@@ -304,6 +304,13 @@ class ReplyEngine {
     };
     if (aiResult.customer_name && /عميل|مستخدم|متابع/.test(conv.customer_name || '')) patch.customer_name = aiResult.customer_name;
     if (aiResult.customer_phone && !conv.customer_phone) patch.customer_phone = aiResult.customer_phone;
+    if (aiResult.company_name) patch.company_name = aiResult.company_name;
+    if (aiResult.customer_email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(aiResult.customer_email) && !conv.customer_email) patch.customer_email = aiResult.customer_email;
+    // Once asked for, a consultation/demo stays requested.
+    if (aiResult.consultation_requested) patch.consultation_requested = true;
+    if (aiResult.demo_requested) patch.demo_requested = true;
+    // When the follow-up engine would next nudge this customer (shown in the CRM / Google Form).
+    patch.next_follow_up_at = handoff ? null : require('./followUpService').nextFollowUpAt({ ...conv, ...patch });
 
     const updated = storageService.saveConversation(patch);
     await supabaseService.saveConversation(updated);

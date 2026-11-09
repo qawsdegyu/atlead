@@ -143,7 +143,7 @@ class GoogleSheetsService {
 
   isConfigured() {
     const cfg = this.getConfig();
-    return !!(this.getApiConfig() || cfg.webhook_url);
+    return !!(this.getApiConfig() || cfg.webhook_url || (cfg.form_url && cfg.form_auto_sync !== false));
   }
 
   async getAccessToken(sa) {
@@ -346,13 +346,17 @@ class GoogleSheetsService {
 
     try {
       let rowIndex = null;
+      let formResult = null;
       if (cfg.form_url && cfg.form_auto_sync !== false) {
-        const formResult = await this._withRetry(() => googleFormService.submit(lead, storageService.getSettings()));
-        if (!formResult.success) return formResult;
-        const fresh = storageService.getLeads().find(l => l.id === lead.id);
-        if (fresh) storageService.saveLead({ id: lead.id, google_form_synced: true, last_synced_at: new Date().toISOString() });
-        return formResult;
-      } else if (apiCfg) {
+        formResult = await this._withRetry(() => googleFormService.submit(lead, storageService.getSettings()));
+        if (formResult.success && !formResult.skipped) {
+          storageService.saveLead({ id: lead.id, google_form_synced: true, last_synced_at: new Date().toISOString() });
+        }
+        // Form only (no Sheets API / webhook configured): done.
+        if (!apiCfg && !cfg.webhook_url) return formResult;
+        if (cfg.auto_sync === false && !lead._manual) return formResult;
+      }
+      if (apiCfg) {
         rowIndex = await this._withRetry(() => this.upsertRowApi(apiCfg, lead));
       } else if (cfg.webhook_url) {
         await this._withRetry(() => this.upsertRowWebhook(cfg.webhook_url, lead));

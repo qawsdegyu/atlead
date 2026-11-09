@@ -83,7 +83,14 @@ class KnowledgeService {
         .order('created_at', { ascending: true })
         .limit(100);
       if (error) throw error;
-      if (!data?.length) {
+      // Seed only a truly empty table (not when the admin switched every document off).
+      let totalRows = data?.length || 0;
+      if (!totalRows) {
+        const all = await supabase.from('knowledge_docs').select('id', { count: 'exact', head: true });
+        if (all.error) throw all.error;
+        totalRows = all.count || 0;
+      }
+      if (!totalRows) {
         const seed = this.getDocuments().map(d => ({
           title: d.title, doc_type: 'text', file_path: null, content: d.text,
           metadata: { source_key: d.title.includes('Portfolio') ? 'portfolio_document' : 'kb_document', seeded_from: 'approved_atlead_documents', seeded_at: new Date().toISOString(), editable: true }, is_active: true
@@ -147,8 +154,26 @@ class KnowledgeService {
     return data?.[0] || null;
   }
 
+  async createDocument({ title, content, file_path = '' } = {}) {
+    const supabase = require('./supabaseService').getClient();
+    if (!supabase) throw new Error('Supabase غير مربوط');
+    const t = String(title || '').trim().slice(0, 255);
+    const c = String(content || '').trim().slice(0, 200000);
+    if (!t || !c) throw new Error('اكتب عنوان ومحتوى للوثيقة');
+    const { data, error } = await supabase
+      .from('knowledge_docs')
+      .insert({ title: t, content: c, doc_type: 'text', file_path: String(file_path || '').slice(0, 1000) || null, metadata: { source_key: 'dashboard', created_from: 'dashboard', editable: true }, is_active: true })
+      .select('id,title,doc_type,file_path,content,metadata,is_active,created_at')
+      .limit(1);
+    if (error) throw error;
+    await this.loadFromSupabase();
+    return data?.[0] || null;
+  }
+
   getRuntimeDocuments() {
-    return this.remoteDocuments?.length ? this.remoteDocuments : this.getDocuments();
+    // Supabase loaded fine → it's the source, even if the admin switched documents off.
+    if (this.remoteKnowledgeStatus === 'loaded' || this.remoteKnowledgeStatus === 'empty') return this.remoteDocuments || [];
+    return this.getDocuments();
   }
 
   // Extra knowledge the admin writes in the dashboard (settings.knowledge.extra_text).
@@ -267,7 +292,11 @@ atlead شركة متخصصة في تصميم وبناء أنظمة المبيع�
   "business_type": "نوع نشاط/مجال العميل إن عُرف أو null",
   "customer_requests": "قائمة مختصرة بكل ما طلبه أو سأل عنه العميل حتى الآن (تراكمية، لا تحذف طلبات سابقة)",
   "customer_summary": "ملخص سيلز تراكمي محدث لكل ما حصل مع العميل: من هو، شو بده، وين وصلنا، شو الخطوة الجاية (3-5 جمل)",
-  "objections": "أي تردد أو اعتراض عند العميل (السعر، الوقت، الثقة...) أو null"
+  "objections": "أي تردد أو اعتراض عند العميل (السعر، الوقت، الثقة...) أو null",
+  "company_name": "اسم شركة/محل العميل إن ذكره أو null",
+  "customer_email": "إيميل العميل إن ذكره أو null",
+  "consultation_requested": false (true فقط إذا العميل طلب أو وافق على الاستشارة المجانية),
+  "demo_requested": false (true فقط إذا العميل طلب أو وافق على الديمو)
 }
 
 === ذاكرة العميل ===

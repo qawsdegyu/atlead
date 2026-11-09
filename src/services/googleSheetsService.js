@@ -346,7 +346,7 @@ class GoogleSheetsService {
 
     try {
       let rowIndex = null;
-      if (cfg.form_url && (cfg.form_auto_sync !== false || lead._manual)) {
+      if (cfg.form_url && cfg.form_auto_sync !== false) {
         const formResult = await this._withRetry(() => googleFormService.submit(lead, storageService.getSettings()));
         if (!formResult.success) return formResult;
         const fresh = storageService.getLeads().find(l => l.id === lead.id);

@@ -800,13 +800,8 @@ async function loadSettings() {
       loadSupabaseSyncStatus();
 
       // AI
-      document.getElementById('ai-provider').value = s.ai?.provider || 'gemini';
-      const prov = s.ai?.provider || 'gemini';
-      const defaultModels = { gemini: 'gemini-2.5-flash', openai: 'gpt-4o', anthropic: 'claude-sonnet-5-5' };
-      document.getElementById('ai-model').value = s.ai?.[`${prov}_model`] || defaultModels[prov] || '';
-      document.getElementById('gemini-api-key').value = s.ai?.gemini_api_key || '';
-      document.getElementById('openai-api-key').value = s.ai?.openai_api_key || '';
-      document.getElementById('anthropic-api-key').value = s.ai?.anthropic_api_key || '';
+      document.getElementById('openrouter-api-key').value = s.ai?.openrouter_api_key || '';
+      document.getElementById('openrouter-model').value = s.ai?.openrouter_model || 'openai/gpt-4o-mini';
       document.getElementById('voice-transcription-enabled').checked = s.ai?.voice_transcription_enabled !== false;
 
       // Handoff
@@ -898,11 +893,9 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
       notify_new_messages_after_handoff: document.getElementById('notify-new-messages').checked
     },
     ai: {
-      provider: document.getElementById('ai-provider').value,
-      [`${document.getElementById('ai-provider').value}_model`]: document.getElementById('ai-model').value.trim(),
-      gemini_api_key: document.getElementById('gemini-api-key').value,
-      openai_api_key: document.getElementById('openai-api-key').value,
-      anthropic_api_key: document.getElementById('anthropic-api-key').value,
+      provider: 'openrouter',
+      openrouter_api_key: document.getElementById('openrouter-api-key').value,
+      openrouter_model: document.getElementById('openrouter-model').value.trim() || 'openai/gpt-4o-mini',
       voice_transcription_enabled: document.getElementById('voice-transcription-enabled').checked,
       image_understanding_enabled: document.getElementById('image-understanding-enabled').checked
     },

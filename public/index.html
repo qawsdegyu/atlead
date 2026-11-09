@@ -957,35 +957,21 @@
                 إعدادات الذكاء الاصطناعي ومعالجة الصوت (AI & Voice Engine)
               </h4>
 
-              <div class="grid-2">
-                <div class="form-group">
-                  <label class="form-label">مزود الذكاء الاصطناعي (AI Provider)</label>
-                  <select id="ai-provider" class="form-control">
-                    <option value="gemini">Google Gemini (موصى به - يدعم الفويس والنص الفوري)</option>
-                    <option value="openai">OpenAI (GPT-4o + Whisper)</option>
-                    <option value="anthropic">Claude (Anthropic)</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">الموديل (Model)</label>
-                  <input type="text" id="ai-model" class="form-control" value="gemini-2.5-flash">
-                </div>
+              <div class="form-group">
+                <label class="form-label">OpenRouter API Key</label>
+                <input type="password" id="openrouter-api-key" class="form-control" placeholder="sk-or-v1-..." style="direction: ltr;">
+                <small style="font-size: 11.5px; color: var(--text-muted);">من openrouter.ai ← Keys. البوت بيجاوب العملاء من ملفات الشركة عن طريق هذا المفتاح.</small>
               </div>
 
               <div class="form-group">
-                <label class="form-label">Google Gemini API Key</label>
-                <input type="password" id="gemini-api-key" class="form-control" placeholder="AIzaSy...">
-              </div>
-
-              <div class="form-group">
-                <label class="form-label">OpenAI API Key (اختياري)</label>
-                <input type="password" id="openai-api-key" class="form-control" placeholder="sk-proj-...">
-              </div>
-
-              <div class="form-group">
-                <label class="form-label">Claude (Anthropic) API Key (اختياري)</label>
-                <input type="password" id="anthropic-api-key" class="form-control" placeholder="sk-ant-...">
-                <small style="font-size: 11.5px; color: var(--text-muted);">البوت بيعرف نوع أي مفتاح لحاله، وإذا مفتاح ما زبط بيجرب الثاني تلقائياً.</small>
+                <label class="form-label">الموديل (Model)</label>
+                <input type="text" id="openrouter-model" class="form-control" list="openrouter-models" value="openai/gpt-4o-mini" style="direction: ltr;">
+                <datalist id="openrouter-models">
+                  <option value="openai/gpt-4o-mini">سريع ورخيص (الافتراضي)</option>
+                  <option value="openai/gpt-4o">أذكى، أغلى</option>
+                  <option value="google/gemini-2.5-flash">سريع، بيفهم الفويس والصور</option>
+                  <option value="anthropic/claude-sonnet-5-5">ردود طبيعية جداً، أغلى</option>
+                </datalist>
               </div>
 
               <div style="display: flex; gap: 16px;">

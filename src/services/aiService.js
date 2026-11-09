@@ -43,9 +43,29 @@ class AiService {
    * with the provider chosen in the dashboard first. A key pasted into the "wrong"
    * field still works because the type comes from the key itself.
    */
+  /**
+   * One-time cleanup: an OpenRouter key that was pasted into another field
+   * (e.g. the old Gemini field) moves to the OpenRouter field.
+   */
+  migrateKeys() {
+    if (this._migrated) return;
+    this._migrated = true;
+    const ai = storageService.getSettings().ai || {};
+    if (ai.openrouter_api_key) return;
+    for (const field of ['gemini_api_key', 'openai_api_key', 'anthropic_api_key']) {
+      if (detectKeyType(ai[field]) === 'openrouter') {
+        storageService.updateSettings({ ai: { openrouter_api_key: String(ai[field]).trim(), [field]: '', provider: 'openrouter' } });
+        console.log(`[AI] Moved the OpenRouter key from "${field}" to the OpenRouter field.`);
+        return;
+      }
+    }
+  }
+
   getProviders() {
+    this.migrateKeys();
     const ai = storageService.getSettings().ai || {};
     const raw = [
+      ai.openrouter_api_key,
       ai.gemini_api_key, ai.openai_api_key, ai.anthropic_api_key,
       process.env.GEMINI_API_KEY, process.env.OPENAI_API_KEY, process.env.ANTHROPIC_API_KEY,
       process.env.OPENROUTER_API_KEY, process.env.GROQ_API_KEY
@@ -64,7 +84,7 @@ class AiService {
               : (ai[`${type}_model`] || OPENAI_COMPATIBLE[type].model);
       list.push({ type, key, model, label: PROVIDER_LABELS[type] });
     }
-    const preferred = ai.provider || 'gemini';
+    const preferred = ai.provider || 'openrouter';
     return list.sort((a, b) => (b.type === preferred) - (a.type === preferred));
   }
 
@@ -325,6 +345,18 @@ ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} ي
             contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: audioBuffer.toString('base64') } }] }]
           }, { timeout: 35000 });
           const t = res.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (t) return t;
+        } else if (p.type === 'openrouter') {
+          // Audio input through OpenRouter (Gemini understands voice notes well).
+          const fmt = /mpeg|mp3/.test(mimeType) ? 'mp3' : /wav/.test(mimeType) ? 'wav' : /mp4|m4a|aac/.test(mimeType) ? 'm4a' : 'ogg';
+          const res = await axios.post(`${OPENAI_COMPATIBLE.openrouter.base}/chat/completions`, {
+            model: 'google/gemini-2.5-flash',
+            messages: [{ role: 'user', content: [
+              { type: 'text', text: prompt },
+              { type: 'input_audio', input_audio: { data: audioBuffer.toString('base64'), format: fmt } }
+            ] }]
+          }, { headers: { Authorization: `Bearer ${p.key}` }, timeout: 40000 });
+          const t = String(res.data?.choices?.[0]?.message?.content || '').trim();
           if (t) return t;
         } else if (p.type === 'openai' || p.type === 'groq') {
           const form = new FormData();

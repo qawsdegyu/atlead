@@ -652,7 +652,7 @@ document.getElementById('sim-voice-upload')?.addEventListener('change', async (e
       simulatorConvId = data.conversation.id;
       // Replace last user bubble with transcript
       simMessages.lastElementChild.previousElementSibling?.remove();
-      appendSimBubble('customer', `(تم التفريغ الصوتي): "${data.transcript}"`, true);
+      appendSimBubble('customer', data.transcription_failed ? '🎤 فويس (ما قدر يفرّغه)' : `🎤 (تم التفريغ الصوتي): "${data.transcript}"`, true);
       appendSimBubble('bot', data.reply);
       updateSimulatorInspector(data);
       showToast('تم استقبال الفويس والتفريغ والرد الذكي بنجاح!', 'success');
@@ -660,6 +660,31 @@ document.getElementById('sim-voice-upload')?.addEventListener('change', async (e
   } catch (err) {
     showToast('فشل تفريغ الفويس الصوتي', 'error');
   }
+});
+
+document.getElementById('sim-image-upload')?.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('image', file);
+  if (simulatorConvId) formData.append('conversation_id', simulatorConvId);
+  appendSimBubble('customer', '🖼️ جاري رفع الصورة وتحليلها...', true);
+  try {
+    const res = await fetch('/api/simulator/image', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.success) {
+      simulatorConvId = data.conversation.id;
+      simMessages.lastElementChild?.remove();
+      appendSimBubble('customer', data.understood ? `🖼️ (البوت فهم الصورة): ${data.image_description}` : '🖼️ صورة (ما قدر يحللها — تأكد من مفتاح الذكاء الاصطناعي)', true);
+      appendSimBubble('bot', data.reply);
+      updateSimulatorInspector(data);
+    } else {
+      showToast(data.message || 'فشل تحليل الصورة', 'error');
+    }
+  } catch (err) {
+    showToast('فشل رفع الصورة', 'error');
+  }
+  e.target.value = '';
 });
 
 document.getElementById('btn-reset-simulator')?.addEventListener('click', () => {
@@ -699,6 +724,7 @@ async function loadKnowledge() {
               <span class="form-hint">${escapeHtml(doc.doc_type || 'text')} • ${Number(doc.chars || 0).toLocaleString()} حرف</span>
             </div>
             <input class="form-control kb-doc-title" value="${escapeHtml(doc.title || '')}" style="margin-bottom:8px;" aria-label="عنوان الوثيقة">
+            ${doc.hint ? `<div class="form-hint" style="margin-bottom:6px;">${escapeHtml(doc.hint)}</div>` : ''}
             <textarea class="form-control kb-doc-content" rows="10" aria-label="محتوى الوثيقة">${escapeHtml(doc.content || '')}</textarea>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
               <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer;">

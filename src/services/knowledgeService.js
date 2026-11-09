@@ -64,8 +64,59 @@ class KnowledgeService {
   }
 
   getFaq() {
+    // Supabase FAQ (edited from the dashboard) wins over the bundled file.
+    if (this.remoteFaq && (this.remoteKnowledgeStatus === 'loaded' || this.remoteKnowledgeStatus === 'empty')) return this.remoteFaq;
     if (!this.faq) this.loadKB();
     return this.faq;
+  }
+
+  /**
+   * FAQ text → [{q, a, keywords}]. Accepts the JSON array format, or plain text:
+   *   س: سؤال        (or Q: question)
+   *   ج: جواب        (or A: answer)
+   *   كلمات: سعر، بكم  (optional, or K: price, cost)
+   */
+  parseFaq(content) {
+    const text = String(content || '').trim();
+    if (!text) return [];
+    if (text.startsWith('[')) {
+      try {
+        const arr = JSON.parse(text);
+        if (Array.isArray(arr)) return arr.filter(x => x && x.q && x.a).map(x => ({ q: String(x.q), a: String(x.a), keywords: Array.isArray(x.keywords) && x.keywords.length ? x.keywords : this.keywordsFrom(x.q) }));
+      } catch { /* fall through to text format */ }
+    }
+    const items = [];
+    let cur = null;
+    let field = null;
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      const m = line.match(/^(س|سؤال|q|question|ج|جواب|a|answer|كلمات|k|keywords)\s*[:：]\s*(.*)$/i);
+      if (m) {
+        const tag = m[1].toLowerCase();
+        if (/^(س|سؤال|q|question)$/.test(tag)) {
+          if (cur && cur.q && cur.a) items.push(cur);
+          cur = { q: m[2], a: '', keywords: [] };
+          field = 'q';
+        } else if (/^(ج|جواب|a|answer)$/.test(tag) && cur) {
+          cur.a = m[2]; field = 'a';
+        } else if (cur) {
+          cur.keywords = m[2].split(/[،,]/).map(s => s.trim()).filter(Boolean); field = null;
+        }
+      } else if (cur && field && line) {
+        cur[field] += `\n${line}`;
+      }
+    }
+    if (cur && cur.q && cur.a) items.push(cur);
+    return items.map(i => ({ ...i, keywords: i.keywords.length ? i.keywords : this.keywordsFrom(i.q) }));
+  }
+
+  keywordsFrom(question) {
+    const stop = new Set(['شو', 'هل', 'كيف', 'ليش', 'مين', 'وين', 'متى', 'انتو', 'انتم', 'عندكم', 'عن', 'في', 'من', 'على', 'او', 'the', 'what', 'how', 'do', 'you', 'is', 'are']);
+    return [...new Set(normalize(question).split(' ').filter(w => w.length > 2 && !stop.has(w)))];
+  }
+
+  faqToText(items) {
+    return (items || []).map(i => `س: ${i.q}\nج: ${i.a}${i.keywords?.length ? `\nكلمات: ${i.keywords.join('، ')}` : ''}`).join('\n\n');
   }
 
   /**
@@ -108,6 +159,8 @@ class KnowledgeService {
           data = inserted.data || [];
         }
       }
+      const faqRow = (data || []).find(d => d.metadata?.source_key === 'faq' && d.content);
+      this.remoteFaq = faqRow ? this.parseFaq(faqRow.content) : [];
       this.remoteDocuments = (data || []).filter(d => d.content && d.metadata?.source_key !== 'faq').map(d => ({
         title: d.title, text: d.content, file_path: d.file_path || '', metadata: d.metadata || {}
       }));
@@ -143,6 +196,15 @@ class KnowledgeService {
     if (patch.file_path !== undefined) update.file_path = String(patch.file_path).slice(0, 1000);
     if (patch.is_active !== undefined) update.is_active = Boolean(patch.is_active);
     if (!Object.keys(update).length) throw new Error('لا توجد تغييرات للحفظ');
+    if (update.content !== undefined) {
+      const current = await supabase.from('knowledge_docs').select('metadata').eq('id', id).limit(1);
+      if (current.error) throw current.error;
+      if (current.data?.[0]?.metadata?.source_key === 'faq') {
+        const parsed = this.parseFaq(update.content);
+        if (!parsed.length) throw new Error('صيغة الأسئلة الشائعة غير صحيحة — كل سؤال لازم يكون «س: ...» وتحته «ج: ...». ما انحفظ اشي.');
+        update.doc_type = 'text';
+      }
+    }
     const { data, error } = await supabase
       .from('knowledge_docs')
       .update(update)

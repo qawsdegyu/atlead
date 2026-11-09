@@ -24,7 +24,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`)
 });
-const upload = multer({ storage });
+const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024 } });
 
 // --- SETTINGS ROUTES ---
 // Secrets are never sent back to the browser in full. The dashboard receives a
@@ -470,6 +470,22 @@ router.post('/simulator/chat', async (req, res) => {
   res.json({ success: true, ...result });
 });
 
+router.post('/simulator/image', upload.single('image'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, message: 'لم يتم إرفاق صورة' });
+  const conv = getOrCreateSimConversation(req.body.conversation_id, 'عميل صور (Image Test)');
+  const caption = String(req.body.caption || '').trim();
+  const description = await aiService.describeImage(req.file.path, req.file.mimetype || 'image/jpeg');
+  const text = aiService.imageMessageText(caption, description);
+  storageService.addMessage(conv.id, {
+    sender: 'customer',
+    content: text,
+    media_type: 'image',
+    media_url: `/uploads/${req.file.filename}`
+  });
+  const result = await runSimulatorTurn(conv, text);
+  res.json({ success: true, image_description: description, understood: !!description, ...result });
+});
+
 router.post('/simulator/voice', upload.single('audio'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: 'لم يتم إرفاق ملف صوتي' });
@@ -501,7 +517,20 @@ router.get('/knowledge', async (req, res) => {
     const docs = await knowledgeService.getEditableDocuments();
     res.json({
       success: true,
-      documents: docs.map(d => ({ ...d, chars: String(d.content || '').length })),
+      documents: docs.map(d => {
+        // The FAQ is shown as simple "س: / ج:" text so it's easy to edit by hand.
+        const isFaq = d.metadata?.source_key === 'faq';
+        const content = isFaq && String(d.content || '').trim().startsWith('[')
+          ? knowledgeService.faqToText(knowledgeService.parseFaq(d.content))
+          : d.content;
+        return {
+          ...d,
+          content,
+          is_faq: isFaq,
+          hint: isFaq ? 'كل سؤال بسطرين: «س: السؤال» ثم «ج: الجواب»، وسطر اختياري «كلمات: سعر، بكم» للكلمات اللي بتدل عليه. اترك سطر فاضي بين الأسئلة.' : '',
+          chars: String(content || '').length
+        };
+      }),
       faq_count: knowledgeService.getFaq().length,
       extra_text: knowledgeService.getExtraKnowledge(),
       system_prompt: knowledgeService.getSystemPrompt()

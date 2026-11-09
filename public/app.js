@@ -688,7 +688,40 @@ async function loadKnowledge() {
       if (extra) extra.value = data.extra_text || '';
       const status = document.getElementById('kb-docs-status');
       if (status) {
-        status.textContent = `محمّل: ${data.documents.map(d => `${d.title} (${d.chars.toLocaleString()} حرف)`).join(' • ')} • ${data.faq_count} سؤال شائع بأجوبة معتمدة`;
+        status.textContent = `محمّل من Supabase: ${data.documents.map(d => `${d.title} (${d.chars.toLocaleString()} حرف)`).join(' • ')} • ${data.faq_count} سؤال شائع بأجوبة معتمدة`;
+      }
+      const editor = document.getElementById('kb-documents-editor');
+      if (editor) {
+        editor.innerHTML = (data.documents || []).map(doc => `
+          <div class="glass-card" data-kb-doc="${escapeHtml(doc.id)}" style="padding: 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px;">
+              <strong>${escapeHtml(doc.title || 'وثيقة')}</strong>
+              <span class="form-hint">${escapeHtml(doc.doc_type || 'text')} • ${Number(doc.chars || 0).toLocaleString()} حرف</span>
+            </div>
+            <input class="form-control kb-doc-title" value="${escapeHtml(doc.title || '')}" style="margin-bottom:8px;" aria-label="عنوان الوثيقة">
+            <textarea class="form-control kb-doc-content" rows="10" aria-label="محتوى الوثيقة">${escapeHtml(doc.content || '')}</textarea>
+            <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+              <button type="button" class="btn btn-primary kb-doc-save"><i class="fa-solid fa-floppy-disk"></i> حفظ الوثيقة</button>
+            </div>
+          </div>`).join('');
+        editor.querySelectorAll('.kb-doc-save').forEach(btn => btn.addEventListener('click', async () => {
+          const card = btn.closest('[data-kb-doc]');
+          btn.disabled = true;
+          try {
+            const res = await fetch(`/api/knowledge/${encodeURIComponent(card.dataset.kbDoc)}`, {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: card.querySelector('.kb-doc-title').value,
+                content: card.querySelector('.kb-doc-content').value
+              })
+            });
+            const result = await res.json();
+            showToast(result.message || (result.success ? 'تم الحفظ' : 'فشل الحفظ'), result.success ? 'success' : 'error');
+            if (result.success) loadKnowledge();
+          } catch (err) {
+            showToast('فشل حفظ الوثيقة: ' + err.message, 'error');
+          } finally { btn.disabled = false; }
+        }));
       }
     }
   } catch (err) {

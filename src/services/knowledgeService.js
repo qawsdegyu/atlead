@@ -86,15 +86,22 @@ class KnowledgeService {
       if (!data?.length) {
         const seed = this.getDocuments().map(d => ({
           title: d.title, doc_type: 'text', file_path: null, content: d.text,
-          metadata: { seeded_from: 'approved_atlead_documents', seeded_at: new Date().toISOString() }, is_active: true
+          metadata: { source_key: d.title.includes('Portfolio') ? 'portfolio_document' : 'kb_document', seeded_from: 'approved_atlead_documents', seeded_at: new Date().toISOString(), editable: true }, is_active: true
         }));
+        if (fs.existsSync(FAQ_FILE)) {
+          seed.push({
+            title: 'الأسئلة الشائعة المعتمدة', doc_type: 'json', file_path: 'data/knowledge/faq.json',
+            content: fs.readFileSync(FAQ_FILE, 'utf-8'),
+            metadata: { source_key: 'faq', seeded_from: 'approved_atlead_documents', seeded_at: new Date().toISOString(), editable: true }, is_active: true
+          });
+        }
         if (seed.length) {
           const inserted = await supabase.from('knowledge_docs').insert(seed).select('id,title,doc_type,file_path,content,metadata,is_active,created_at');
           if (inserted.error) throw inserted.error;
           data = inserted.data || [];
         }
       }
-      this.remoteDocuments = (data || []).filter(d => d.content).map(d => ({
+      this.remoteDocuments = (data || []).filter(d => d.content && d.metadata?.source_key !== 'faq').map(d => ({
         title: d.title, text: d.content, file_path: d.file_path || '', metadata: d.metadata || {}
       }));
       this.remoteKnowledgeStatus = this.remoteDocuments.length ? 'loaded' : 'empty';
@@ -105,6 +112,39 @@ class KnowledgeService {
       console.error('[Knowledge] Supabase load failed:', err.message);
       return false;
     }
+  }
+
+  async getEditableDocuments() {
+    if (this.remoteKnowledgeStatus === 'not_loaded') await this.loadFromSupabase();
+    const supabase = require('./supabaseService').getClient();
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from('knowledge_docs')
+      .select('id,title,doc_type,file_path,content,metadata,is_active,created_at')
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (error) throw error;
+    return data || [];
+  }
+
+  async updateDocument(id, patch = {}) {
+    const supabase = require('./supabaseService').getClient();
+    if (!supabase) throw new Error('Supabase غير مربوط');
+    const update = {};
+    if (patch.title !== undefined) update.title = String(patch.title).trim().slice(0, 255);
+    if (patch.content !== undefined) update.content = String(patch.content).slice(0, 200000);
+    if (patch.file_path !== undefined) update.file_path = String(patch.file_path).slice(0, 1000);
+    if (patch.is_active !== undefined) update.is_active = Boolean(patch.is_active);
+    if (!Object.keys(update).length) throw new Error('لا توجد تغييرات للحفظ');
+    const { data, error } = await supabase
+      .from('knowledge_docs')
+      .update(update)
+      .eq('id', id)
+      .select('id,title,doc_type,file_path,content,metadata,is_active,created_at')
+      .limit(1);
+    if (error) throw error;
+    await this.loadFromSupabase();
+    return data?.[0] || null;
   }
 
   getRuntimeDocuments() {

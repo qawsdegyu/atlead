@@ -487,16 +487,30 @@ router.post('/simulator/voice', upload.single('audio'), async (req, res) => {
   res.json({ success: true, transcript, transcription_failed: !transcript, ...result });
 });
 
-// Knowledge Base info
-router.get('/knowledge', (req, res) => {
-  const docs = knowledgeService.getDocuments();
-  res.json({
-    success: true,
-    documents: docs.map(d => ({ title: d.title, chars: d.text.length })),
-    faq_count: knowledgeService.getFaq().length,
-    extra_text: knowledgeService.getExtraKnowledge(),
-    system_prompt: knowledgeService.getSystemPrompt()
-  });
+// Knowledge Base info and editable Supabase documents
+router.get('/knowledge', async (req, res) => {
+  try {
+    const docs = await knowledgeService.getEditableDocuments();
+    res.json({
+      success: true,
+      documents: docs.map(d => ({ ...d, chars: String(d.content || '').length })),
+      faq_count: knowledgeService.getFaq().length,
+      extra_text: knowledgeService.getExtraKnowledge(),
+      system_prompt: knowledgeService.getSystemPrompt()
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: `تعذر تحميل قاعدة المعرفة: ${err.message}` });
+  }
+});
+
+router.put('/knowledge/:id', async (req, res) => {
+  try {
+    const doc = await knowledgeService.updateDocument(req.params.id, req.body || {});
+    if (!doc) return res.status(404).json({ success: false, message: 'الوثيقة غير موجودة' });
+    res.json({ success: true, document: { ...doc, chars: String(doc.content || '').length }, message: 'تم حفظ الوثيقة وتحديث مصدر البوت ✅' });
+  } catch (err) {
+    res.status(400).json({ success: false, message: `تعذر حفظ الوثيقة: ${err.message}` });
+  }
 });
 
 router.post('/knowledge', (req, res) => {

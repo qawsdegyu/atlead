@@ -26,6 +26,8 @@ class KnowledgeService {
   constructor() {
     this.kbData = null;
     this.documents = null;
+    this.remoteDocuments = null;
+    this.remoteKnowledgeStatus = 'not_loaded';
     this.faq = null;
     this.loadKB();
   }
@@ -66,6 +68,49 @@ class KnowledgeService {
     return this.faq;
   }
 
+  /**
+   * Supabase is the runtime source of truth. Local files are used only once to
+   * seed an empty knowledge_docs table; replies then read the remote rows.
+   */
+  async loadFromSupabase() {
+    try {
+      const supabase = require('./supabaseService').getClient();
+      if (!supabase) { this.remoteKnowledgeStatus = 'supabase_not_configured'; return false; }
+      let { data, error } = await supabase
+        .from('knowledge_docs')
+        .select('id,title,doc_type,file_path,content,metadata,is_active,created_at')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(100);
+      if (error) throw error;
+      if (!data?.length) {
+        const seed = this.getDocuments().map(d => ({
+          title: d.title, doc_type: 'text', file_path: null, content: d.text,
+          metadata: { seeded_from: 'approved_atlead_documents', seeded_at: new Date().toISOString() }, is_active: true
+        }));
+        if (seed.length) {
+          const inserted = await supabase.from('knowledge_docs').insert(seed).select('id,title,doc_type,file_path,content,metadata,is_active,created_at');
+          if (inserted.error) throw inserted.error;
+          data = inserted.data || [];
+        }
+      }
+      this.remoteDocuments = (data || []).filter(d => d.content).map(d => ({
+        title: d.title, text: d.content, file_path: d.file_path || '', metadata: d.metadata || {}
+      }));
+      this.remoteKnowledgeStatus = this.remoteDocuments.length ? 'loaded' : 'empty';
+      console.log(`[Knowledge] Runtime source: Supabase knowledge_docs (${this.remoteDocuments.length} documents).`);
+      return this.remoteDocuments.length > 0;
+    } catch (err) {
+      this.remoteKnowledgeStatus = 'error';
+      console.error('[Knowledge] Supabase load failed:', err.message);
+      return false;
+    }
+  }
+
+  getRuntimeDocuments() {
+    return this.remoteDocuments?.length ? this.remoteDocuments : this.getDocuments();
+  }
+
   // Extra knowledge the admin writes in the dashboard (settings.knowledge.extra_text).
   getExtraKnowledge() {
     try {
@@ -102,9 +147,12 @@ class KnowledgeService {
       return "أنت المساعد الذكي لشركة atlead المتخصصة في أنظمة المبيعات الذكية.";
     }
 
-    const docs = this.getDocuments();
+    const docs = this.getRuntimeDocuments();
     const extra = this.getExtraKnowledge();
     const faq = this.getFaq();
+    const remoteNote = this.remoteDocuments?.length
+      ? 'مصدر هذه الوثائق وقت التشغيل هو Supabase knowledge_docs. لا تستخدم ملفات الكود أو GitHub كمصدر إجابة.'
+      : 'تحذير: لم تُحمّل وثائق Supabase بعد؛ لا تعطِ روابط أو تفاصيل غير موجودة صراحة في المرجع.';
     const reference = `
 === المرجع الرسمي (مصدر الحقيقة الوحيد) ===
 تحت هذا السطر النص الكامل لملفات الشركة المعتمدة. جاوب من هذه الملفات فقط:
@@ -112,9 +160,13 @@ class KnowledgeService {
 - إذا المعلومة مش موجودة، لا تخترع أبداً: استخدم عبارة "المعلومة غير المتوفرة" من القاعدة 7.
 - النص مستخرج آلياً من PDF، فممكن تلاقي ترتيب كلمات غريب بسيط؛ افهم المعنى.
 - لا تكرر نفس الرد اللي بعته قبل بنفس المحادثة؛ إذا العميل كرر سؤاله، جاوبه بطريقة مختلفة أو اسأله سؤال يوضح قصده.
+${remoteNote}
 ${faq.length ? `\n--- أسئلة شائعة بأجوبة معتمدة ---\n${faq.map(f => `س: ${f.q}\nج: ${f.a}`).join('\n\n')}\n` : ''}
 ${extra ? `\n--- معلومات إضافية من إدارة atlead (أحدث من الملفات، والأولوية لها) ---\n${extra}\n` : ''}
-${docs.map(d => `\n--- ${d.title} ---\n${d.text}`).join('\n')}
+    ${docs.map(d => {
+      const link = d.file_path || d.metadata?.url || d.metadata?.source_url || d.metadata?.link || '';
+      return `\n--- ${d.title}${link ? ` | الرابط/المسار: ${link}` : ''} ---\n${d.text}`;
+    }).join('\n')}
 `;
 
     return `
@@ -187,4 +239,3 @@ ${reference}`;
 }
 
 module.exports = new KnowledgeService();
-

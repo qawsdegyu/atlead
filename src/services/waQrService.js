@@ -325,7 +325,7 @@ class WaQrService {
       } catch (err) {
         console.error('[WhatsApp QR] voice download error:', err.message);
       }
-      text = transcript || 'رسالة صوتية من العميل';
+      text = transcript || '__VOICE_TRANSCRIPTION_FAILED__';
     } else if (content.imageMessage) {
       mediaType = 'image';
       const caption = content.imageMessage.caption || '';

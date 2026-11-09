@@ -304,6 +304,9 @@ async function bootstrap() {
     await supabaseService.saveSettings(storageService.getSettings());
   }
 
+  // Runtime answers must come from Supabase knowledge_docs, not from the GitHub checkout.
+  await require('./src/services/knowledgeService').loadFromSupabase();
+
   if (storageService.isServerless()) {
     console.warn('⚠️ Serverless hosting detected (Vercel): WhatsApp QR, 10s delayed replies, follow-ups, daily report and backups need an always-on server (Railway).');
     return;

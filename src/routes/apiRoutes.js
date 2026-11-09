@@ -468,23 +468,23 @@ router.post('/simulator/voice', upload.single('audio'), async (req, res) => {
   }
   const conv = getOrCreateSimConversation(req.body.conversation_id, 'عميل صوتي (Voice Test)');
 
-  const transcript = (await aiService.transcribeAudio(req.file.path, req.file.mimetype || 'audio/ogg'))
-    || 'رسالة صوتية (تعذر التفريغ — أضف مفتاح Gemini API في الإعدادات)';
+  const transcript = await aiService.transcribeAudio(req.file.path, req.file.mimetype || 'audio/ogg');
+  const messageText = transcript || '__VOICE_TRANSCRIPTION_FAILED__';
 
   storageService.addMessage(conv.id, {
     sender: 'customer',
-    content: transcript,
+    content: messageText,
     media_type: 'audio',
     media_url: `/uploads/${req.file.filename}`,
     is_voice: true,
     voice_transcript: transcript
   });
 
-  const result = await runSimulatorTurn(conv, transcript);
+  const result = await runSimulatorTurn(conv, messageText);
   if (!result.bot_active && !result.reply) {
     result.reply = 'تم استلام الفويس. المحادثة محولة لموظف بشري — البوت ما بيرد.';
   }
-  res.json({ success: true, transcript, ...result });
+  res.json({ success: true, transcript, transcription_failed: !transcript, ...result });
 });
 
 // Knowledge Base info

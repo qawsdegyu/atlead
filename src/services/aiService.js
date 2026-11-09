@@ -162,6 +162,22 @@ class AiService {
   }
 
   async generateReply(conversation, incomingMessage) {
+    // Never treat an untranslated voice note as a normal text question. That
+    // caused the old generic welcome/fallback answer instead of an honest retry.
+    if (String(incomingMessage || '').trim() === '__VOICE_TRANSCRIPTION_FAILED__') {
+      return {
+        reply_text: 'استلمت رسالتك الصوتية، بس ما قدرت أفرّغ الكلام بدقة حالياً. ابعثها مرة ثانية بوضوح أو اكتب سؤالك، وما رح أخمّن على طلبك.',
+        identified_problem: 'تعذر تفريغ الرسالة الصوتية بدقة',
+        proposed_solution: 'إعادة إرسال التسجيل الصوتي أو كتابة السؤال',
+        lead_stage: conversation.lead_stage || 'discovery',
+        classification: conversation.classification || 'Cold',
+        buying_probability: Number(conversation.interest_score) || 20,
+        handoff_triggered: false,
+        customer_name: null,
+        customer_phone: null,
+        source: 'voice_transcription_failed'
+      };
+    }
     const systemPrompt = knowledgeService.getSystemPrompt();
 
     // Prepare message history
@@ -191,6 +207,7 @@ class AiService {
 ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} يوم من آخر رسالة — كمّل معه من وين ما وقفتوا.` : ''}
 
 قم بتحليل الرسالة، وتوليد الرد المناسب حسب قواعد atlead الدقيقة، وتحديد حالة العميل وتصنيفه، وما إذا وصل لمرحلة الديل/التحويل للبشري.
+إذا طلب العميل رابطاً أو مثالاً أو ملفاً أو تفاصيل عن مشروع سابق، ابحث في المرجع الرسمي عن الرابط/الملف المطابق وانسخه كما هو في الرد. لا تستبدل الرابط برد عام، ولا تذكر GitHub كمصدر؛ المصدر التشغيلي هو Supabase knowledge_docs.
 أعد النتيجة بصيغة JSON حصراً.
 `;
 

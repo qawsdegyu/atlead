@@ -796,6 +796,16 @@
                 </div>
               </details>
 
+              <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                <label class="form-label">رابط Google Form لاستقبال بيانات العملاء</label>
+                <input type="text" id="google-form-url" class="form-control" dir="ltr" placeholder="https://docs.google.com/forms/d/e/.../viewform">
+                <span class="form-hint">يتم إرسال السجل كإجابة للنموذج مباشرة بدون API Key. لا تضع رابط التعديل؛ استخدم رابط المجيب العام.</span>
+              </div>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; margin-bottom: 10px;">
+                <input type="checkbox" id="google-form-auto-sync" checked>
+                <span>إضافة وتحديث بيانات العملاء تلقائياً في Google Form</span>
+              </label>
+
               <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
                 <input type="checkbox" id="sheet-auto-sync" checked>
                 <span>تحديث صف العميل تلقائياً بعد كل رسالة (المرحلة، نسبة الشراء، شو طلب، الملخص...)</span>
@@ -1068,4 +1078,3 @@
   <script src="app.js"></script>
 </body>
 </html>
-

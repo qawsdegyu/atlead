@@ -760,6 +760,8 @@ async function loadSettings() {
       document.getElementById('sheet-id').value = s.google_sheets?.sheet_id || '';
       document.getElementById('sheet-sa-json').value = s.google_sheets?.service_account_json || '';
       document.getElementById('sheet-auto-sync').checked = s.google_sheets?.auto_sync !== false;
+      document.getElementById('google-form-url').value = s.google_sheets?.form_url || '';
+      document.getElementById('google-form-auto-sync').checked = s.google_sheets?.form_auto_sync !== false;
       showServiceAccountEmail(s.google_sheets?.service_account_email || '');
 
       // Notifications
@@ -882,7 +884,9 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
       sheet_name: document.getElementById('sheet-name').value,
       sheet_id: document.getElementById('sheet-id').value,
       service_account_json: document.getElementById('sheet-sa-json').value.trim(),
-      auto_sync: document.getElementById('sheet-auto-sync').checked
+      auto_sync: document.getElementById('sheet-auto-sync').checked,
+      form_url: document.getElementById('google-form-url').value.trim(),
+      form_auto_sync: document.getElementById('google-form-auto-sync').checked
     },
     notifications: {
       recipients: notifyRecipients,

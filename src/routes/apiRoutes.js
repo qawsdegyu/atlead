@@ -149,6 +149,7 @@ router.post('/settings/test-google-sheets', async (req, res) => {
   if (req.body.sheet_id) overrides.sheet_id = req.body.sheet_id;
   if (req.body.sheet_name) overrides.sheet_name = req.body.sheet_name;
   if (req.body.webhook_url) overrides.webhook_url = req.body.webhook_url;
+  if (req.body.form_url) overrides.form_url = req.body.form_url;
   const result = await googleSheetsService.testConnection(overrides);
   res.json(result);
 });
@@ -505,4 +506,3 @@ router.post('/knowledge', (req, res) => {
 });
 
 module.exports = router;
-

@@ -15,6 +15,7 @@
 const axios = require('axios');
 const crypto = require('crypto');
 const storageService = require('./storageService');
+const googleFormService = require('./googleFormService');
 
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -338,19 +339,25 @@ class GoogleSheetsService {
   async _syncLeadNow(lead) {
     if (!lead?.id) return { success: false, message: 'بيانات العميل ناقصة' };
     const cfg = this.getConfig();
-    if (cfg.auto_sync === false && !lead._manual) {
+    if (cfg.auto_sync === false && cfg.form_auto_sync !== true && !lead._manual) {
       return { success: false, message: 'المزامنة مع Google Sheets متوقفة من الإعدادات.' };
     }
     const apiCfg = this.getApiConfig();
 
     try {
       let rowIndex = null;
-      if (apiCfg) {
+      if (cfg.form_url && (cfg.form_auto_sync !== false || lead._manual)) {
+        const formResult = await this._withRetry(() => googleFormService.submit(lead, storageService.getSettings()));
+        if (!formResult.success) return formResult;
+        const fresh = storageService.getLeads().find(l => l.id === lead.id);
+        if (fresh) storageService.saveLead({ id: lead.id, google_form_synced: true, last_synced_at: new Date().toISOString() });
+        return formResult;
+      } else if (apiCfg) {
         rowIndex = await this._withRetry(() => this.upsertRowApi(apiCfg, lead));
       } else if (cfg.webhook_url) {
         await this._withRetry(() => this.upsertRowWebhook(cfg.webhook_url, lead));
       } else {
-        return { success: false, message: 'Google Sheets غير مربوط. أضف ملف Service Account ورابط الشيت من الإعدادات.' };
+        return { success: false, message: 'Google Sheets أو Google Form غير مربوط من الإعدادات.' };
       }
 
       const fresh = storageService.getLeads().find(l => l.id === lead.id);
@@ -397,9 +404,11 @@ class GoogleSheetsService {
         return { success: false, message: this.explainError(err), service_account_email: apiCfg.sa.client_email };
       }
     }
+    const formUrl = overrides.form_url || this.getConfig().form_url;
+    if (formUrl) return googleFormService.test(formUrl);
     const webhookUrl = overrides.webhook_url || this.getConfig().webhook_url;
     if (webhookUrl) return this.testSync(webhookUrl);
-    return { success: false, message: 'أدخل ملف Service Account (JSON) ورابط الشيت أولاً.' };
+    return { success: false, message: 'أدخل رابط Google Form أو ملف Service Account ورابط الشيت أولاً.' };
   }
 
   async testSync(webhookUrl) {

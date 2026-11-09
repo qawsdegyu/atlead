@@ -25,23 +25,33 @@ function withTimeout(promise, ms, label) {
 class HealthService {
   async checkAi() {
     const label = 'الذكاء الاصطناعي (ردود البوت)';
-    const ai = storageService.getSettings().ai || {};
-    const provider = ai.provider || 'gemini';
-    const key = provider === 'openai' ? ai.openai_api_key : ai.gemini_api_key;
-    if (!key) {
-      return fail('ai', label, `ما في مفتاح ${provider === 'openai' ? 'OpenAI' : 'Gemini'} — البوت رح يرد بردود بسيطة جاهزة بدل الذكاء الاصطناعي، وما رح يفهم العملاء صح. أضف المفتاح من بطاقة الذكاء الاصطناعي.`);
+    const providers = aiService.getProviders();
+    if (!providers.length) {
+      return fail('ai', label, 'ما في أي مفتاح ذكاء اصطناعي — البوت رح يرد من الأجوبة المعتمدة بملفات الشركة بس، بدل ما يحكي كـ AI Agent. أضف مفتاح (Gemini أو OpenAI أو Claude) من بطاقة الذكاء الاصطناعي.');
     }
-    try {
-      const r = await aiService.callJson('أنت أداة فحص. أعد JSON فقط.', 'أعد {"ok": true}');
-      if (r && r.ok === true) return ok('ai', label, `${provider === 'openai' ? 'OpenAI' : 'Gemini'} شغال (${provider === 'openai' ? ai.openai_model || 'gpt-4o' : ai.gemini_model || 'gemini-2.5-flash'}).`);
-      return warn('ai', label, 'المفتاح شغال بس الرد مش بالشكل المتوقع — جرّب البوت من المحاكي.');
-    } catch (err) {
-      const m = err.response?.data?.error?.message || err.message;
-      if (/not found|is not supported|404/i.test(m)) return fail('ai', label, `اسم الموديل غير صحيح أو انتهى: ${m}`);
-      if (/API key|permission|401|403/i.test(m)) return fail('ai', label, `المفتاح غير صالح: ${m}`);
-      if (/quota|429|exhausted/i.test(m)) return fail('ai', label, `خلص رصيد/حد الاستخدام: ${m}`);
-      return fail('ai', label, m);
+    const results = [];
+    for (const p of providers) {
+      try {
+        const text = await aiService.chat(p, 'أنت أداة فحص. أعد JSON فقط.', [], 'أعد {"ok": true}', { json: true, timeout: 20000 });
+        results.push({ p, ok: /"ok"\s*:\s*true/.test(text) });
+      } catch (err) {
+        const m = err.response?.data?.error?.message || err.message;
+        let why = m;
+        if (/not found|is not supported|404/i.test(m)) why = `اسم الموديل غير صحيح: ${m}`;
+        else if (/API key|invalid|permission|401|403|authentication/i.test(m)) why = `المفتاح مرفوض: ${m}`;
+        else if (/quota|429|exhausted|credit|balance/i.test(m)) why = `خلص الرصيد/حد الاستخدام: ${m}`;
+        results.push({ p, ok: false, why });
+      }
     }
+    const working = results.filter(r => r.ok);
+    const describe = r => `${r.p.label} (يبدأ بـ ${r.p.key.slice(0, 4)}…، ${r.p.model})`;
+    if (working.length) {
+      const broken = results.filter(r => !r.ok);
+      return (broken.length ? warn : ok)('ai', label,
+        `AI Agent شغال ✅ عن طريق ${describe(working[0])}، وبيجاوب من ملفات الشركة.` +
+        (broken.length ? ` مفتاح ثاني ما زبط: ${broken.map(r => `${describe(r)} — ${r.why || 'رد غير متوقع'}`).join(' | ')}` : ''));
+    }
+    return fail('ai', label, `ولا مفتاح شغال — البوت عم يرد من الأجوبة المعتمدة بس. ${results.map(r => `${describe(r)}: ${r.why || 'رد غير متوقع'}`).join(' | ')}`);
   }
 
   async checkWhatsApp() {

@@ -33,7 +33,7 @@ const SECRET_FIELDS = {
   meta: ['page_access_token', 'app_secret'],
   whatsapp: ['access_token'],
   supabase: ['service_role_key', 'anon_key'],
-  ai: ['gemini_api_key', 'openai_api_key'],
+  ai: ['gemini_api_key', 'openai_api_key', 'anthropic_api_key'],
   google_sheets: ['service_account_json', 'private_key'],
   notifications: ['gmail_app_password']
 };

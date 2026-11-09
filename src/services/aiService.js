@@ -14,17 +14,140 @@ function normalizeArabic(text) {
     .trim();
 }
 
+// Detects which AI service a key belongs to from its prefix.
+function detectKeyType(key) {
+  const k = String(key || '').trim();
+  if (!k) return null;
+  if (k.startsWith('sk-ant-')) return 'anthropic';
+  if (k.startsWith('sk-or-')) return 'openrouter';
+  if (k.startsWith('gsk_')) return 'groq';
+  if (k.startsWith('sk-')) return 'openai';
+  if (k.startsWith('AIza') || k.startsWith('AQ.')) return 'gemini';
+  return 'unknown';
+}
+
+const PROVIDER_LABELS = {
+  gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Claude (Anthropic)',
+  openrouter: 'OpenRouter', groq: 'Groq', unknown: 'غير معروف'
+};
+
+const OPENAI_COMPATIBLE = {
+  openai: { base: 'https://api.openai.com/v1', model: 'gpt-4o' },
+  openrouter: { base: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
+  groq: { base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' }
+};
+
 class AiService {
+  /**
+   * Every usable AI key (dashboard fields + environment variables), typed by prefix,
+   * with the provider chosen in the dashboard first. A key pasted into the "wrong"
+   * field still works because the type comes from the key itself.
+   */
+  getProviders() {
+    const ai = storageService.getSettings().ai || {};
+    const raw = [
+      ai.gemini_api_key, ai.openai_api_key, ai.anthropic_api_key,
+      process.env.GEMINI_API_KEY, process.env.OPENAI_API_KEY, process.env.ANTHROPIC_API_KEY,
+      process.env.OPENROUTER_API_KEY, process.env.GROQ_API_KEY
+    ].map(k => String(k || '').trim()).filter(Boolean);
+    const seen = new Set();
+    const list = [];
+    for (const key of raw) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      let type = detectKeyType(key);
+      if (type === 'unknown') type = 'gemini';
+      const model =
+        type === 'gemini' ? (ai.gemini_model || 'gemini-2.5-flash')
+          : type === 'anthropic' ? (ai.anthropic_model || 'claude-sonnet-5-5')
+            : type === 'openai' ? (ai.openai_model || 'gpt-4o')
+              : (ai[`${type}_model`] || OPENAI_COMPATIBLE[type].model);
+      list.push({ type, key, model, label: PROVIDER_LABELS[type] });
+    }
+    const preferred = ai.provider || 'gemini';
+    return list.sort((a, b) => (b.type === preferred) - (a.type === preferred));
+  }
+
+  describeKeys() {
+    return this.getProviders().map(p => `${p.label} (${p.key.slice(0, 4)}…, ${p.model})`);
+  }
+
+  /** One chat call to any provider. Returns the raw text of the model's answer. */
+  async chat(p, systemPrompt, history, userPrompt, { json = true, temperature = 0.5, timeout = 30000 } = {}) {
+    if (p.type === 'gemini') {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${p.model}:generateContent?key=${p.key}`;
+      const contents = history.map(h => ({ role: h.role === 'model' ? 'model' : 'user', parts: [{ text: h.text }] }));
+      contents.push({ role: 'user', parts: [{ text: userPrompt }] });
+      const res = await axios.post(url, {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generationConfig: { temperature, ...(json ? { responseMimeType: 'application/json' } : {}) }
+      }, { timeout });
+      return res.data?.candidates?.[0]?.content?.parts?.map(x => x.text || '').join('') || '';
+    }
+    if (p.type === 'anthropic') {
+      // Claude needs alternating user/assistant turns that start with "user".
+      const messages = [];
+      for (const h of [...history, { role: 'user', text: userPrompt }]) {
+        const role = h.role === 'model' ? 'assistant' : 'user';
+        const last = messages[messages.length - 1];
+        if (last && last.role === role) last.content += `\n${h.text}`;
+        else messages.push({ role, content: h.text });
+      }
+      if (messages[0]?.role !== 'user') messages.unshift({ role: 'user', content: '(بداية المحادثة)' });
+      const res = await axios.post('https://api.anthropic.com/v1/messages', {
+        model: p.model,
+        max_tokens: 1500,
+        temperature,
+        system: systemPrompt + (json ? '\n\nأعد JSON صالح فقط، بدون أي نص قبله أو بعده.' : ''),
+        messages
+      }, {
+        headers: { 'x-api-key': p.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        timeout
+      });
+      return (res.data?.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    }
+    const cfg = OPENAI_COMPATIBLE[p.type];
+    const messages = [{ role: 'system', content: systemPrompt }];
+    for (const h of history) messages.push({ role: h.role === 'model' ? 'assistant' : 'user', content: h.text });
+    messages.push({ role: 'user', content: userPrompt });
+    const res = await axios.post(`${cfg.base}/chat/completions`, {
+      model: p.model,
+      messages,
+      temperature,
+      ...(json ? { response_format: { type: 'json_object' } } : {})
+    }, { headers: { Authorization: `Bearer ${p.key}`, 'Content-Type': 'application/json' }, timeout });
+    return res.data?.choices?.[0]?.message?.content || '';
+  }
+
+  /** Tries every configured provider in order; throws the last error if all fail. */
+  async chatWithFailover(systemPrompt, history, userPrompt, opts) {
+    const providers = this.getProviders();
+    if (!providers.length) throw new Error('NO_AI_KEY');
+    let lastErr;
+    for (const p of providers) {
+      try {
+        const text = await this.chat(p, systemPrompt, history, userPrompt, opts);
+        if (!String(text).trim()) throw new Error('Empty AI response');
+        this.lastStatus = { ok: true, provider: p.label, model: p.model, at: new Date().toISOString() };
+        return { text, provider: p };
+      } catch (err) {
+        lastErr = err;
+        const msg = err.response?.data?.error?.message || err.message;
+        this.lastStatus = { ok: false, provider: p.label, model: p.model, error: msg, at: new Date().toISOString() };
+        console.error(`[AI] ${p.label} (${p.model}) failed:`, msg);
+      }
+    }
+    throw lastErr;
+  }
+
   async generateReply(conversation, incomingMessage) {
-    const settings = storageService.getSettings();
-    const aiConfig = settings.ai || {};
-    const provider = aiConfig.provider || 'gemini';
     const systemPrompt = knowledgeService.getSystemPrompt();
 
     // Prepare message history
     const history = (conversation.messages || []).slice(-20).map(m => ({
       role: m.sender === 'customer' ? 'user' : 'model',
-      parts: [{ text: `${m.sender === 'customer' ? 'العميل: ' : m.sender === 'agent' ? 'موظف المبيعات: ' : 'المساعد: '}${m.content}` }]
+      text: `${m.sender === 'customer' ? 'العميل: ' : m.sender === 'agent' ? 'موظف المبيعات: ' : 'المساعد: '}${m.content}`
     }));
 
     const lastMsgAt = conversation.messages?.length ? conversation.messages[conversation.messages.length - 1].created_at : null;
@@ -51,100 +174,16 @@ ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} ي
 أعد النتيجة بصيغة JSON حصراً.
 `;
 
-    // 1. Try Google Gemini
-    if (provider === 'gemini' && aiConfig.gemini_api_key) {
-      try {
-        const reply = await this.callGemini(aiConfig.gemini_api_key, aiConfig.gemini_model || 'gemini-2.5-flash', systemPrompt, history, userPrompt);
-        return reply;
-      } catch (err) {
-        console.error('Gemini API Error:', err.response?.data || err.message);
-      }
+    // AI agent: answers from the company files (in the system prompt), with failover across keys.
+    try {
+      const { text } = await this.chatWithFailover(systemPrompt, history, userPrompt, { json: true });
+      return { ...this.cleanAndParseJson(text), source: 'ai' };
+    } catch (err) {
+      if (err.message !== 'NO_AI_KEY') console.error('[AI] All providers failed — using the knowledge-file fallback.');
     }
 
-    // 2. Try OpenAI
-    if (provider === 'openai' && aiConfig.openai_api_key) {
-      try {
-        const reply = await this.callOpenAI(aiConfig.openai_api_key, aiConfig.openai_model || 'gpt-4o', systemPrompt, history, userPrompt);
-        return reply;
-      } catch (err) {
-        console.error('OpenAI API Error:', err.response?.data || err.message);
-      }
-    }
-
-    // 3. Smart Rule-Based Fallback (Works 100% locally even without API keys configured!)
-    return this.ruleBasedReply(conversation, incomingMessage);
-  }
-
-  async callGemini(apiKey, model, systemPrompt, history, userPrompt) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    
-    // Gemini contents format
-    const contents = [
-      {
-        role: 'user',
-        parts: [{ text: systemPrompt }]
-      },
-      {
-        role: 'model',
-        parts: [{ text: 'أنا جاهز ومستعد لتمثيل شركة atlead كمستشار مبيعات أردني محترف وفق كافة القواعد المحددة.' }]
-      }
-    ];
-
-    for (const h of history) {
-      contents.push({
-        role: h.role === 'model' ? 'model' : 'user',
-        parts: h.parts
-      });
-    }
-
-    contents.push({
-      role: 'user',
-      parts: [{ text: userPrompt }]
-    });
-
-    const response = await axios.post(url, {
-      contents,
-      generationConfig: {
-        temperature: 0.5,
-        responseMimeType: 'application/json'
-      }
-    }, { timeout: 25000 });
-
-    const rawText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    return this.cleanAndParseJson(rawText);
-  }
-
-  async callOpenAI(apiKey, model, systemPrompt, history, userPrompt) {
-    const url = 'https://api.openai.com/v1/chat/completions';
-
-    const messages = [
-      { role: 'system', content: systemPrompt }
-    ];
-
-    for (const h of history) {
-      messages.push({
-        role: h.role === 'model' ? 'assistant' : 'user',
-        content: h.parts[0].text
-      });
-    }
-
-    messages.push({ role: 'user', content: userPrompt });
-
-    const response = await axios.post(url, {
-      model: model || 'gpt-4o',
-      messages,
-      temperature: 0.5,
-      response_format: { type: 'json_object' }
-    }, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 25000
-    });
-
-    const rawText = response.data?.choices?.[0]?.message?.content;
-    return this.cleanAndParseJson(rawText);
+    // Last resort (no working AI key): approved answers from the company files, never repeated.
+    return { ...this.ruleBasedReply(conversation, incomingMessage), source: 'fallback' };
   }
 
   cleanAndParseJson(text) {
@@ -271,54 +310,42 @@ ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} ي
 
   // Audio transcription (Voice notes - الفويسّات)
   async transcribeAudio(audioFilePath, mimeType = 'audio/ogg') {
-    const settings = storageService.getSettings();
-    const aiConfig = settings.ai || {};
-
-    // 1. Try Gemini Multimodal Audio
-    if (aiConfig.gemini_api_key) {
+    let audioBuffer;
+    try {
+      audioBuffer = fs.readFileSync(audioFilePath);
+    } catch {
+      return null;
+    }
+    const prompt = 'أنت خبير تفريغ صوتي دقيق للغة العربية واللهجة الأردنية. قم بتفريغ هذا التسجيل الصوتي بدقة تامة واكتب النص المنطوق فقط بدون أي مقدمات أو تعليقات إضافية:';
+    for (const p of this.getProviders()) {
       try {
-        const audioBuffer = fs.readFileSync(audioFilePath);
-        const base64Audio = audioBuffer.toString('base64');
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${aiConfig.gemini_model || 'gemini-2.5-flash'}:generateContent?key=${aiConfig.gemini_api_key}`;
-
-        const response = await axios.post(url, {
-          contents: [{
-            parts: [
-              {
-                text: 'أنت خبير تفريغ صوتي دقيق للغة العربية واللهجة الأردنية. قم بتفريغ هذا التسجيل الصوتي بدقة تامة واكتب النص المنطوق فقط بدون أي مقدمات أو تعليقات إضافية:'
-              },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64Audio
-                }
-              }
-            ]
-          }]
-        }, { timeout: 35000 });
-
-        const transcript = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (transcript) return transcript;
+        if (p.type === 'gemini') {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${p.model}:generateContent?key=${p.key}`;
+          const res = await axios.post(url, {
+            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: audioBuffer.toString('base64') } }] }]
+          }, { timeout: 35000 });
+          const t = res.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (t) return t;
+        } else if (p.type === 'openai' || p.type === 'groq') {
+          const form = new FormData();
+          const ext = (mimeType.split('/')[1] || 'ogg').split(';')[0];
+          form.append('file', new Blob([audioBuffer], { type: mimeType }), `voice.${ext === 'mpeg' ? 'mp3' : ext}`);
+          form.append('model', p.type === 'groq' ? 'whisper-large-v3' : 'whisper-1');
+          form.append('language', 'ar');
+          const res = await axios.post(`${OPENAI_COMPATIBLE[p.type].base}/audio/transcriptions`, form, {
+            headers: { Authorization: `Bearer ${p.key}` }, timeout: 35000
+          });
+          const t = String(res.data?.text || '').trim();
+          if (t) return t;
+        }
       } catch (err) {
-        console.error('Gemini Audio Transcription Error:', err.response?.data || err.message);
+        console.error(`[AI] ${p.label} transcription failed:`, err.response?.data?.error?.message || err.message);
       }
     }
-
-    // 2. Try OpenAI Whisper
-    if (aiConfig.openai_api_key) {
-      try {
-        const FormData = require('multer'); // or direct form-data
-        // Fallback or basic handling
-      } catch (err) {
-        console.error('Whisper Audio Transcription Error:', err.message);
-      }
-    }
-
     // No transcription engine available: don't invent content, just flag it.
     return null;
   }
 
-  // Comment Analysis for Facebook & Instagram Posts
   /**
    * Understand an image the customer sent (screenshot, product photo, document...).
    * Returns a short Arabic description, or null if no vision-capable key / disabled.
@@ -335,31 +362,38 @@ ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} ي
     if (buffer.length > 7 * 1024 * 1024) return null; // too big for inline upload
     const prompt = 'العميل بعث هذه الصورة بمحادثة مبيعات. صف محتواها باختصار (جملتين كحد أقصى) بالعربي: شو بتعرض؟ وإذا فيها نص أو أرقام مهمة أو رسالة خطأ اكتبها. بدون مقدمات.';
     const base64 = buffer.toString('base64');
-    const mime = /^image\/(jpeg|png|webp|gif|heic|heif)$/.test(mimeType) ? mimeType : 'image/jpeg';
+    const mime = /^image\/(jpeg|png|webp|gif)$/.test(mimeType) ? mimeType : 'image/jpeg';
 
-    if (aiConfig.gemini_api_key && (aiConfig.provider !== 'openai' || !aiConfig.openai_api_key)) {
+    for (const p of this.getProviders()) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${aiConfig.gemini_model || 'gemini-2.5-flash'}:generateContent?key=${aiConfig.gemini_api_key}`;
-        const res = await axios.post(url, {
-          contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }] }]
-        }, { timeout: 30000 });
-        const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (text) return text;
+        let text = '';
+        if (p.type === 'gemini') {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${p.model}:generateContent?key=${p.key}`;
+          const res = await axios.post(url, {
+            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }] }]
+          }, { timeout: 30000 });
+          text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        } else if (p.type === 'anthropic') {
+          const res = await axios.post('https://api.anthropic.com/v1/messages', {
+            model: p.model,
+            max_tokens: 300,
+            messages: [{ role: 'user', content: [
+              { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } },
+              { type: 'text', text: prompt }
+            ] }]
+          }, { headers: { 'x-api-key': p.key, 'anthropic-version': '2023-06-01' }, timeout: 30000 });
+          text = (res.data?.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+        } else if (p.type === 'openai' || p.type === 'openrouter') {
+          const res = await axios.post(`${OPENAI_COMPATIBLE[p.type].base}/chat/completions`, {
+            model: p.model,
+            messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } }] }],
+            max_tokens: 200
+          }, { headers: { Authorization: `Bearer ${p.key}` }, timeout: 30000 });
+          text = res.data?.choices?.[0]?.message?.content;
+        }
+        if (String(text || '').trim()) return String(text).trim();
       } catch (err) {
-        console.error('Gemini image error:', err.response?.data?.error?.message || err.message);
-      }
-    }
-    if (aiConfig.openai_api_key) {
-      try {
-        const res = await axios.post('https://api.openai.com/v1/chat/completions', {
-          model: aiConfig.openai_model || 'gpt-4o',
-          messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } }] }],
-          max_tokens: 200
-        }, { headers: { Authorization: `Bearer ${aiConfig.openai_api_key}` }, timeout: 30000 });
-        const text = res.data?.choices?.[0]?.message?.content?.trim();
-        if (text) return text;
-      } catch (err) {
-        console.error('OpenAI image error:', err.response?.data?.error?.message || err.message);
+        console.error(`[AI] ${p.label} image failed:`, err.response?.data?.error?.message || err.message);
       }
     }
     return null;
@@ -375,32 +409,12 @@ ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} ي
 
   // Generic "give me JSON" call used for comment analysis.
   async callJson(systemPrompt, userPrompt) {
-    const aiConfig = storageService.getSettings().ai || {};
-    const provider = aiConfig.provider || 'gemini';
-    const parse = (t) => {
-      let c = (t || '').trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-      return JSON.parse(c);
-    };
-
-    if (provider === 'gemini' && aiConfig.gemini_api_key) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${aiConfig.gemini_model || 'gemini-2.5-flash'}:generateContent?key=${aiConfig.gemini_api_key}`;
-      const res = await axios.post(url, {
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: { temperature: 0.4, responseMimeType: 'application/json' }
-      }, { timeout: 20000 });
-      return parse(res.data?.candidates?.[0]?.content?.parts?.[0]?.text);
-    }
-    if (provider === 'openai' && aiConfig.openai_api_key) {
-      const res = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: aiConfig.openai_model || 'gpt-4o',
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-        temperature: 0.4,
-        response_format: { type: 'json_object' }
-      }, { headers: { Authorization: `Bearer ${aiConfig.openai_api_key}` }, timeout: 20000 });
-      return parse(res.data?.choices?.[0]?.message?.content);
-    }
-    return null;
+    if (!this.getProviders().length) return null;
+    const { text } = await this.chatWithFailover(systemPrompt, [], userPrompt, { json: true, temperature: 0.4, timeout: 20000 });
+    let c = String(text || '').trim().replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+    const start = c.indexOf('{'); const end = c.lastIndexOf('}');
+    if (start > 0 || (end >= 0 && end < c.length - 1)) c = c.slice(start, end + 1);
+    return JSON.parse(c);
   }
 
   async analyzeComment(commentText, { userName = '', platform = 'facebook' } = {}) {

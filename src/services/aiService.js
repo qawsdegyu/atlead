@@ -43,6 +43,31 @@ const VOICE_MARKERS = [VOICE_FAILED_TEXT, '__VOICE_TRANSCRIPTION_FAILED__', 'ر�
 class AiService {
   get VOICE_FAILED_TEXT() { return VOICE_FAILED_TEXT; }
 
+  /** 'en' when the message is mostly Latin letters, otherwise 'ar'. */
+  detectLanguage(text) {
+    const t = this.cleanVoiceMarker(String(text || '')).replace(/https?:\/\/\S+/g, '');
+    const ar = (t.match(/[؀-ۿ]/g) || []).length;
+    const en = (t.match(/[A-Za-z]/g) || []).length;
+    return en > ar * 2 && en >= 3 ? 'en' : 'ar';
+  }
+
+  /** Customer names like "عميل محتمل" / "متابع" / simulator labels are not real names. */
+  realName(name) {
+    const n = String(name || '').trim();
+    if (!n || /عميل|متابع|مستخدم|simulator|test|voice|image|customer|user/i.test(n)) return '';
+    return n;
+  }
+
+  /** Chat apps don't render Markdown: [text](url) → "text: url", drop ** and # headings. */
+  toPlainText(text) {
+    return String(text || '')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, label, url) => (label.includes(url) ? url : `${label}: ${url}`))
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/__([^_]+)__/g, '$1')
+      .replace(/^#{1,6}\s+/gm, '')
+      .trim();
+  }
+
   isVoiceFailed(text) {
     return VOICE_MARKERS.some(m => String(text || '').includes(m));
   }
@@ -209,12 +234,13 @@ class AiService {
     const lastMsgAt = conversation.messages?.length ? conversation.messages[conversation.messages.length - 1].created_at : null;
     const daysSince = lastMsgAt ? Math.floor((Date.now() - new Date(lastMsgAt).getTime()) / 86400000) : 0;
 
+    const lang = this.detectLanguage(incomingMessage);
     const userPrompt = `
 الرسالة الجديدة من العميل: "${incomingMessage}"
 
 بيانات العميل المحفوظة (ذاكرة من المحادثات السابقة):
 - القناة: ${conversation.channel}
-- الاسم: ${conversation.customer_name || 'غير معروف'}
+- الاسم: ${this.realName(conversation.customer_name) || 'غير معروف (لا تناديه باسم)'}
 - رقم الهاتف: ${conversation.customer_phone || 'غير مسجل'}
 - نوع النشاط: ${conversation.business_type || 'غير معروف'}
 - طلبات العميل السابقة: ${conversation.customer_requests || 'لا يوجد'}
@@ -235,13 +261,30 @@ ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} ي
 3. الصور: إذا الرسالة فيها "[صورة من العميل: ...]" فهذا وصف لصورة بعتها العميل؛ تعامل مع محتواها مباشرة (مثلاً سكرين شوت مشكلة، منتج، عرض سعر) واسأله سؤال مفيد عنها.
 4. الفويس: الرسائل الصوتية بتوصلك مكتوبة (تفريغ للكلام)؛ رد عليها نصياً كأنها رسالة مكتوبة.
 5. ردك مختصر وواضح (2-5 جمل)، جاوب السؤال أولاً، وبعدين سؤال واحد بس لفهم احتياجه.
+6. التنسيق: الرد بيوصل على واتساب/إنستغرام/ماسنجر — لا تستخدم Markdown (لا [نص](رابط) ولا ** ولا #). اكتب الرابط كامل لحاله مثل https://agsco.shop
 أعد النتيجة بصيغة JSON حصراً.
+${lang === 'en' ? `
+IMPORTANT: The customer's last message is in ENGLISH. Write "reply_text" entirely in English (professional, friendly). Do not use Arabic in reply_text.` : ''}
 `;
 
     // AI agent: answers from the company files (in the system prompt), with failover across keys.
     try {
       const { text } = await this.chatWithFailover(systemPrompt, history, userPrompt, { json: true });
-      return { ...this.cleanAndParseJson(text), source: 'ai' };
+      let result = this.cleanAndParseJson(text);
+      // Language guard: an English message must get an English reply. One strict retry.
+      if (lang === 'en' && /[؀-ۿ]/.test(result.reply_text || '')) {
+        try {
+          const retry = await this.chatWithFailover(systemPrompt, history,
+            `${userPrompt}
+
+Your previous answer was in Arabic. The customer writes in English — return the same JSON with reply_text written ONLY in English.`,
+            { json: true });
+          const r2 = this.cleanAndParseJson(retry.text);
+          if (r2.reply_text && !/[؀-ۿ]/.test(r2.reply_text)) result = r2;
+        } catch { /* keep the first answer */ }
+      }
+      result.reply_text = this.toPlainText(result.reply_text);
+      return { ...result, source: 'ai' };
     } catch (err) {
       if (err.message !== 'NO_AI_KEY') console.error('[AI] All providers failed — using the knowledge-file fallback.');
     }

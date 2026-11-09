@@ -37,7 +37,7 @@ function formValues(lead) {
     [`entry.${ENTRY.firstContact}`]: fmt(lead.first_contact_at || lead.created_at),
     [`entry.${ENTRY.lastContact}`]: fmt(lead.updated_at || new Date().toISOString()),
     [`entry.${ENTRY.followUps}`]: String(Number(lead.follow_up_count) || 0),
-    [`entry.${ENTRY.nextFollowUp}`]: fmt(lead.next_follow_up_at),
+    [`entry.${ENTRY.nextFollowUp}`]: fmt(lead.next_follow_up_at || lead.last_follow_up_at),
     [`entry.${ENTRY.consultation}`]: bool(lead.consultation_requested), [`entry.${ENTRY.demo}`]: bool(lead.demo_requested),
     [`entry.${ENTRY.notes}`]: fmt(lead.notes), [`entry.${ENTRY.rep}`]: fmt(lead.assigned_to_name),
     [`entry.${ENTRY.repEmail}`]: fmt(lead.assigned_to_email)

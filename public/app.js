@@ -789,7 +789,7 @@ async function loadSettings() {
       const fu = s.follow_up || {};
       document.getElementById('fu-enabled').checked = fu.enabled !== false;
       document.getElementById('fu-after-hours').value = String(fu.after_hours ?? 20);
-      document.getElementById('fu-min-prob').value = fu.min_probability ?? 60;
+      document.getElementById('fu-min-prob').value = fu.min_probability ?? 50;
       document.getElementById('fu-max').value = String(fu.max_per_customer ?? 2);
       document.getElementById('fu-use-ai').checked = fu.use_ai !== false;
       document.getElementById('fu-template').value = fu.template || 'أهلين {name} 👋 حبيت أطمّن عليك، إذا عندك أي سؤال بخصوص {topic} أنا موجود وبساعدك بكل سرور. شو رأيك نكمل؟';
@@ -847,7 +847,7 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
     follow_up: {
       enabled: document.getElementById('fu-enabled').checked,
       after_hours: Number(document.getElementById('fu-after-hours').value) || 20,
-      min_probability: Number(document.getElementById('fu-min-prob').value) || 60,
+      min_probability: Number(document.getElementById('fu-min-prob').value) || 50,
       max_per_customer: Number(document.getElementById('fu-max').value) || 2,
       use_ai: document.getElementById('fu-use-ai').checked,
       template: document.getElementById('fu-template').value.trim()

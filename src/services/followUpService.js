@@ -6,7 +6,7 @@
  *  - The last message in the chat is from the bot (customer didn't answer).
  *  - The customer's last message is between `after_hours` (default 20h) and 23.5h old.
  *    (Meta & WhatsApp only allow business messages within 24h of the customer's last message.)
- *  - Buying probability is between `min_probability` (default 60%) and the handoff threshold.
+ *  - Buying probability is between `min_probability` (default 50%) and the handoff threshold.
  *  - At most ONE follow-up per silence, and `max_per_customer` (default 2) in total.
  *  - Only during working hours (or 09:00–21:00 if working hours are off).
  *  - At most one follow-up per minute overall (natural pace, protects the WhatsApp number).
@@ -26,7 +26,7 @@ class FollowUpService {
     return {
       enabled: f.enabled !== false,
       afterHours: Math.min(23, Math.max(1, num(f.after_hours, 20))),
-      minProbability: num(f.min_probability, 60),
+      minProbability: Math.min(84, Math.max(0, num(f.min_probability, 50))),
       maxPerCustomer: Math.max(1, num(f.max_per_customer, 2)),
       useAi: f.use_ai !== false,
       template: f.template || 'أهلين {name} 👋 حبيت أطمّن عليك، إذا عندك أي سؤال بخصوص {topic} أنا موجود وبساعدك بكل سرور. شو رأيك نكمل؟'
@@ -128,7 +128,8 @@ class FollowUpService {
     const updated = storageService.saveConversation({
       id: conv.id,
       follow_up_count: (fresh.follow_up_count || 0) + 1,
-      last_follow_up_at: new Date().toISOString()
+      last_follow_up_at: new Date().toISOString(),
+      notes: [fresh.notes, `لم يرد العميل بعد آخر رسالة؛ تم إرسال متابعة رقم ${(fresh.follow_up_count || 0) + 1}`].filter(Boolean).join(' | ')
     });
     supabaseService.saveMessage(msg, conv.id).catch(() => {});
     supabaseService.saveConversation(updated).catch(() => {});

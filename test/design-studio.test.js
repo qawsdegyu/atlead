@@ -162,3 +162,22 @@ test('identity test: designs every medium in its own size with the logo, then re
   assert.equal(edit.body.messages[0].content[1].image_url.url.length > 100, true, 'the existing design is sent first');
   assert.throws(() => kit.redo('nope'), /غير معروفة/);
 });
+
+test('credit-friendly requests, and never an off-brand free image when the brand identity exists', async () => {
+  fakeWorld();
+  await mk.learnBrand();
+  fake('get', /image\.pollinations\.ai/, () => img);
+  calls.length = 0;
+  let p = await mk.createPlan({ customTopic: 'x' });
+  const gen = calls.filter(c => c.body?.modalities);
+  assert.ok(gen.every(g => g.body.max_tokens === 6000), 'each request caps what OpenRouter reserves');
+  // now every Nano Banana model is out of credit
+  reset();
+  fake('post', /openrouter\.ai\/api\/v1\/chat\/completions/, (req) => req.body.modalities
+    ? { __status: 402, data: { error: { message: 'This request would exceed your available credits' } } }
+    : { choices: [{ message: { content: '{}' } }] });
+  fake('get', /image\.pollinations\.ai/, () => img);
+  p = await mk.regenerate(p.id, 'images');
+  assert.ok(!calls.some(c => /pollinations/.test(c.url)), 'free generator not used when the brand has references');
+  assert.match(p.image_error, /رصيد OpenRouter خلص/, 'clear reason shown');
+});

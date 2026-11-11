@@ -26,6 +26,7 @@ const OPENROUTER_CHAIN = ['google/gemini-3-pro-image', 'google/gemini-nano-banan
 const POST_W = 1080;
 const POST_H = 1350;
 const ASPECT = '4:5';
+const MAX_TOKENS = 6000;
 const errMsg = (e) => e.response?.data?.error?.message || e.message;
 const fromDataUrl = (url) => Buffer.from(String(url).split(',').pop(), 'base64');
 
@@ -150,12 +151,13 @@ class ImageService {
       const post = (b) => axios.post('https://openrouter.ai/api/v1/chat/completions', b, { headers: { Authorization: `Bearer ${p.key}` }, timeout: 180000 });
       let res;
       try {
-        res = await post({ model, messages, modalities: ['image', 'text'], image_config: { aspect_ratio: aspect, image_size: '2K' } });
+        // max_tokens caps what OpenRouter reserves from the balance per request (a 2K image is ~1-2K tokens).
+        res = await post({ model, messages, modalities: ['image', 'text'], max_tokens: MAX_TOKENS, image_config: { aspect_ratio: aspect, image_size: '2K' } });
       } catch (e) {
         // A provider that rejects an option still gets the request, without it.
         if (e.response?.status !== 400) throw e;
-        res = await post({ model, messages, modalities: ['image', 'text'], image_config: { aspect_ratio: aspect } })
-          .catch(() => post({ model, messages, modalities: ['image', 'text'] }));
+        res = await post({ model, messages, modalities: ['image', 'text'], max_tokens: MAX_TOKENS, image_config: { aspect_ratio: aspect } })
+          .catch(() => post({ model, messages, modalities: ['image', 'text'], max_tokens: MAX_TOKENS }));
       }
       const url = res.data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
       if (!url) throw new Error(res.data?.error?.message || 'OpenRouter returned no image');
@@ -233,7 +235,8 @@ class ImageService {
         console.error('[Images]', lastErr.message);
       }
     }
-    if (allowFree && storageService.getSettings().marketing?.free_image_fallback !== false) {
+    // The free generator can't see the logo / design references, so it is only used when there are none.
+    if (allowFree && !images.length && storageService.getSettings().marketing?.free_image_fallback !== false) {
       try {
         return { file: await this.save(await this.viaPollinations(prompt), kind, aspect), engine: 'Pollinations (مجاني)' };
       } catch (e) {

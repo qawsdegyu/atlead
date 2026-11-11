@@ -92,6 +92,23 @@ router.post('/brand/remove', (req, res) => {
   try { brandReply(res, marketingService.removeBrandFile(String(req.body.file || '')), 'تم الحذف'); } catch (e) { brandFail(res, e); }
 });
 
+// --- Identity test: the brand designed on every medium (background job) ---
+const brandKit = require('../services/brandKit');
+router.get('/brand-kit', (req, res) => {
+  res.json({ success: true, kit: brandKit.view(), media: brandKit.media.map(m => ({ key: m.key, title: m.title, group: m.group, aspect: m.aspect })) });
+});
+router.post('/brand-kit/start', (req, res) => {
+  try {
+    const keys = Array.isArray(req.body.keys) && req.body.keys.length ? req.body.keys.map(String) : null;
+    res.json({ success: true, kit: brandKit.start({ keys, fresh: req.body.fresh === true }), message: 'بدأ التصميم — الصور بتظهر وحدة وحدة ✨' });
+  } catch (e) { res.status(400).json({ success: false, message: e.message }); }
+});
+router.post('/brand-kit/redo', (req, res) => {
+  try {
+    res.json({ success: true, kit: brandKit.redo(String(req.body.key || ''), req.body.note || ''), message: 'جاري إعادة التصميم…' });
+  } catch (e) { res.status(400).json({ success: false, message: e.message }); }
+});
+
 // Market research: competitors, our best posts, news.
 router.get('/research', async (req, res) => {
   try {

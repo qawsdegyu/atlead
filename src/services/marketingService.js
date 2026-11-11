@@ -111,7 +111,9 @@ class MarketingService {
   /** Scheduler: retry anything that did not reach the database yet (posts + images). */
   async syncDb() {
     await syncToDb();
-    await imageService.backupMissing(read().plans.flatMap(p => [p.image_file, ...(p.images || []).map(i => i.file)]).filter(Boolean));
+    const d = read();
+    const brandFiles = [d.brand?.logo, ...(d.brand?.refs || []), ...(d.brand?.kit?.items || []).flatMap(i => [i.file, ...(i.history || [])])];
+    await imageService.backupMissing([...d.plans.flatMap(p => [p.image_file, ...(p.images || []).map(i => i.file)]), ...brandFiles].filter(Boolean));
   }
 
   dbStatus() {

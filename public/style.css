@@ -1219,3 +1219,20 @@ button.mk-option:hover { border-color: var(--primary); background: var(--primary
 .mk-brand-file.logo img { object-fit: contain; background: #fff; }
 .mk-brand-file button { position: absolute; top: 3px; inset-inline-end: 3px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: rgba(0,0,0,.65); color: #fff; cursor: pointer; line-height: 1; }
 @media (max-width: 900px) { .mk-studio { grid-template-columns: 1fr; } }
+
+/* ---- Identity test ---- */
+.mk-kit-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.mk-kit-bar { height: 6px; border-radius: 999px; background: var(--bg-raised); overflow: hidden; }
+.mk-kit-bar i { display: block; height: 100%; background: var(--primary); transition: width .4s ease; }
+.mk-kit-group { font-size: 13px; color: var(--text-secondary); font-weight: 600; margin: 18px 0 10px; }
+.mk-kit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; align-items: start; }
+.mk-kit-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; }
+.mk-kit-frame { position: relative; background: var(--bg-raised); max-height: 460px; width: 100%; }
+.mk-kit-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mk-kit-wait { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--text-secondary); font-size: 12.5px; text-align: center; padding: 12px; background: rgba(12, 17, 29, .55); }
+.mk-kit-wait .mk-spinner { margin: 0; width: 28px; height: 28px; }
+.mk-kit-wait.err { color: #f08396; }
+.mk-kit-wait.idle { background: transparent; color: var(--text-muted); }
+.mk-kit-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 12px 6px; font-size: 13px; }
+.mk-kit-actions { display: flex; gap: 6px; padding: 0 12px 12px; }
+.mk-kit-actions .form-control { padding: 6px 10px; font-size: 12px; }

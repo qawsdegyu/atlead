@@ -130,3 +130,35 @@ test('owner can upload a logo / design and remove references', async () => {
   b = mk.removeBrandFile(b.refs[0]);
   assert.equal(b.refs.length, 4);
 });
+
+test('identity test: designs every medium in its own size with the logo, then redo with feedback', async () => {
+  fakeWorld();
+  await mk.learnBrand();
+  const kit = require('../src/services/brandKit');
+  calls.length = 0;
+  kit.start();
+  for (let i = 0; i < 100 && kit.state().status === 'running'; i++) await new Promise(r => setTimeout(r, 50));
+  const st = kit.state();
+  assert.equal(st.status, 'done');
+  assert.equal(st.progress.done, kit.media.length, 'all media designed');
+  const gens = calls.filter(c => c.body?.modalities);
+  const aspects = new Set(gens.map(g => g.body.image_config.aspect_ratio));
+  for (const a of ['4:5', '9:16', '21:9', '16:9', '3:2', '1:1']) assert.ok(aspects.has(a), `asked for ${a}`);
+  assert.ok(gens.every(g => g.body.messages[0].content.filter(p => p.type === 'image_url').length >= 2), 'logo + references on every design');
+  assert.match(gens[0].body.messages[0].content[0].text, /Reproduce the logo faithfully/);
+  const story = st.items.find(i => i.key === 'ig_story');
+  const meta = await require('sharp')(imageService.filePath(story.file)).metadata();
+  assert.ok(meta.height > meta.width, 'story kept vertical (not cropped to 4:5)');
+  // redo one design with feedback → edits the existing design
+  calls.length = 0;
+  const before = story.file;
+  kit.redo('ig_story', 'خلّي الخلفية أغمق');
+  for (let i = 0; i < 100 && kit.state().status === 'running'; i++) await new Promise(r => setTimeout(r, 50));
+  const after = kit.state().items.find(i => i.key === 'ig_story');
+  assert.notEqual(after.file, before);
+  assert.deepEqual(after.history, [before], 'previous version kept');
+  const edit = calls.find(c => c.body?.modalities);
+  assert.match(edit.body.messages[0].content[0].text, /خلّي الخلفية أغمق/);
+  assert.equal(edit.body.messages[0].content[1].image_url.url.length > 100, true, 'the existing design is sent first');
+  assert.throws(() => kit.redo('nope'), /غير معروفة/);
+});

@@ -367,6 +367,7 @@
     document.querySelectorAll('.mk-subtab').forEach(b => b.classList.toggle('active', b.dataset.mk === name));
     document.querySelectorAll('.mk-pane').forEach(p => p.classList.toggle('active', p.id === `mk-pane-${name}`));
     if (name === 'research') loadResearch();
+    if (name === 'kit') loadKit();
     if (name === 'history') renderHistory();
     if (name === 'setup') fillSetup();
   }
@@ -418,6 +419,60 @@
     if (!item || e.target.closest('a')) return;
     const p = (overview.plans || []).find(x => x.id === item.dataset.id);
     if (p) { setPlan(p); switchPane('wizard'); }
+  });
+
+  // ---------- identity test (brand on every medium) ----------
+  let kitTimer = null;
+  async function loadKit() {
+    let d;
+    try { d = await api('/api/marketing/brand-kit', undefined, 'GET'); } catch (e) { $('mk-kit-body').innerHTML = `<div class="mk-alert">${esc(e.message)}</div>`; return; }
+    renderKit(d.kit, d.media);
+    clearTimeout(kitTimer);
+    // Keep refreshing while designs are being made (only while the tab is open).
+    if (d.kit?.status === 'running' && document.querySelector('.mk-subtab.active')?.dataset.mk === 'kit') kitTimer = setTimeout(loadKit, 5000);
+  }
+
+  function renderKit(kit, media) {
+    const running = kit?.status === 'running';
+    const p = kit?.progress || { done: 0, failed: 0, total: media.length };
+    $('mk-kit-start').disabled = running;
+    $('mk-kit-start').querySelector('span').textContent = running ? 'جاري التصميم…' : kit ? 'كمّل الناقص' : 'صمّم كل الوسائط';
+    $('mk-kit-progress').innerHTML = kit ? `
+      <div class="mk-kit-bar"><i style="width:${Math.round((p.done / p.total) * 100)}%"></i></div>
+      <div class="form-hint" style="margin:6px 0 16px;">${p.done} من ${p.total} جاهزين${p.failed ? ` · ${p.failed} ما زبطوا (اضغط «أعد التصميم» عليهم)` : ''}${running ? ' · التصاميم بتظهر وحدة وحدة، ممكن تاخد كم دقيقة' : ''}</div>` : '';
+    const items = media.map(md => ({ ...md, ...(kit?.items?.find(i => i.key === md.key) || { status: 'idle' }) }));
+    const groups = [...new Set(items.map(i => i.group))];
+    $('mk-kit-body').innerHTML = groups.map(g => `
+      <h4 class="mk-kit-group">${esc(g)}</h4>
+      <div class="mk-kit-grid">${items.filter(i => i.group === g).map(i => `
+        <div class="mk-kit-card">
+          <div class="mk-kit-frame" style="aspect-ratio:${i.aspect.replace(':', ' / ')}">
+            ${i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener"><img src="${esc(i.url)}" alt="${esc(i.title)}" loading="lazy"></a>` : ''}
+            ${i.status === 'running' || (i.status === 'pending' && running) ? `<div class="mk-kit-wait"><div class="mk-spinner"></div><span>${i.status === 'running' ? 'جاري التصميم…' : 'بالدور'}</span></div>` : ''}
+            ${i.status === 'failed' ? `<div class="mk-kit-wait err"><i class="fa-solid fa-triangle-exclamation"></i><span>${esc(i.error || 'ما زبط')}</span></div>` : ''}
+            ${!i.url && (i.status === 'idle' || (i.status === 'pending' && !running)) ? `<div class="mk-kit-wait idle"><span>${esc(i.aspect)}</span></div>` : ''}
+          </div>
+          <div class="mk-kit-meta">
+            <b>${esc(i.title)}</b><span class="form-hint">${esc(i.aspect)}${i.engine ? ` · ${esc(i.engine)}` : ''}</span>
+          </div>
+          ${i.url || i.status === 'failed' ? `<div class="mk-kit-actions">
+            <input class="form-control" data-kit-note="${esc(i.key)}" placeholder="ملاحظة للتعديل (اختياري)">
+            <button class="btn btn-secondary btn-sm" data-kit-redo="${esc(i.key)}" ${running ? 'disabled' : ''}><i class="fa-solid fa-rotate"></i> أعد التصميم</button>
+            ${i.url ? `<a class="btn btn-secondary btn-sm" href="${esc(i.url)}" download="atlead-${esc(i.key)}.jpg" title="تنزيل"><i class="fa-solid fa-download"></i></a>` : ''}
+          </div>` : ''}
+        </div>`).join('')}</div>`).join('');
+  }
+
+  $('mk-kit-start')?.addEventListener('click', async () => {
+    if (!confirm('رح نصمّم كل الوسائط بأفضل موديل (Nano Banana Pro). بتاخد كم دقيقة وبتستهلك من رصيد OpenRouter (تقريباً 10–15 سنت للتصميم). نبلّش؟')) return;
+    try { const d = await api('/api/marketing/brand-kit/start', {}); showToast(d.message, 'success'); loadKit(); } catch (e) { showToast(e.message, 'error'); }
+  });
+  $('mk-pane-kit')?.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-kit-redo]');
+    if (!b) return;
+    const key = b.dataset.kitRedo;
+    const note = document.querySelector(`[data-kit-note="${key}"]`)?.value.trim() || '';
+    try { const d = await api('/api/marketing/brand-kit/redo', { key, note }); showToast(d.message, 'success'); loadKit(); } catch (err) { showToast(err.message, 'error'); }
   });
 
   // ---------- research ----------

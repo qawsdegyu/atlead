@@ -55,10 +55,16 @@ class ImageService {
    * Store an image. kind "post" → 1080x1350 JPEG (cropped to 4:5);
    * kind "ref" → reference/logo, kept whole (max 1024px, PNG keeps transparency).
    */
-  async save(buffer, kind = 'post') {
+  async save(buffer, kind = 'post', aspect = ASPECT) {
     let ext = 'jpg';
     let out = buffer;
-    if (sharp && kind === 'ref') {
+    if (sharp && kind === 'media') {
+      // Exact frame of the medium (a story is always 9:16, a cover 21:9…), long side up to 2048px.
+      const [aw, ah] = String(aspect).split(':').map(Number);
+      const w = aw >= ah ? 2048 : Math.round(2048 * aw / ah);
+      const h = aw >= ah ? Math.round(2048 * ah / aw) : 2048;
+      out = await sharp(buffer).rotate().resize(w, h, { fit: 'cover', position: 'attention' }).jpeg({ quality: 92 }).toBuffer();
+    } else if (sharp && kind === 'ref') {
       const meta = await sharp(buffer).metadata();
       const png = !!meta.hasAlpha;
       const img = sharp(buffer).rotate().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true });
@@ -112,14 +118,14 @@ class ImageService {
    * One image from one provider. images = data URLs given to the model as input
    * (for editing: the image to edit first; then logo / design references).
    */
-  async viaProvider(p, prompt, images = [], model = null) {
+  async viaProvider(p, prompt, images = [], model = null, aspect = ASPECT) {
     const custom = storageService.getSettings().marketing?.image_model;
     model = model || (custom && String(custom).trim()) || DEFAULT_MODELS[p.type];
     if (p.type === 'gemini') {
       const parts = [{ text: prompt }, ...images.map(u => ({ inline_data: { mime_type: u.slice(5, u.indexOf(';')), data: u.split(',')[1] } }))];
       const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${p.key}`, {
         contents: [{ parts }],
-        generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: ASPECT } }
+        generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: aspect } }
       }, { timeout: 150000 });
       for (const part of res.data?.candidates?.[0]?.content?.parts || []) {
         const data = part.inlineData?.data || part.inline_data?.data;
@@ -128,7 +134,7 @@ class ImageService {
       throw new Error('Gemini returned no image');
     }
     if (p.type === 'openai') {
-      const res = await axios.post('https://api.openai.com/v1/images/generations', { model, prompt, size: '1024x1536', n: 1 }, {
+      const res = await axios.post('https://api.openai.com/v1/images/generations', { model, prompt, size: aspect === '1:1' ? '1024x1024' : (Number(aspect.split(':')[0]) > Number(aspect.split(':')[1]) ? '1536x1024' : '1024x1536'), n: 1 }, {
         headers: { Authorization: `Bearer ${p.key}` }, timeout: 120000
       });
       const d = res.data?.data?.[0] || {};
@@ -144,11 +150,11 @@ class ImageService {
       const post = (b) => axios.post('https://openrouter.ai/api/v1/chat/completions', b, { headers: { Authorization: `Bearer ${p.key}` }, timeout: 180000 });
       let res;
       try {
-        res = await post({ model, messages, modalities: ['image', 'text'], image_config: { aspect_ratio: ASPECT, image_size: '2K' } });
+        res = await post({ model, messages, modalities: ['image', 'text'], image_config: { aspect_ratio: aspect, image_size: '2K' } });
       } catch (e) {
         // A provider that rejects an option still gets the request, without it.
         if (e.response?.status !== 400) throw e;
-        res = await post({ model, messages, modalities: ['image', 'text'], image_config: { aspect_ratio: ASPECT } })
+        res = await post({ model, messages, modalities: ['image', 'text'], image_config: { aspect_ratio: aspect } })
           .catch(() => post({ model, messages, modalities: ['image', 'text'] }));
       }
       const url = res.data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
@@ -202,13 +208,13 @@ class ImageService {
    * (for an edit, the image being edited comes first).
    * Returns { file, engine } or throws with the last error.
    */
-  async generate(prompt, images = [], { allowFree = true } = {}) {
+  async generate(prompt, images = [], { allowFree = true, aspect = ASPECT, kind = 'post' } = {}) {
     let lastErr = new Error('لا يوجد مفتاح AI يدعم توليد الصور (Gemini / OpenAI / OpenRouter)');
     for (const a of this.attempts()) {
       if (images.length && a.p.type === 'openai' && !allowFree) continue; // can't edit through this endpoint
       try {
         const refs = a.p.type === 'openai' ? [] : images;
-        return { file: await this.save(await this.viaProvider(a.p, prompt, refs, a.model)), engine: this.label(a) };
+        return { file: await this.save(await this.viaProvider(a.p, prompt, refs, a.model, aspect), kind, aspect), engine: this.label(a) };
       } catch (e) {
         lastErr = new Error(`${this.label(a)}: ${errMsg(e)}`);
         this._bad.set(`${a.p.key}|${a.model}`, Date.now());
@@ -217,7 +223,7 @@ class ImageService {
     }
     if (allowFree && storageService.getSettings().marketing?.free_image_fallback !== false) {
       try {
-        return { file: await this.save(await this.viaPollinations(prompt)), engine: 'Pollinations (مجاني)' };
+        return { file: await this.save(await this.viaPollinations(prompt), kind, aspect), engine: 'Pollinations (مجاني)' };
       } catch (e) {
         const busy = /402|429/.test(e.message) ? 'مضغوط حالياً' : e.message;
         lastErr = new Error(`${lastErr.message} — والمولّد المجاني ${busy}. للحصول على صور مضمونة: حط مفتاح Gemini أو OpenAI بالإعدادات.`);
@@ -231,10 +237,10 @@ class ImageService {
    * The image itself goes first, then the logo / references. Returns { file, engine }.
    * Editing needs a model that reads images, so the free generator is never used here.
    */
-  async edit(fileName, prompt, refs = []) {
+  async edit(fileName, prompt, refs = [], { aspect = ASPECT, kind = 'post' } = {}) {
     const src = this.dataUrl(fileName) || (await this.ensureLocal(fileName) && this.dataUrl(fileName));
     if (!src) throw new Error('الصورة الأصلية مش موجودة');
-    return this.generate(prompt, [src, ...refs], { allowFree: false });
+    return this.generate(prompt, [src, ...refs], { allowFree: false, aspect, kind });
   }
 
   /** Several images in parallel; failures are returned as { error } so the rest still show. */

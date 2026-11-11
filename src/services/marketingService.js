@@ -509,6 +509,7 @@ ${this.langRule()}
 
   async generateImages(id) {
     const plan = this.mustGet(id, ['image', 'caption', 'time']);
+    imageService.resetCooldown(); // a person asked for images now — retry every model
     const prompts = await this.imagePrompts(plan.topic);
     const made = await imageService.generateMany(prompts, this.brandImages());
     const fresh = this.mustGet(id);
@@ -538,6 +539,7 @@ ${this.langRule()}
     if (!msg) throw new Error('اكتب شو بدك تعدّل');
     const src = (plan.images || []).find(im => im.file === file);
     if (!src) throw new Error('اختار صورة من القائمة');
+    imageService.resetCooldown();
     const history = (plan.image_chat || []).filter(m => m.target === file || m.result === file).slice(-6)
       .map(m => `- ${m.role === 'user' ? 'Owner asked' : 'Done'}: ${m.text}`).join('\n');
     const prompt = [

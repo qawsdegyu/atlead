@@ -71,7 +71,7 @@ class HealthService {
 
   async checkMeta() {
     const results = [];
-    const cfg = storageService.getSettings().meta || {};
+    const cfg = require('./metaService').config();
     const label = 'فيسبوك وإنستغرام (Meta)';
     if (!cfg.page_access_token) {
       return [warn('meta', label, 'ما في Page Access Token — الرد على فيسبوك وإنستغرام والتعليقات متوقف.')];

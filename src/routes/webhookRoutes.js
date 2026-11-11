@@ -41,7 +41,7 @@ function verifyHandler(getExpectedToken, label) {
 router.get('/meta', verifyHandler(() => storageService.getSettings().meta?.verify_token || 'attlead_meta_verify_token_2026', 'Meta'));
 
 router.post('/meta', async (req, res) => {
-  const appSecret = storageService.getSettings().meta?.app_secret;
+  const appSecret = metaService.config().app_secret;
   if (!isValidSignature(req, appSecret)) {
     console.warn('[Meta Webhook] Invalid signature — ignored');
     metaService.logWebhookEvent({ object: req.body?.object || '?', kind: 'rejected', detail: 'توقيع غير صحيح (App Secret مش مطابق)' });
@@ -122,7 +122,7 @@ router.post('/meta', async (req, res) => {
 router.get('/whatsapp', verifyHandler(() => storageService.getSettings().whatsapp?.verify_token || 'attlead_whatsapp_verify_token_2026', 'WhatsApp'));
 
 router.post('/whatsapp', async (req, res) => {
-  const appSecret = storageService.getSettings().meta?.app_secret;
+  const appSecret = metaService.config().app_secret;
   if (!isValidSignature(req, appSecret)) {
     return res.sendStatus(401);
   }

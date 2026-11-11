@@ -47,3 +47,18 @@ Supabase ← **SQL Editor** ← الصق `supabase_schema.sql` كامل ← **Ru
 - **نسخة وحدة بس** (Replicas = 1) — نسختين بيفصلوا جلسة الواتساب عن بعض. `railway.json` مضبوط على 1.
 - كل `git push` على `main` بيعمل نشر جديد تلقائياً، والبيانات بتضل بالـ Volume.
 - السجلات (Logs): الخدمة ← **Deployments** ← **View Logs**.
+
+## 5) تسجيل الدخول بفيسبوك وإنستغرام (مرة وحدة)
+عشان أي مستخدم يربط صفحته بضغطة «سجّل دخول بفيسبوك وإنستغرام» بدون ما يشوف أي API:
+1. developers.facebook.com ← تطبيقك ← **App settings ← Basic**: انسخ App ID و App Secret.
+2. بـ Railway ← Variables أضف:
+```
+META_APP_ID=...
+META_APP_SECRET=...
+```
+3. بالتطبيق: **Add product ← Facebook Login ← Settings ← Valid OAuth Redirect URIs** وحط:
+`https://رابطك.up.railway.app/api/meta/oauth/callback`
+4. عشان يشتغل لأي حساب (مش بس الأدمن): App Review للصلاحيات + Business Verification من Meta.
+
+## 6) الاختبارات
+`npm test` — 31 اختبار للتسويق الذكي، النشر، تليجرام، تسجيل الدخول بفيسبوك، والإعدادات (بدون أي اتصال حقيقي).

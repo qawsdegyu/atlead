@@ -21,7 +21,23 @@ const GRAPH_API_VERSION = 'v21.0';
 const GRAPH = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 const UPLOADS_DIR = storageService.getUploadsDir();
 
-const metaConfig = () => storageService.getSettings().meta || {};
+// The Meta app (App ID / Secret) can be set once on the server (Railway variables):
+// then users only ever see "سجّل دخول بفيسبوك". Dashboard values still win if typed.
+const envApp = () => ({
+  app_id: String(process.env.META_APP_ID || '').trim(),
+  app_secret: String(process.env.META_APP_SECRET || '').trim(),
+  login_config_id: String(process.env.META_LOGIN_CONFIG_ID || '').trim()
+});
+const metaConfig = () => {
+  const cfg = storageService.getSettings().meta || {};
+  const env = envApp();
+  return {
+    ...cfg,
+    app_id: cfg.app_id || env.app_id,
+    app_secret: cfg.app_secret || env.app_secret,
+    login_config_id: cfg.login_config_id || env.login_config_id
+  };
+};
 const ECHO_SETTLE_MS = Number(process.env.ECHO_SETTLE_MS || 3000);
 
 // Every permission the system uses (chat, comments, research, publishing).
@@ -43,6 +59,15 @@ const PUBLISH_SCOPES = ['pages_manage_posts', 'instagram_content_publish'];
 
 class MetaService {
   get REQUIRED_SCOPES() { return REQUIRED_SCOPES; }
+
+  /** Meta settings with the server-level app credentials filled in. */
+  config() { return metaConfig(); }
+
+  /** true when the Meta app is configured on the server (users only see the login button). */
+  appManagedByServer() {
+    const env = envApp();
+    return !!(env.app_id && env.app_secret);
+  }
 
   // ---- One-click connect (Facebook Login → permanent Page token, all permissions) ----
   /** Our app id: typed in the dashboard, or read from the current token. */
@@ -101,7 +126,11 @@ class MetaService {
 
     const conv = await this.convertUserTokenToPageToken(ex.access_token);
     if (!conv.converted || conv.error) throw new Error(conv.error || 'ما قدرنا نجيب رمز الصفحة');
-    storageService.updateSettings({ meta: { app_id: appId, granted_scopes: granted, connected_at: new Date().toISOString(), _ids_checked: true } });
+    storageService.updateSettings({ meta: {
+      ...(this.appManagedByServer() ? {} : { app_id: appId }),
+      page_name: conv.page?.name || '',
+      granted_scopes: granted, connected_at: new Date().toISOString(), _ids_checked: true
+    } });
     const sub = await this.subscribePage();
     const missing = granted.length ? Object.keys(REQUIRED_SCOPES).filter(s => !granted.includes(s)) : [];
     return {

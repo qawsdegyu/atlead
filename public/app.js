@@ -1031,6 +1031,16 @@ async function loadMetaOauthInfo() {
     const d = await (await fetch('/api/meta/oauth/info')).json();
     if (!d.success) return;
     document.getElementById('meta-oauth-redirect').value = d.redirect_uri;
+    // Meta app set once on the server → users only see the login button.
+    metaAppManaged = !!d.managed;
+    document.querySelectorAll('.meta-dev-only').forEach(el => { el.style.display = d.managed ? 'none' : ''; });
+    const btn = document.getElementById('btn-meta-oauth');
+    btn.innerHTML = `<i class="fa-brands fa-facebook"></i> ${d.connected ? 'إعادة تسجيل الدخول بفيسبوك' : 'سجّل دخول بفيسبوك وإنستغرام'}`;
+    const who = document.getElementById('meta-connected-as');
+    who.style.display = d.connected ? 'block' : 'none';
+    who.innerHTML = d.connected
+      ? `✅ مربوط: ${escapeHtml(d.page_name || 'صفحة فيسبوك')}${d.instagram_username ? ` + إنستغرام @${escapeHtml(d.instagram_username)}` : ''}${d.granted?.length ? ` — ${d.granted.length} صلاحية` : ''}`
+      : '';
     if (!document.getElementById('meta-app-id').value && d.app_id) document.getElementById('meta-app-id').value = d.app_id;
     const granted = new Set(d.granted || []);
     document.getElementById('meta-scopes-list').innerHTML = Object.entries(d.scopes).map(([k, label]) =>
@@ -1040,7 +1050,9 @@ async function loadMetaOauthInfo() {
 }
 
 // The connect button needs App ID + Secret saved first.
+let metaAppManaged = false;
 document.getElementById('btn-meta-oauth')?.addEventListener('click', async (e) => {
+  if (metaAppManaged) return; // plain link: straight to Facebook
   const appId = document.getElementById('meta-app-id').value.trim();
   const secret = document.getElementById('meta-app-secret').value.trim();
   if (!appId || !secret) {

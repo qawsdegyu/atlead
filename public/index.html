@@ -730,7 +730,8 @@
                   </div>
                   <a class="btn btn-primary btn-sm" id="btn-meta-oauth" href="/api/meta/oauth/start"><i class="fa-brands fa-facebook"></i> ربط Meta تلقائياً</a>
                 </div>
-                <div class="grid-2" style="margin-top: 12px;">
+                <div id="meta-connected-as" class="form-hint" style="margin-top: 8px; display: none;"></div>
+                <div class="grid-2 meta-dev-only" style="margin-top: 12px;">
                   <div class="form-group" style="margin-bottom: 8px;">
                     <label class="form-label">App ID</label>
                     <input type="text" id="meta-app-id" class="form-control" placeholder="من App settings ← Basic">
@@ -740,14 +741,14 @@
                     <input type="text" id="meta-login-config-id" class="form-control" placeholder="لتطبيقات Business فقط">
                   </div>
                 </div>
-                <div class="form-group" style="margin-bottom: 8px;">
+                <div class="form-group meta-dev-only" style="margin-bottom: 8px;">
                   <label class="form-label" style="font-size: 12px;">رابط الرجوع (Valid OAuth Redirect URI) — حطه مرة وحدة بإعدادات Facebook Login بالتطبيق:</label>
                   <div style="display: flex; gap: 8px;">
                     <input type="text" id="meta-oauth-redirect" class="form-control" style="font-size: 11px; direction: ltr;" readonly>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('meta-oauth-redirect').value); showToast('تم نسخ الرابط!', 'info');">نسخ</button>
                   </div>
                 </div>
-                <details class="form-hint">
+                <details class="form-hint meta-dev-only">
                   <summary style="cursor: pointer;">خطوات أول مرة (5 دقائق) والصلاحيات المطلوبة</summary>
                   <ol style="padding-inline-start: 18px; line-height: 1.9; margin-top: 6px;">
                     <li>developers.facebook.com ← تطبيقك ← <b>App settings ← Basic</b>: انسخ App ID و App Secret لهون واضغط <b>حفظ</b>.</li>

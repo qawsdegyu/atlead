@@ -271,7 +271,11 @@ router.get('/meta/oauth/info', async (req, res) => {
     success: true,
     redirect_uri: oauthRedirectUri(req),
     app_id: await metaService.getAppId(),
-    has_secret: !!storageService.getSettings().meta?.app_secret,
+    has_secret: !!metaService.config().app_secret,
+    managed: metaService.appManagedByServer(),
+    page_name: storageService.getSettings().meta?.page_name || '',
+    instagram_username: storageService.getSettings().meta?.instagram_username || '',
+    connected: !!storageService.getSettings().meta?.page_access_token,
     scopes: metaService.REQUIRED_SCOPES,
     granted: storageService.getSettings().meta?.granted_scopes || [],
     connected_at: storageService.getSettings().meta?.connected_at || null

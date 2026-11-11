@@ -128,6 +128,7 @@ class BrandKit {
     if (!brand?.logo && !(brand?.refs || []).length) throw new Error('تعلّم الهوية من صفحتك أو ارفع اللوغو أول (الإعدادات والربط ← هوية التصميم).');
     let kit = this.state();
     if (kit?.status === 'running') throw new Error('في تصميم شغال هلق — استنى يخلص.');
+    imageService.resetCooldown();
     const wanted = keys ? MEDIA.filter(m => keys.includes(m.key)) : MEDIA;
     if (!wanted.length) throw new Error('اختار وسيلة من القائمة');
     const items = MEDIA.map(m => {
@@ -153,6 +154,7 @@ class BrandKit {
     if (kit?.status === 'running') throw new Error('في تصميم شغال هلق — استنى يخلص.');
     const it = kit?.items?.find(i => i.key === key);
     if (!it) return this.start({ keys: [key], fresh: true });
+    imageService.resetCooldown();
     Object.assign(it, { status: 'pending', note: String(note || '').slice(0, 400) });
     kit.status = 'running'; kit.updated_at = now();
     marketing.saveBrand({ kit });

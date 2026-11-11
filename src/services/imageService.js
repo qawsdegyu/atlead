@@ -198,6 +198,12 @@ class ImageService {
     return out.filter(a => Date.now() - (this._bad.get(`${a.p.key}|${a.model}`) || 0) > 10 * 60 * 1000);
   }
 
+  /** A person pressed a button (e.g. after topping up credit): try every model again now. */
+  resetCooldown() {
+    this._bad = new Map();
+    this._lastReason = null;
+  }
+
   label(a) {
     const names = { 'google/gemini-3-pro-image': 'Nano Banana Pro', 'google/gemini-nano-banana-2.1': 'Nano Banana 2.1', 'google/gemini-3.1-flash-image': 'Nano Banana 2' };
     return names[a.model] || `${a.p.label} (${a.model})`;

@@ -576,6 +576,27 @@ Your previous answer was in Arabic. The customer writes in English — return th
     throw lastErr;
   }
 
+  /**
+   * OpenRouter balance straight from OpenRouter: account credits/usage and this key's own limit.
+   * Returns null when there is no OpenRouter key.
+   */
+  async openRouterBalance() {
+    const p = this.getProviders().find(x => x.type === 'openrouter');
+    if (!p) return null;
+    const get = (path) => axios.get(`https://openrouter.ai/api/v1/${path}`, { headers: { Authorization: `Bearer ${p.key}` }, timeout: 15000 }).then(r => r.data?.data);
+    const [credits, key] = await Promise.all([get('credits').catch(e => ({ error: e.response?.data?.error?.message || e.message })), get('key').catch(() => null)]);
+    const total = Number(credits?.total_credits);
+    const used = Number(credits?.total_usage);
+    return {
+      account_remaining: Number.isFinite(total - used) ? Math.round((total - used) * 100) / 100 : null,
+      account_total: Number.isFinite(total) ? total : null,
+      key_limit: key?.limit ?? null,
+      key_remaining: key?.limit_remaining ?? null,
+      key_label: key?.label || '',
+      error: credits?.error || null
+    };
+  }
+
   // Generic "give me JSON" call used for comment analysis.
   async callJson(systemPrompt, userPrompt) {
     if (!this.getProviders().length) return null;

@@ -92,6 +92,11 @@ router.post('/brand/remove', (req, res) => {
   try { brandReply(res, marketingService.removeBrandFile(String(req.body.file || '')), 'تم الحذف'); } catch (e) { brandFail(res, e); }
 });
 
+// Real OpenRouter balance (account + this key's own limit).
+router.get('/ai-balance', async (req, res) => {
+  try { res.json({ success: true, balance: await require('../services/aiService').openRouterBalance() }); } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
 // --- Identity test: the brand designed on every medium (background job) ---
 const brandKit = require('../services/brandKit');
 router.get('/brand-kit', (req, res) => {

@@ -218,6 +218,9 @@ class NotificationService {
       </div>
     </div>`;
 
+    // Instant alert on Telegram as well (if the bot is connected).
+    require('./telegramService').notifyHandoff(conv, prob, links).catch(() => {});
+
     const text = [
       'عميل جاهز للتواصل — البوت أوقف الرد عليه.',
       ...rows.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`),

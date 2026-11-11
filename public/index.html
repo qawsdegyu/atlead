@@ -39,6 +39,10 @@
           <i class="fa-solid fa-robot"></i>
           <span>مختبر تجربة البوت والفويس</span>
         </li>
+        <li class="nav-item" data-tab="marketing">
+          <i class="fa-solid fa-bullhorn"></i>
+          <span>التسويق الذكي وجدولة البوستات</span>
+        </li>
         <li class="nav-item" data-tab="knowledge">
           <i class="fa-solid fa-book-open"></i>
           <span>قاعدة المعرفة والأعمال السابقة</span>
@@ -456,6 +460,149 @@
 
           </div>
 
+        </div>
+      </section>
+
+      <!-- 5b. SMART MARKETING (post planner + market research + Telegram) -->
+      <section class="view-panel" id="view-marketing">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap;">
+          <div>
+            <h3 style="font-size: 18px;">التسويق الذكي: دراسة السوق وجدولة البوستات</h3>
+            <p style="font-size: 13px; color: var(--text-muted);">كل صباح بيوصلك على تليجرام 3 مواضيع مبنية على المنافسين وأسئلة عملائك. اختار الموضوع ← الصورة ← الكابشن ← الساعة، والبوست بينزل لحاله.</p>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-secondary" id="mk-btn-send-brief"><i class="fa-brands fa-telegram"></i> <span>ابعت اقتراحات اليوم على تليجرام</span></button>
+            <button class="btn btn-primary" id="mk-btn-new-plan"><i class="fa-solid fa-wand-magic-sparkles"></i> <span>بوست جديد</span></button>
+          </div>
+        </div>
+
+        <div id="mk-status-strip" class="mk-strip"></div>
+
+        <div class="mk-subtabs">
+          <button class="mk-subtab active" data-mk="wizard"><i class="fa-solid fa-list-check"></i> <span>صناعة البوست</span></button>
+          <button class="mk-subtab" data-mk="research"><i class="fa-solid fa-magnifying-glass-chart"></i> <span>دراسة السوق والمنافسين</span></button>
+          <button class="mk-subtab" data-mk="history"><i class="fa-solid fa-calendar-days"></i> <span>البوستات المجدولة والسابقة</span></button>
+          <button class="mk-subtab" data-mk="setup"><i class="fa-solid fa-gear"></i> <span>الإعدادات والربط</span></button>
+        </div>
+
+        <!-- Wizard -->
+        <div class="mk-pane active" id="mk-pane-wizard">
+          <div class="mk-steps" id="mk-steps"></div>
+          <div class="glass-card" id="mk-wizard-body">
+            <div class="mk-empty">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <p>ما في بوست قيد التحضير. اضغط <b>بوست جديد</b> وبندرس السوق ونقترحلك 3 مواضيع.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Research -->
+        <div class="mk-pane" id="mk-pane-research">
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+            <button class="btn btn-secondary btn-sm" id="mk-btn-refresh-research"><i class="fa-solid fa-rotate"></i> <span>تحديث الدراسة الآن</span></button>
+          </div>
+          <div id="mk-research-body"><div class="mk-empty"><p>جاري التحميل...</p></div></div>
+        </div>
+
+        <!-- History -->
+        <div class="mk-pane" id="mk-pane-history">
+          <div id="mk-history-body"></div>
+        </div>
+
+        <!-- Setup -->
+        <div class="mk-pane" id="mk-pane-setup">
+          <div class="grid-2">
+            <div class="glass-card">
+              <h4 class="mk-card-title"><i class="fa-brands fa-telegram" style="color: #29a9eb;"></i> بوت تليجرام (رسالة الصباح والتنبيهات)</h4>
+              <ol class="mk-howto">
+                <li>افتح <b>@BotFather</b> بتليجرام ← <code>/newbot</code> ← انسخ التوكن والصقه هون.</li>
+                <li>افتح البوت تبعك وابعثله <code>/start</code>.</li>
+                <li>اضغط <b>اكتشف رقم المحادثة</b> ثم <b>حفظ</b>.</li>
+              </ol>
+              <div class="form-group">
+                <label class="form-label">Bot Token</label>
+                <input type="password" id="mk-tg-token" class="form-control" placeholder="123456789:AA...">
+              </div>
+              <div class="form-group">
+                <label class="form-label">رقم محادثة المسؤول (Chat ID) — أكثر من واحد افصل بفاصلة</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="mk-tg-chats" class="form-control" placeholder="123456789">
+                  <button type="button" class="btn btn-secondary btn-sm" id="mk-btn-tg-detect" style="white-space: nowrap;">اكتشف رقم المحادثة</button>
+                </div>
+                <div id="mk-tg-detect-result" class="form-hint"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">قناة تليجرام للنشر (اختياري)</label>
+                <input type="text" id="mk-tg-channel" class="form-control" placeholder="@my_channel">
+                <span class="form-hint">إذا بدك البوست ينزل كمان على قناتك: أضف البوت كأدمن بالقناة.</span>
+              </div>
+              <label class="mk-check"><input type="checkbox" id="mk-tg-handoffs" checked> <span>ابعتلي على تليجرام كمان لما يكون في عميل جاهز للتواصل 🔥</span></label>
+              <div style="display: flex; gap: 8px; margin-top: 14px;">
+                <button type="button" class="btn btn-secondary btn-sm" id="mk-btn-tg-test">رسالة تجريبية</button>
+              </div>
+            </div>
+
+            <div class="glass-card">
+              <h4 class="mk-card-title"><i class="fa-solid fa-magnifying-glass-chart" style="color: #f59e0b;"></i> دراسة السوق</h4>
+              <div class="form-group">
+                <label class="form-label">حسابات المنافسين على إنستغرام (حتى 8)</label>
+                <textarea id="mk-competitors" class="form-control" rows="3" placeholder="@competitor1&#10;@competitor2"></textarea>
+                <span class="form-hint">لازم تكون حسابات أعمال أو صانع محتوى. بنقرأ منشوراتهم العامة وتفاعلها عبر Meta (Business Discovery) — بدون أي سكرابينغ.</span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">كلمات مجالك (للأخبار والترندات)</label>
+                <input type="text" id="mk-keywords" class="form-control" placeholder="أتمتة المبيعات، الذكاء الاصطناعي للشركات">
+              </div>
+              <div class="form-group">
+                <label class="form-label">وصف شركتك وجمهورك (اختياري — غير هيك بنستخدم قاعدة المعرفة)</label>
+                <textarea id="mk-business" class="form-control" rows="3" placeholder="مين إحنا، شو بنقدم، ومين عملاءنا المثاليين"></textarea>
+              </div>
+            </div>
+
+            <div class="glass-card">
+              <h4 class="mk-card-title"><i class="fa-solid fa-clock" style="color: #34d399;"></i> الجدول والمحتوى</h4>
+              <div class="grid-2">
+                <div class="form-group">
+                  <label class="form-label">وقت رسالة الصباح</label>
+                  <input type="time" id="mk-morning-time" class="form-control" value="09:00">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">لغة البوستات</label>
+                  <select id="mk-language" class="form-control">
+                    <option value="ar">عربي (لهجة بيضاء)</option>
+                    <option value="en">English</option>
+                    <option value="both">عربي + English</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">ستايل الصور (اختياري، بالإنجليزي أفضل)</label>
+                <input type="text" id="mk-brand-style" class="form-control" placeholder="modern tech brand, navy and sky-blue, soft glow">
+              </div>
+              <div class="form-group">
+                <label class="form-label">موديل توليد الصور (اختياري)</label>
+                <input type="text" id="mk-image-model" class="form-control" placeholder="تلقائي: gemini-2.5-flash-image / gpt-image-1">
+              </div>
+              <label class="mk-check"><input type="checkbox" id="mk-enabled" checked> <span>ابعتلي اقتراحات كل صباح</span></label>
+              <label class="mk-check"><input type="checkbox" id="mk-free-images" checked> <span>إذا مفتاح الـ AI ما بيدعم الصور، استخدم مولّد مجاني (Pollinations)</span></label>
+            </div>
+
+            <div class="glass-card">
+              <h4 class="mk-card-title"><i class="fa-solid fa-share-nodes" style="color: #0084FF;"></i> وين ينزل البوست</h4>
+              <div id="mk-channels-status" style="margin-bottom: 12px;"></div>
+              <label class="mk-check"><input type="checkbox" id="mk-pub-fb" checked> <span>فيسبوك (صفحتك)</span></label>
+              <label class="mk-check"><input type="checkbox" id="mk-pub-ig" checked> <span>إنستغرام</span></label>
+              <label class="mk-check"><input type="checkbox" id="mk-pub-tg"> <span>قناة تليجرام</span></label>
+              <div class="form-group" style="margin-top: 12px;">
+                <label class="form-label">الرابط العام للسيرفر (للإنستغرام)</label>
+                <input type="text" id="mk-public-url" class="form-control" placeholder="https://your-app.up.railway.app">
+                <span class="form-hint">على Railway بيتعبّى تلقائياً. الإنستغرام بينزّل الصورة من هذا الرابط. رمز الصفحة لازم يكون فيه <code>pages_manage_posts</code> و <code>instagram_content_publish</code>.</span>
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end;">
+            <button class="btn btn-primary" id="mk-btn-save-setup"><i class="fa-solid fa-floppy-disk"></i> <span>حفظ إعدادات التسويق</span></button>
+          </div>
         </div>
       </section>
 
@@ -1092,6 +1239,7 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="marketing.js"></script>
   <script src="i18n.js"></script>
 </body>
 </html>

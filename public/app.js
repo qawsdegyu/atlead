@@ -54,6 +54,7 @@ function switchTab(tab) {
     comments: 'التعليقات والتحويل للخاص',
     simulator: 'مختبر تجربة البوت والفويس',
     knowledge: 'قاعدة المعرفة والأعمال السابقة',
+    marketing: 'التسويق الذكي وجدولة البوستات',
     settings: 'إعدادات الربط والـ APIs'
   };
   document.getElementById('current-tab-title').textContent = titles[tab] || '';
@@ -63,6 +64,7 @@ function switchTab(tab) {
   if (tab === 'comments') loadComments();
   if (tab === 'settings') loadSettings();
   if (tab === 'knowledge') loadKnowledge();
+  if (tab === 'marketing' && window.mkOpen) window.mkOpen();
 }
 
 // 1. INBOX LOGIC

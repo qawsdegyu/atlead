@@ -35,7 +35,8 @@ const SECRET_FIELDS = {
   supabase: ['service_role_key', 'anon_key'],
   ai: ['openrouter_api_key', 'gemini_api_key', 'openai_api_key', 'anthropic_api_key'],
   google_sheets: ['service_account_json', 'private_key'],
-  notifications: ['gmail_app_password']
+  notifications: ['gmail_app_password'],
+  telegram: ['bot_token']
 };
 const MASK = '••••••••';
 const isMasked = (v) => typeof v === 'string' && v.startsWith(MASK);
@@ -113,6 +114,28 @@ router.post('/settings', (req, res) => {
   if (body.handoff?.closing_deal_threshold_percent !== undefined) {
     const t = Number(body.handoff.closing_deal_threshold_percent);
     body.handoff.closing_deal_threshold_percent = Number.isFinite(t) ? Math.min(100, Math.max(1, t)) : 85;
+  }
+
+  const toList = (v) => [...new Set((Array.isArray(v) ? v : String(v || '').split(/[,\n]+/)).map(x => String(x).trim()).filter(Boolean))];
+  if (body.telegram) {
+    if (body.telegram.chat_ids !== undefined) {
+      body.telegram.chat_ids = toList(String(body.telegram.chat_ids).replace(/\s+/g, ','));
+      const bad = body.telegram.chat_ids.filter(c => !/^(-?\d+|@\w+)$/.test(c));
+      if (bad.length) return res.status(400).json({ success: false, message: `رقم محادثة تليجرام غير صحيح: ${bad.join(', ')}` });
+    }
+    if (body.telegram.bot_token === '') delete body.telegram.bot_token; // an empty field never wipes the saved token
+  }
+  if (body.marketing) {
+    const m = body.marketing;
+    if (m.morning_time !== undefined && !/^\d{2}:\d{2}$/.test(m.morning_time)) {
+      return res.status(400).json({ success: false, message: 'وقت رسالة الصباح غير صحيح' });
+    }
+    if (m.competitors !== undefined) {
+      // "@name", "name" or a full instagram.com link → just the username.
+      m.competitors = toList(toList(m.competitors).map(c => c.replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').replace(/[/?].*$/, ''))).slice(0, 8);
+    }
+    if (m.keywords !== undefined) m.keywords = toList(m.keywords).slice(0, 4);
+    if (m.public_url) m.public_url = String(m.public_url).trim().replace(/\/+$/, '');
   }
 
   // New Meta token → re-detect own Page/IG ids (prevents the bot answering its own comments).

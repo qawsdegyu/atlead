@@ -54,6 +54,15 @@ app.get('/data-deletion', (req, res) => res.send(legalPage('Data Deletion Instru
 app.get('/terms', (req, res) => res.send(legalPage('Terms of Service', `
 <p>By messaging atlead's accounts you agree that replies may be generated automatically by an AI assistant and reviewed by our team. Information provided by the assistant is for general guidance; final offers and prices are confirmed by our sales team.</p>`)));
 
+// Post images must be public: Instagram downloads the image from this URL when publishing.
+// Only files created by the post planner (random, unguessable names) are served.
+app.get('/media/:name', (req, res) => {
+  const file = require('./src/services/imageService').filePath(req.params.name);
+  if (!file || !fs.existsSync(file)) return res.status(404).end();
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.sendFile(file, { dotfiles: 'allow' }); // the name is already validated
+});
+
 // Webhooks must stay public (Meta calls them). Everything else = admin dashboard.
 app.use('/webhook', webhookRoutes);
 
@@ -80,7 +89,9 @@ const readCookie = (req, name) => {
   return m ? decodeURIComponent(m.slice(name.length + 1)) : '';
 };
 
-const loginPage = (error = '') => `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+const safeNext = (n) => (/^\/(?![/\\])/.test(String(n || '')) ? String(n) : '/');
+const escAttr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+const loginPage = (error = '', next = '/') => `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>تسجيل الدخول — atlead</title>
 <style>body{font-family:system-ui,sans-serif;background:#f4f5f7;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
 form{background:#fff;padding:32px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);width:300px}
@@ -88,22 +99,22 @@ h1{font-size:1.3rem;margin:0 0 20px}label{display:block;font-size:.9rem;margin:1
 input{width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:1rem}
 button{margin-top:20px;width:100%;padding:11px;border:0;border-radius:8px;background:#4f46e5;color:#fff;font-size:1rem;cursor:pointer}
 .err{color:#c00;font-size:.9rem;margin-top:10px}</style></head><body>
-<form method="post" action="/login"><h1>لوحة تحكم atlead</h1>
+<form method="post" action="/login"><input type="hidden" name="next" value="${escAttr(next)}"><h1>لوحة تحكم atlead</h1>
 <label>اسم المستخدم</label><input name="username" autocomplete="username" value="admin">
 <label>كلمة السر</label><input name="password" type="password" autocomplete="current-password" autofocus>
 ${error ? `<div class="err">${error}</div>` : ''}<button type="submit">دخول</button></form></body></html>`;
 
-app.get('/login', (req, res) => res.send(loginPage()));
+app.get('/login', (req, res) => res.send(loginPage('', safeNext(req.query.next))));
 app.post('/login', (req, res) => {
   const password = process.env.ADMIN_PASSWORD;
   const user = process.env.ADMIN_USER || 'admin';
   if (!password) return res.redirect('/');
-  const { username = '', password: pass = '' } = req.body || {};
+  const { username = '', password: pass = '', next = '/' } = req.body || {};
   if (safeEqual(String(username).trim(), user) && safeEqual(pass, password)) {
     res.set('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(makeSession())}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}`);
-    return res.redirect('/');
+    return res.redirect(safeNext(next)); // e.g. the link from the Telegram morning message
   }
-  res.status(401).send(loginPage('اسم المستخدم أو كلمة السر غلط'));
+  res.status(401).send(loginPage('اسم المستخدم أو كلمة السر غلط', safeNext(next)));
 });
 app.get('/logout', (req, res) => {
   res.set('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
@@ -122,7 +133,7 @@ app.use((req, res, next) => {
   }
   // Browsers get the login page; API calls get a plain 401.
   if (req.method === 'GET' && !req.path.startsWith('/api') && (req.headers.accept || '').includes('text/html')) {
-    return res.redirect('/login');
+    return res.redirect(req.originalUrl && req.originalUrl !== '/' ? `/login?next=${encodeURIComponent(req.originalUrl)}` : '/login');
   }
   res.status(401).json({ success: false, message: 'Authentication required' });
 });
@@ -132,6 +143,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(storageService.getUploadsDir()));
 
 // Mount routes
+app.use('/api/marketing', require('./src/routes/marketingRoutes'));
 app.use('/api', apiRoutes);
 
 app.get('/google_apps_script.js', (req, res) => {
@@ -285,6 +297,8 @@ async function bootstrap() {
     daily_report: { enabled: true, time: '20:00', ...(s.daily_report || {}) },
     backup: { enabled: true, keep_days: 14, ...(s.backup || {}) },
     sales_team: { members: [], ...(s.sales_team || {}) },
+    marketing: { enabled: true, morning_time: '09:00', language: 'ar', free_image_fallback: true, publish_facebook: true, publish_instagram: true, publish_telegram_channel: false, ...(s.marketing || {}) },
+    telegram: { notify_handoffs: true, ...(s.telegram || {}) },
     ai: { image_understanding_enabled: s.ai?.image_understanding_enabled ?? true },
     bot: {
       reply_delay_seconds: s.bot?.reply_delay_seconds ?? 10,

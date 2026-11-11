@@ -4,6 +4,7 @@
  *  2. Send (at most one) follow-up to a quiet interested customer.
  *  3. Daily report at the configured time.
  *  4. Daily backup.
+ *  5. Marketing: morning post ideas on Telegram + publishing scheduled posts.
  */
 const storageService = require('./storageService');
 const supabaseService = require('./supabaseService');
@@ -52,6 +53,8 @@ class SchedulerService {
     await step('follow-up', () => followUpService.runOnce(getAdapter));
     await step('daily report', () => reportService.maybeSend());
     await step('backup', () => backupService.maybeRun());
+    await step('scheduled posts', () => require('./marketingService').publishDue());
+    await step('morning brief', () => require('./marketingService').maybeSendMorningBrief());
     this.running = false;
   }
 

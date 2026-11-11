@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Cairo:wght@400;600;700&display=swap');
 
 :root {
   --bg-primary: #0b0f17;
@@ -1021,3 +1021,164 @@ button.mk-option:hover { border-color: var(--primary); background: var(--primary
 
 .meta-connect-box { background: rgba(2,132,199,0.08); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px; font-size: 13px; }
 .meta-connect-box code { background: rgba(255,255,255,0.08); padding: 0 5px; border-radius: 4px; }
+
+/* =====================================================================
+   atlead console — refined theme layer
+   Calm ink-navy surfaces, one clear blue for actions, status colours
+   only for status. IBM Plex Sans Arabic for a steady, precise voice.
+   ===================================================================== */
+:root {
+  --bg-primary: #0c111d;     /* app background */
+  --bg-secondary: #0f1524;   /* sidebar */
+  --bg-card: #141b2c;        /* panels */
+  --bg-raised: #1a2235;      /* inputs, hovers */
+  --border-color: #222c42;
+  --border-strong: #2e3a55;
+  --border-highlight: rgba(77, 140, 255, 0.45);
+  --text-primary: #e8ecf4;
+  --text-secondary: #a4aec3;
+  --text-muted: #7c879e;
+  --primary: #4d8cff;
+  --primary-hover: #3c78ea;
+  --primary-light: rgba(77, 140, 255, 0.13);
+  --accent-emerald: #2fbf8a;
+  --accent-amber: #e6a83a;
+  --accent-rose: #e5566b;
+  --radius-lg: 14px;
+  --radius-md: 8px;
+  --radius-sm: 6px;
+  --shadow-glow: none;
+  --focus-ring: 0 0 0 3px rgba(77, 140, 255, 0.35);
+}
+
+* { font-family: 'IBM Plex Sans Arabic', 'Cairo', system-ui, sans-serif; }
+body { font-size: 14px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+
+/* ---- Shell ---- */
+.sidebar { background: var(--bg-secondary); border-left: 1px solid var(--border-color); }
+.sidebar-header { padding: 22px 20px; }
+.logo-badge {
+  width: 40px; height: 40px; border-radius: 10px; font-size: 18px; font-weight: 700;
+  background: var(--primary); box-shadow: none; letter-spacing: -0.5px;
+}
+.brand-text h1 {
+  font-size: 19px; font-weight: 700; letter-spacing: -0.3px;
+  background: none; -webkit-text-fill-color: currentColor; color: var(--text-primary);
+}
+.brand-text span { font-size: 11px; letter-spacing: 0.2px; }
+
+.nav-links { padding: 14px 10px; gap: 2px; }
+.nav-item {
+  padding: 10px 14px; border-radius: var(--radius-md); font-size: 13.5px; font-weight: 500;
+  border: 1px solid transparent; border-inline-start: 3px solid transparent;
+  transition: background-color .15s ease, color .15s ease;
+}
+.nav-item i { font-size: 15px; width: 20px; opacity: .85; }
+.nav-item:hover { background: var(--bg-raised); }
+.nav-item.active {
+  background: var(--primary-light); color: var(--text-primary); font-weight: 600;
+  border-color: transparent; border-inline-start-color: var(--primary);
+}
+.nav-item.active i { color: var(--primary); opacity: 1; }
+.sidebar-footer { background: transparent; }
+.status-dot { box-shadow: none; }
+
+.main-content { background: var(--bg-primary); }
+.top-navbar {
+  height: 64px; padding: 0 28px; background: var(--bg-primary);
+  backdrop-filter: none; border-bottom: 1px solid var(--border-color);
+}
+.top-navbar-title h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.2px; }
+.top-badges { gap: 8px; }
+.badge-pill { padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 500; }
+.badge-pill.success { background: rgba(47, 191, 138, .1); color: #5fd3a9; border-color: rgba(47, 191, 138, .28); }
+.badge-pill.warning { background: rgba(230, 168, 58, .1); color: #efbd63; border-color: rgba(230, 168, 58, .28); }
+.badge-pill.info    { background: var(--primary-light); color: #8fb6ff; border-color: rgba(77, 140, 255, .3); }
+.badge-pill.danger  { background: rgba(229, 86, 107, .1); color: #f08396; border-color: rgba(229, 86, 107, .3); }
+
+.view-panel { padding: 24px 28px 40px; }
+
+/* One-line description under the page title (the top bar holds the title) */
+.page-lede { font-size: 13.5px; color: var(--text-secondary); max-width: 70ch; }
+
+/* ---- Panels ---- */
+.glass-card {
+  background: var(--bg-card); backdrop-filter: none; box-shadow: none;
+  border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px;
+}
+.glass-card h4 { font-weight: 600; letter-spacing: -0.1px; }
+.card-title { font-size: 15.5px; font-weight: 600; margin-bottom: 2px; }
+.card-sub { font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px; }
+
+.stat-card { background: var(--bg-card); border-radius: var(--radius-lg); padding: 18px 20px; }
+.stat-icon { width: 42px; height: 42px; border-radius: 10px; font-size: 18px; }
+.stat-val { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+.stat-title { font-size: 12.5px; }
+
+/* ---- Buttons ---- */
+.btn {
+  padding: 9px 16px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600;
+  white-space: nowrap; transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.btn-sm { padding: 6px 12px; font-size: 12.5px; }
+.btn-primary { background: var(--primary); box-shadow: none; }
+.btn-primary:hover { background: var(--primary-hover); transform: none; }
+.btn-secondary { background: var(--bg-raised); border: 1px solid var(--border-strong); color: var(--text-primary); }
+.btn-secondary:hover { background: #222c43; border-color: #3a4867; }
+.btn-success { background: var(--accent-emerald); }
+.btn-success:hover { background: #28a879; }
+.btn-danger { background: rgba(229, 86, 107, .1); color: #f08396; border: 1px solid rgba(229, 86, 107, .35); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ---- Forms ---- */
+.form-group { margin-bottom: 16px; }
+.form-label { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+.form-hint { font-size: 11.5px; color: var(--text-muted); line-height: 1.6; }
+.form-control {
+  background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  padding: 10px 12px; color: var(--text-primary); font-size: 13.5px;
+}
+.form-control::placeholder { color: #5f6a82; }
+.form-control:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+select.form-control { cursor: pointer; }
+input[type="checkbox"] { accent-color: var(--primary); width: 15px; height: 15px; }
+
+/* ---- Tables ---- */
+.data-table-container { border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-card); }
+.data-table th { background: var(--bg-secondary); color: var(--text-muted); font-weight: 600; font-size: 12px; }
+.data-table td { border-color: var(--border-color); }
+.data-table tr:hover td { background: rgba(255, 255, 255, .025); }
+
+/* ---- Inbox ---- */
+.filter-chip { border-radius: 999px; }
+.filter-chip.active { background: var(--primary-light); color: #8fb6ff; border-color: rgba(77, 140, 255, .35); }
+.conv-item.active { background: var(--primary-light); border-color: rgba(77, 140, 255, .3); }
+.msg-row.bot .msg-bubble { background: var(--bg-raised); }
+
+/* ---- Feedback ---- */
+.toast { border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, .35); font-weight: 500; }
+.toast.success { background: #1f8f68; }
+.toast.error { background: #c4384e; }
+.toast.info { background: #3567c8; }
+
+/* ---- Marketing tab accents follow the same blue ---- */
+.mk-subtab.active { background: var(--primary-light); border-color: rgba(77, 140, 255, .35); color: #8fb6ff; }
+.mk-step.current .mk-step-dot { background: var(--primary); border-color: var(--primary); box-shadow: none; }
+.mk-letter { background: var(--primary-light); color: #8fb6ff; }
+button.mk-option:hover { border-color: var(--primary); background: var(--primary-light); transform: none; }
+.mk-image:hover { border-color: var(--primary); transform: none; box-shadow: none; }
+.meta-connect-box { background: var(--primary-light); border-color: rgba(77, 140, 255, .3); }
+
+/* ---- Keyboard focus & reduced motion ---- */
+.btn:focus-visible, .nav-item:focus-visible, .mk-subtab:focus-visible, .mk-option:focus-visible, .mk-image:focus-visible, a:focus-visible {
+  outline: none; box-shadow: var(--focus-ring);
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---- Small screens ---- */
+@media (max-width: 1100px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .top-badges { display: none; }
+}

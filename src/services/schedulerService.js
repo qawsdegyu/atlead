@@ -53,7 +53,8 @@ class SchedulerService {
     await step('follow-up', () => followUpService.runOnce(getAdapter));
     await step('daily report', () => reportService.maybeSend());
     await step('backup', () => backupService.maybeRun());
-    await step('scheduled posts', () => require('./marketingService').publishDue());
+    await step('marketing db sync', () => require('./marketingService').syncDb());
+    await step('scheduled posts',() => require('./marketingService').publishDue());
     await step('morning brief', () => require('./marketingService').maybeSendMorningBrief());
     this.running = false;
   }

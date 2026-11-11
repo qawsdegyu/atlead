@@ -36,21 +36,42 @@ const FALLBACK_TOPICS = [
   { title: 'كيف تعرف مين من عملائك جاهز يشتري؟', angle: 'تصنيف العملاء حسب الجاهزية بدل ما تتصل بالكل.', why: 'بيخاطب مدراء المبيعات مباشرة', format: 'نصيحة عملية' }
 ];
 
+// Posts live in data/marketing.json AND in Supabase (app_settings, key "marketing"),
+// so a redeploy or a wiped disk loses nothing. The day of the last morning message is
+// stored with them, so it is never sent twice in one day after a restart.
+const DB_KEY = 'marketing';
+let dbDirty = false;
+let dbTimer = null;
+
 function read() {
   try {
     const data = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf-8')) : {};
-    return { plans: Array.isArray(data.plans) ? data.plans : [] };
+    return { plans: Array.isArray(data.plans) ? data.plans : [], last_brief: data.last_brief || null };
   } catch (e) {
     console.error('[Marketing] cannot read marketing.json:', e.message);
-    return { plans: [] };
+    return { plans: [], last_brief: null };
   }
 }
 
-function write(data) {
+function write(data, { fromDb = false } = {}) {
   data.plans = data.plans.slice(0, KEEP_PLANS);
   const tmp = `${FILE}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
   fs.renameSync(tmp, FILE);
+  if (fromDb) return;
+  dbDirty = true;
+  clearTimeout(dbTimer);
+  dbTimer = setTimeout(() => syncToDb().catch(() => {}), 1500);
+}
+
+/** Mirror everything to Supabase. Failed writes stay dirty and are retried every minute. */
+async function syncToDb() {
+  const sb = require('./supabaseService');
+  if (!dbDirty || !sb.isEnabled()) return false;
+  dbDirty = false;
+  const ok = await sb.saveKv(DB_KEY, { ...read(), saved_at: new Date().toISOString() });
+  if (!ok) dbDirty = true;
+  return ok;
 }
 
 function parseJson(text) {
@@ -68,7 +89,36 @@ class MarketingService {
   }
 
   // ---- storage ------------------------------------------------------------
-  listPlans() { return read().plans.map(p => this.view(p)); }
+  /**
+   * On startup: if this server has no posts (new deploy / wiped disk) but the
+   * database has them, bring them back. The newest copy wins.
+   */
+  async restoreFromDb() {
+    const sb = require('./supabaseService');
+    if (!sb.isEnabled()) return { restored: false };
+    const remote = await sb.loadKv(DB_KEY);
+    const local = read();
+    const newest = (d) => Math.max(0, ...(d?.plans || []).map(p => new Date(p.updated_at || p.created_at || 0).getTime()));
+    if (remote?.plans?.length && newest(remote) > newest(local)) {
+      write({ plans: remote.plans, last_brief: remote.last_brief || local.last_brief }, { fromDb: true });
+      console.log(`[Marketing] Restored ${remote.plans.length} posts from Supabase`);
+      return { restored: true, count: remote.plans.length };
+    }
+    if (local.plans.length && newest(local) > newest(remote)) { dbDirty = true; await syncToDb(); }
+    return { restored: false };
+  }
+
+  /** Scheduler: retry anything that did not reach the database yet (posts + images). */
+  async syncDb() {
+    await syncToDb();
+    await imageService.backupMissing(read().plans.flatMap(p => [p.image_file, ...(p.images || []).map(i => i.file)]).filter(Boolean));
+  }
+
+  dbStatus() {
+    return { enabled: require('./supabaseService').isEnabled(), pending: dbDirty };
+  }
+
+  listPlans(){ return read().plans.map(p => this.view(p)); }
   getPlan(id) { return read().plans.find(p => p.id === id) || null; }
 
   savePlan(plan) {
@@ -399,8 +449,9 @@ ${this.langRule()}
   // ---- publishing ---------------------------------------------------------
   async publishPlan(id, only = null) {
     const plan = this.mustGet(id, ['scheduled', 'failed', 'partial']);
-    const filePath = imageService.filePath(plan.image_file);
-    if (!filePath || !fs.existsSync(filePath)) {
+    // Restored from the database storage if this server lost the file.
+    const filePath = await imageService.ensureLocal(plan.image_file);
+    if (!filePath) {
       Object.assign(plan, { status: 'failed', error: 'ملف الصورة مش موجود على السيرفر' });
       return this.savePlan(plan);
     }
@@ -435,7 +486,7 @@ ${this.langRule()}
       v.ok ? `✅ ${ch[k]?.label || k}${v.url ? ` — <a href="${esc(v.url)}">فتح البوست</a>` : ''}` : `❌ ${ch[k]?.label || k}: ${esc(v.error || 'فشل')}`);
     const head = plan.status === 'published' ? '🚀 <b>البوست انتشر</b>' : plan.status === 'partial' ? '⚠️ <b>البوست انتشر جزئياً</b>' : '❌ <b>فشل نشر البوست</b>';
     await telegram.sendMessage(`${head}\n📌 ${esc(plan.topic?.title || '')}\n\n${lines.join('\n') || esc(plan.error || '')}`, {
-      buttons: [[{ text: 'فتح لوحة التسويق', url: `${this.dashboardUrl()}/?tab=marketing&plan=${plan.id}` }]]
+      buttons: [[{ text: 'فتح لوحة التسويق', url: `${this.dashboardUrl()}/?tab=marketing&plan=${plan.id}` }]], type: 'publish_result'
     });
   }
 
@@ -452,7 +503,7 @@ ${this.langRule()}
         Object.assign(plan, { status: 'failed', error: `فات موعد النشر (${p.scheduled_label || ''}) لأن السيرفر كان متوقف — اختار وقت جديد أو انشر الآن.` });
         this.savePlan(plan);
         telegram.sendMessage(`⏰ <b>فات موعد بوست</b>\n📌 ${esc(plan.topic?.title || '')}\n${esc(plan.error)}`, {
-          buttons: [[{ text: 'اختار وقت جديد', url: `${this.dashboardUrl()}/?tab=marketing&plan=${plan.id}` }]]
+          buttons: [[{ text: 'اختار وقت جديد', url: `${this.dashboardUrl()}/?tab=marketing&plan=${plan.id}` }]], type: 'missed_post'
         }).catch(() => {});
         continue;
       }
@@ -492,7 +543,7 @@ ${this.langRule()}
   async sendBrief({ source = 'morning' } = {}) {
     const plan = await this.createPlan({ source, refresh: true });
     const { text, buttons } = this.briefMessage(plan);
-    const sent = await telegram.sendMessage(text, { buttons });
+    const sent = await telegram.sendMessage(text, { buttons, type: 'morning_brief' });
     plan.telegram_sent = sent.success;
     this.savePlan(plan);
     return { plan, sent };
@@ -505,8 +556,10 @@ ${this.langRule()}
     const now = businessHours.localParts();
     const start = businessHours.toMinutes(cfg.morning_time);
     if (now.minutes < start || now.minutes > start + 6 * 60) return null;
-    if (storageService.getState('last_marketing_brief') === now.dateKey) return null;
-    storageService.setState('last_marketing_brief', now.dateKey);
+    const data = read();
+    if (data.last_brief === now.dateKey) return null;
+    data.last_brief = now.dateKey;
+    write(data); // saved to the database too → never twice a day, even after a redeploy
     const res = await this.sendBrief();
     console.log(`[Marketing] morning brief ${now.dateKey}: ${res.sent.success ? 'sent' : 'not sent — ' + res.sent.error}`);
     return res;

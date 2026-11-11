@@ -266,6 +266,37 @@ class HealthService {
     return out;
   }
 
+  /** Telegram bot + smart marketing: connection, publishing readiness, database backup. */
+  async checkMarketing() {
+    const out = [];
+    const telegram = require('./telegramService');
+    const tg = telegram.getConfig();
+    if (!tg.token) {
+      out.push(warn('telegram', 'بوت تليجرام', 'مش مربوط — رسالة الصباح (اقتراحات البوستات) وتنبيهات العملاء الجاهزين ما رح توصلك. اربطه من تبويب التسويق الذكي ← الإعدادات والربط.'));
+    } else {
+      try {
+        const me = await telegram.call('getMe', {}, { timeout: 10000 });
+        out.push(tg.chatIds.length
+          ? ok('telegram', 'بوت تليجرام', `@${me.username} شغال، بيبعت لـ ${tg.chatIds.length} محادثة.`)
+          : warn('telegram', 'بوت تليجرام', `@${me.username} شغال بس ما في رقم محادثة — ابعث /start للبوت واضغط «اكتشف رقم المحادثة».`));
+      } catch (err) {
+        out.push(fail('telegram', 'بوت تليجرام', `التوكن مرفوض: ${err.message}`));
+      }
+    }
+    const ch = require('./socialPublisher').channels();
+    for (const [key, c] of Object.entries(ch)) {
+      if (!c.enabled) continue;
+      out.push(c.ready ? ok(`publish_${key}`, `النشر على ${c.label}`, 'جاهز للنشر التلقائي.') : warn(`publish_${key}`, `النشر على ${c.label}`, c.note));
+    }
+    const db = require('./marketingService').dbStatus();
+    out.push(!db.enabled
+      ? warn('marketing_db', 'حفظ البوستات بالداتابيس', 'Supabase مش مربوط — البوستات والصور محفوظة على السيرفر بس.')
+      : db.pending
+        ? warn('marketing_db', 'حفظ البوستات بالداتابيس', 'في تغييرات لسا ما وصلت Supabase — بنعيد المحاولة كل دقيقة.')
+        : ok('marketing_db', 'حفظ البوستات بالداتابيس', 'البوستات والصور ويوم آخر رسالة صباح محفوظين بـ Supabase.'));
+    return out;
+  }
+
   async runAll() {
     const safe = (label, key, p) => withTimeout(Promise.resolve().then(p), 25000, label).catch(err => fail(key, label, err.message));
     const results = await Promise.all([
@@ -275,7 +306,8 @@ class HealthService {
       safe('Supabase', 'supabase', () => this.checkSupabase()),
       safe('Google Sheets', 'sheets', () => this.checkSheets()),
       safe('قاعدة المعرفة', 'knowledge', () => this.checkKnowledge()),
-      safe('Gmail', 'email', () => this.checkEmail())
+      safe('Gmail', 'email', () => this.checkEmail()),
+      safe('التسويق الذكي وتليجرام', 'marketing', () => this.checkMarketing())
     ]);
     const all = [...results.flat(), ...this.checkBotRules(), ...this.checkSecurity()];
     return {

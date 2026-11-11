@@ -45,7 +45,7 @@ class TelegramService {
    * Send an HTML message to every admin chat (or to `chatIds`).
    * buttons: [[{ text, url }]] — URL buttons only work with public https links.
    */
-  async sendMessage(html, { buttons = null, chatIds = null } = {}) {
+  async sendMessage(html, { buttons = null, chatIds = null, type = 'message' } = {}) {
     const cfg = this.getConfig();
     const targets = chatIds || cfg.chatIds;
     if (!cfg.token || !targets.length) return { success: false, error: 'Telegram غير مربوط (التوكن أو رقم المحادثة ناقص)' };
@@ -69,7 +69,24 @@ class TelegramService {
         console.error(`[Telegram] sendMessage to ${chat_id} failed:`, err.message);
       }
     }
-    return { success: sent > 0, sent, error: sent ? '' : lastError };
+    const result = { success: sent > 0, sent, error: sent ? '' : lastError };
+    this.logSent(type, html, targets, result);
+    return result;
+  }
+
+  /** Every Telegram message is recorded (dashboard log + Supabase notification_log). */
+  logSent(type, html, chatIds, result) {
+    try {
+      const subject = String(html).replace(/<[^>]+>/g, '').split('\n').find(l => l.trim()) || '';
+      require('./notificationService').log({
+        type: `telegram_${type}`,
+        subject: subject.slice(0, 200),
+        recipients: chatIds.map(c => `telegram:${c}`),
+        status: result.success ? 'sent' : 'failed',
+        error: result.error || null,
+        created_at: new Date().toISOString()
+      });
+    } catch { /* logging never breaks sending */ }
   }
 
   /** Send a local image file with a caption (caption > 1024 chars is sent as a second message). */
@@ -116,7 +133,7 @@ class TelegramService {
       if (!cfg.chatIds.length) {
         return { success: true, bot: me.username, message: `البوت @${me.username} شغال ✅ — ابعث /start للبوت من تليجرام ثم اضغط "اكتشف رقم المحادثة".` };
       }
-      const res = await this.sendMessage('✅ <b>atlead</b>: ربط تليجرام شغال. رح توصلك هون اقتراحات البوستات كل صباح.');
+      const res = await this.sendMessage('✅ <b>atlead</b>: ربط تليجرام شغال. رح توصلك هون اقتراحات البوستات كل صباح.', { type: 'test' });
       return res.success
         ? { success: true, bot: me.username, message: `تم إرسال رسالة تجريبية من @${me.username} ✅` }
         : { success: false, message: `البوت شغال بس الإرسال فشل: ${res.error} — تأكد إنك بعثت /start للبوت.` };
@@ -137,7 +154,7 @@ class TelegramService {
       conv.customer_requests ? `📝 ${esc(String(conv.customer_requests).slice(0, 300))}` : '',
       conv.handoff_reason ? `➡️ ${esc(conv.handoff_reason)}` : ''
     ].filter(Boolean);
-    return this.sendMessage(lines.join('\n'), { buttons: links.slice(0, 3).map(l => [{ text: l.label, url: l.url }]) });
+    return this.sendMessage(lines.join('\n'), { buttons: links.slice(0, 3).map(l => [{ text: l.label, url: l.url }]), type: 'hot_lead' });
   }
 }
 

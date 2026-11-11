@@ -391,11 +391,11 @@ class MetaService {
       const missing = Object.keys(need).filter(s => !scopes.includes(s));
       add('scopes', 'صلاحيات الرمز', missing.length === 0,
         missing.length ? `ناقص: ${missing.map(s => `${s} (${need[s]})`).join('، ')}` : `كل الصلاحيات موجودة (${Object.keys(need).length}).`,
-        missing.length ? 'اضغط «ربط Meta تلقائياً بكل الصلاحيات» ووافق على كل الصلاحيات بنافذة فيسبوك.' : '');
+        missing.length ? 'اضغط «سجّل دخول بفيسبوك وإنستغرام» ووافق على كل الصلاحيات بنافذة فيسبوك.' : '');
       const pub = PUBLISH_SCOPES.filter(s => !scopes.includes(s));
       add('publish', 'نشر البوستات (التسويق الذكي)', pub.length === 0,
         pub.length ? `ناقص: ${pub.join('، ')}` : 'فيسبوك وإنستغرام جاهزين للنشر.',
-        pub.length ? 'اضغط «ربط Meta تلقائياً بكل الصلاحيات». إذا ما ظهرت الصلاحية بنافذة فيسبوك: أضفها للتطبيق من App Review ← Permissions and Features.' : '');
+        pub.length ? 'اضغط «سجّل دخول بفيسبوك وإنستغرام». إذا ما ظهرت الصلاحية بنافذة فيسبوك: أضفها للتطبيق من App Review ← Permissions and Features.' : '');
     }
 
     // 2) App-level webhook subscriptions (which objects/fields Meta sends us)

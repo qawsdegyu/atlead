@@ -56,9 +56,10 @@ app.get('/terms', (req, res) => res.send(legalPage('Terms of Service', `
 
 // Post images must be public: Instagram downloads the image from this URL when publishing.
 // Only files created by the post planner (random, unguessable names) are served.
-app.get('/media/:name', (req, res) => {
-  const file = require('./src/services/imageService').filePath(req.params.name);
-  if (!file || !fs.existsSync(file)) return res.status(404).end();
+app.get('/media/:name', async (req, res) => {
+  // Restored from Supabase Storage if this server lost the file (redeploy / wiped disk).
+  const file = await require('./src/services/imageService').ensureLocal(req.params.name);
+  if (!file) return res.status(404).end();
   res.set('Cache-Control', 'public, max-age=86400');
   res.sendFile(file, { dotfiles: 'allow' }); // the name is already validated
 });
@@ -320,6 +321,9 @@ async function bootstrap() {
 
   // Runtime answers must come from Supabase knowledge_docs, not from the GitHub checkout.
   await require('./src/services/knowledgeService').loadFromSupabase();
+
+  // Marketing posts (and the day of the last morning message) come back from the database.
+  await require('./src/services/marketingService').restoreFromDb().catch(err => console.error('[Marketing] restore error:', err.message));
 
   if (storageService.isServerless()) {
     console.warn('⚠️ Serverless hosting detected (Vercel): WhatsApp QR, 10s delayed replies, follow-ups, daily report and backups need an always-on server (Railway).');

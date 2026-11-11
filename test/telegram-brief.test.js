@@ -18,7 +18,9 @@ const hhmm = (min) => `${String(Math.floor(((min % 1440) + 1440) % 1440 / 60)).p
 test.beforeEach(() => {
   reset();
   fakeTelegram();
-  storage.setState('last_marketing_brief', null);
+  const fs = require('fs');
+  const file = require('path').join(storage.getDataDir(), 'marketing.json');
+  if (fs.existsSync(file)) { const d = JSON.parse(fs.readFileSync(file, 'utf-8')); d.last_brief = null; fs.writeFileSync(file, JSON.stringify(d)); }
   storage.updateSettings({
     telegram: { bot_token: 'TG:TOKEN', chat_ids: ['42', '43'] },
     marketing: { enabled: true, public_url: 'https://atlead.example.com' }

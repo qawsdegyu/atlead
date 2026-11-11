@@ -529,6 +529,76 @@ class SupabaseService {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // KEY/VALUE in app_settings (marketing posts, etc.) — no extra table needed
+  // ---------------------------------------------------------------------------
+  async saveKv(key, value) {
+    const client = this.getClient();
+    if (!client) return false;
+    try {
+      const { error } = await client.from('app_settings')
+        .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      if (error) { console.warn(`Supabase saveKv(${key}) warning:`, error.message); return false; }
+      return true;
+    } catch (err) {
+      console.error(`Supabase saveKv(${key}) error:`, err.message);
+      return false;
+    }
+  }
+
+  async loadKv(key) {
+    const client = this.getClient();
+    if (!client) return null;
+    try {
+      const { data, error } = await client.from('app_settings').select('value').eq('key', key).maybeSingle();
+      if (error) { console.warn(`Supabase loadKv(${key}) warning:`, error.message); return null; }
+      return data?.value ?? null;
+    } catch (err) {
+      console.error(`Supabase loadKv(${key}) error:`, err.message);
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // FILES (post images) -> Supabase Storage bucket, created automatically
+  // ---------------------------------------------------------------------------
+  async _ensureBucket(client, bucket) {
+    if (this._bucketOk === bucket) return true;
+    const { data } = await client.storage.getBucket(bucket);
+    if (!data) {
+      const { error } = await client.storage.createBucket(bucket, { public: false });
+      if (error && !/exists/i.test(error.message)) throw new Error(error.message);
+    }
+    this._bucketOk = bucket;
+    return true;
+  }
+
+  async uploadFile(bucket, name, buffer, contentType = 'image/jpeg') {
+    const client = this.getClient();
+    if (!client) return false;
+    try {
+      await this._ensureBucket(client, bucket);
+      const { error } = await client.storage.from(bucket).upload(name, buffer, { contentType, upsert: true });
+      if (error) { console.warn(`Supabase upload ${name} warning:`, error.message); return false; }
+      return true;
+    } catch (err) {
+      console.warn(`Supabase upload ${name} error:`, err.message);
+      return false;
+    }
+  }
+
+  async downloadFile(bucket, name) {
+    const client = this.getClient();
+    if (!client) return null;
+    try {
+      const { data, error } = await client.storage.from(bucket).download(name);
+      if (error || !data) return null;
+      return Buffer.from(await data.arrayBuffer());
+    } catch {
+      return null;
+    }
+  }
+
   async logNotification(entry) {
     const client = this.getClient();
     if (!client) return;

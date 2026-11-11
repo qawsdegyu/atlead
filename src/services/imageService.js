@@ -13,11 +13,14 @@ const aiService = require('./aiService');
 let sharp = null;
 try { sharp = require('sharp'); } catch { console.warn('[Images] "sharp" not installed — images are saved as generated (run npm install).'); }
 
-const DEFAULT_MODELS = { gemini: 'gemini-2.5-flash-image', openai: 'gpt-image-1', openrouter: 'google/gemini-2.5-flash-image' };
+const BUCKET = 'marketing-images';
+const DEFAULT_MODELS ={ gemini: 'gemini-2.5-flash-image', openai: 'gpt-image-1', openrouter: 'google/gemini-2.5-flash-image' };
 const errMsg = (e) => e.response?.data?.error?.message || e.message;
 const fromDataUrl = (url) => Buffer.from(String(url).split(',').pop(), 'base64');
 
 class ImageService {
+  constructor() { this._backedUp = new Set(); }
+
   dir() {
     const dir = path.join(storageService.getUploadsDir(), 'marketing');
     fs.mkdirSync(dir, { recursive: true });
@@ -40,7 +43,41 @@ class ImageService {
     }
     const name = `mk_${Date.now().toString(36)}${crypto.randomBytes(8).toString('hex')}.${ext}`;
     fs.writeFileSync(path.join(this.dir(), name), out);
+    // Copy in the database storage too, so a redeploy / wiped disk never loses a post image.
+    this.backup(name, out);
     return name;
+  }
+
+  backup(name, buffer) {
+    const sb = require('./supabaseService');
+    if (!sb.isEnabled()) return Promise.resolve(false);
+    return sb.uploadFile(BUCKET, name, buffer, name.endsWith('.png') ? 'image/png' : 'image/jpeg')
+      .then(ok => { if (ok) this._backedUp.add(name); return ok; });
+  }
+
+  /** Local path of an image, restored from the database storage if the disk lost it. */
+  async ensureLocal(name) {
+    const file = this.filePath(name);
+    if (!file) return null;
+    if (fs.existsSync(file)) return file;
+    const buf = await require('./supabaseService').downloadFile(BUCKET, name);
+    if (!buf) return null;
+    fs.writeFileSync(file, buf);
+    console.log(`[Images] Restored ${name} from Supabase Storage`);
+    return file;
+  }
+
+  /** Upload any local images that are not in the database yet (scheduler retry). */
+  async backupMissing(names) {
+    const sb = require('./supabaseService');
+    if (!sb.isEnabled()) return 0;
+    let n = 0;
+    for (const name of names) {
+      if (this._backedUp.has(name)) continue;
+      const file = this.filePath(name);
+      if (file && fs.existsSync(file) && await this.backup(name, fs.readFileSync(file))) n++;
+    }
+    return n;
   }
 
   async viaProvider(p, prompt) {

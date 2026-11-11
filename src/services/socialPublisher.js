@@ -38,12 +38,12 @@ class SocialPublisher {
     const scopes = require('./metaService').publishScopesStatus() || {};
     const fbScope = scopes.pages_manage_posts !== false;
     const igScope = scopes.instagram_content_publish !== false;
-    const reconnect = ' — اضغط «ربط Meta تلقائياً» بإعدادات الربط ووافق على صلاحية النشر';
+    const reconnect = ' — اضغط «سجّل دخول بفيسبوك وإنستغرام» بإعدادات الربط ووافق على صلاحية النشر';
     return {
       facebook: {
         label: 'فيسبوك', enabled: mk.publish_facebook !== false,
         ready: !!(meta.page_access_token && meta.page_id && fbScope),
-        note: !(meta.page_access_token && meta.page_id) ? 'اربط صفحة فيسبوك («ربط Meta تلقائياً» بإعدادات الربط)'
+        note: !(meta.page_access_token && meta.page_id) ? 'اربط صفحة فيسبوك («سجّل دخول بفيسبوك وإنستغرام» بإعدادات الربط)'
           : !fbScope ? `ناقص صلاحية pages_manage_posts${reconnect}` : ''
       },
       instagram: {

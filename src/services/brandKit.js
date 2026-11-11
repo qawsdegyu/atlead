@@ -116,7 +116,8 @@ class BrandKit {
       note && `CLIENT FEEDBACK TO APPLY: ${note}`,
       `BRAND IDENTITY (follow strictly): ${marketing.brandDirection()}`,
       'The attached images are the REAL logo and published posts of this brand. Reproduce the logo faithfully (shape, letterforms, colours) wherever a logo appears — never redraw or invent a different mark. Match the palette, typography style and finish of the posts.',
-      'Arabic text must be spelled exactly as given, correctly joined and right-to-left; Latin text exactly as given. No other words, no lorem ipsum, no gibberish, no watermarks.',
+      `The medium's name ("${m.title}") is an internal label for you — never write it on the design.`,
+      'Arabic text must be spelled exactly as given, correctly joined and right-to-left; Latin text exactly as given. Write ONLY the copy given in the brief (plus the logo); no extra paragraphs, no lorem ipsum, no gibberish, no invented statistics, no watermarks. Small interface text in mockups may be blurred rather than readable.',
       'Quality bar: world-class art direction, deliberate typographic hierarchy, precise alignment and margins, photorealistic materials and lighting for mockups, one clear focal point, nothing cluttered.'
     ].filter(Boolean).join('\n');
   }

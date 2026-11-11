@@ -46,10 +46,10 @@ let dbTimer = null;
 function read() {
   try {
     const data = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf-8')) : {};
-    return { plans: Array.isArray(data.plans) ? data.plans : [], last_brief: data.last_brief || null };
+    return { plans: Array.isArray(data.plans) ? data.plans : [], last_brief: data.last_brief || null, brand: data.brand || null };
   } catch (e) {
     console.error('[Marketing] cannot read marketing.json:', e.message);
-    return { plans: [], last_brief: null };
+    return { plans: [], last_brief: null, brand: null };
   }
 }
 
@@ -100,7 +100,7 @@ class MarketingService {
     const local = read();
     const newest = (d) => Math.max(0, ...(d?.plans || []).map(p => new Date(p.updated_at || p.created_at || 0).getTime()));
     if (remote?.plans?.length && newest(remote) > newest(local)) {
-      write({ plans: remote.plans, last_brief: remote.last_brief || local.last_brief }, { fromDb: true });
+      write({ plans: remote.plans, last_brief: remote.last_brief || local.last_brief, brand: remote.brand || local.brand }, { fromDb: true });
       console.log(`[Marketing] Restored ${remote.plans.length} posts from Supabase`);
       return { restored: true, count: remote.plans.length };
     }
@@ -218,33 +218,197 @@ ${this.langRule()}
     return { topics, market_summary: 'اقتراحات جاهزة (ما في مفتاح AI شغال حالياً — اربط مفتاح بالإعدادات عشان الاقتراحات تنبني على دراسة السوق).', ai: false };
   }
 
+  // ---- visual identity (learned from the page's own posts) ------------------
+  getBrand() { return read().brand || null; }
+
+  saveBrand(brand) {
+    const data = read();
+    data.brand = { ...(data.brand || {}), ...brand, updated_at: new Date().toISOString() };
+    write(data);
+    return data.brand;
+  }
+
+  /** The design rules as one block of English for the image model and the art director. */
+  brandDirection() {
+    const b = this.getBrand();
+    const g = b?.guide;
+    const manual = String(this.getConfig().brand_style || '').trim();
+    if (!g) return manual || 'Modern, clean, premium B2B tech brand. Deep navy and confident blue palette, generous white space, crisp sans-serif typography.';
+    const palette = (g.palette || []).map(c => `${c.hex} (${c.role})`).join(', ');
+    return [
+      g.art_direction_en,
+      palette && `Exact brand palette: ${palette}.`,
+      g.typography && `Typography: ${g.typography}.`,
+      g.layout && `Layout system: ${g.layout}.`,
+      g.logo_usage && `Logo: ${g.logo_usage}.`,
+      g.imagery && `Imagery: ${g.imagery}.`,
+      (g.dont || []).length && `Never: ${g.dont.join('; ')}.`,
+      manual && `Extra direction from the owner: ${manual}.`
+    ].filter(Boolean).join(' ');
+  }
+
+  /** Logo + up to 3 of the page's own posts, sent to the image model as references. */
+  brandImages({ max = 3 } = {}) {
+    const b = this.getBrand();
+    if (!b) return [];
+    return [b.logo, ...(b.refs || []).slice(0, max)].filter(Boolean).map(f => imageService.dataUrl(f)).filter(Boolean);
+  }
+
+  /**
+   * Learn the visual identity from the page's own Instagram (or Facebook) posts:
+   * palette, type, layout, logo placement, mood — and keep the best posts as references.
+   */
+  async learnBrand() {
+    const axios = require('axios');
+    const meta = require('./metaService').config();
+    const token = meta.page_access_token;
+    if (!token) throw new Error('اربط فيسبوك وإنستغرام أول (سجّل دخول بفيسبوك من الإعدادات).');
+    const G = 'https://graph.facebook.com/v21.0';
+    const candidates = [];
+    let profilePic = null;
+    let account = '';
+    if (meta.instagram_account_id) {
+      try {
+        const me = (await axios.get(`${G}/${meta.instagram_account_id}`, { params: { fields: 'username,profile_picture_url', access_token: token }, timeout: 15000 })).data;
+        account = me.username ? `@${me.username}` : '';
+        profilePic = me.profile_picture_url || null;
+        const media = (await axios.get(`${G}/${meta.instagram_account_id}/media`, {
+          params: { fields: 'media_type,media_url,thumbnail_url,like_count,comments_count,timestamp', limit: 30, access_token: token }, timeout: 20000
+        })).data?.data || [];
+        for (const m of media) {
+          const url = m.media_type === 'VIDEO' ? m.thumbnail_url : m.media_url;
+          if (url) candidates.push({ url, score: (m.like_count || 0) + (m.comments_count || 0) * 3, at: m.timestamp });
+        }
+      } catch (e) { console.warn('[Brand] Instagram media:', e.response?.data?.error?.message || e.message); }
+    }
+    if (candidates.length < 3 && meta.page_id) {
+      try {
+        const posts = (await axios.get(`${G}/${meta.page_id}/posts`, { params: { fields: 'full_picture,created_time', limit: 25, access_token: token }, timeout: 20000 })).data?.data || [];
+        for (const p of posts) if (p.full_picture) candidates.push({ url: p.full_picture, score: 0, at: p.created_time });
+        if (!account) account = 'صفحة فيسبوك';
+      } catch (e) { console.warn('[Brand] Facebook posts:', e.response?.data?.error?.message || e.message); }
+    }
+    if (!candidates.length) throw new Error('ما لقينا صور منشورة على الصفحة نتعلم منها — ارفع صور تصاميمك واللوغو يدوياً.');
+
+    // Best-performing first, then the most recent — 6 posts are enough to see the system.
+    candidates.sort((a, b) => b.score - a.score || String(b.at).localeCompare(String(a.at)));
+    const refs = [];
+    for (const c of candidates.slice(0, 8)) {
+      if (refs.length >= 6) break;
+      try {
+        const buf = Buffer.from((await axios.get(c.url, { responseType: 'arraybuffer', timeout: 20000 })).data);
+        refs.push(await imageService.save(buf, 'ref'));
+      } catch { /* skip */ }
+    }
+    if (!refs.length) throw new Error('ما قدرنا نحمّل صور الصفحة.');
+    const current = this.getBrand() || {};
+    let logo = current.logo || null;
+    if (!logo && profilePic) {
+      try { logo = await imageService.save(Buffer.from((await axios.get(profilePic, { responseType: 'arraybuffer', timeout: 15000 })).data), 'ref'); } catch { /* optional */ }
+    }
+
+    const guide = await this.analyzeBrand([...refs.slice(0, 5), logo].filter(Boolean));
+    return this.saveBrand({ guide, refs, logo, source: account || 'الصفحة', posts_analyzed: refs.length, learned_at: new Date().toISOString(), logo_from_profile: !current.logo && !!logo });
+  }
+
+  /** A vision model reads the posts and writes the design system down. */
+  async analyzeBrand(files) {
+    const images = files.map(f => imageService.dataUrl(f)).filter(Boolean);
+    const system = 'You are a senior brand designer. You reverse-engineer a company\'s visual identity from its published social media posts, precisely and concretely, so another designer can produce new posts that look like they came from the same studio.';
+    const prompt = `These are published posts of the company (the last image may be its logo / profile picture).
+Company: ${this.companyBrief().slice(0, 500)}
+
+Extract the visual identity. Be specific (hex codes, positions, proportions), not generic.
+Return JSON only:
+{
+ "summary_ar": "جملتين بالعربي تلخص الهوية البصرية",
+ "palette": [{"hex":"#RRGGBB","role":"background | primary | accent | text"}],
+ "typography": "font families/styles seen (e.g. bold geometric Arabic sans for headlines, size hierarchy, weight, alignment, RTL)",
+ "layout": "grid, margins, where the headline sits, how much text, use of shapes/cards/frames",
+ "logo_usage": "where and how big the logo appears",
+ "imagery": "photo vs 3D vs illustration, lighting, people, objects, textures",
+ "text_on_image": "how much text appears on the posts and in which language",
+ "mood": "3-5 adjectives",
+ "do": ["..."],
+ "dont": ["..."],
+ "art_direction_en": "One dense paragraph (80-120 words) instructing an image model to produce a new post in exactly this identity."
+}`;
+    const g = await aiService.visionJson(system, prompt, images);
+    if (!g || !g.art_direction_en) throw new Error('ما قدر الذكاء الاصطناعي يحلل التصاميم — جرّب مرة ثانية.');
+    g.palette = (g.palette || []).filter(c => /^#[0-9a-f]{6}$/i.test(c.hex || '')).slice(0, 8);
+    return g;
+  }
+
+  /** Logo or extra design reference uploaded by the owner. */
+  async addBrandFile(buffer, kind = 'ref') {
+    const file = await imageService.save(buffer, 'ref');
+    const b = this.getBrand() || {};
+    if (kind === 'logo') return this.saveBrand({ logo: file, logo_from_profile: false });
+    return this.saveBrand({ refs: [file, ...(b.refs || [])].slice(0, 8) });
+  }
+
+  removeBrandFile(file) {
+    const b = this.getBrand() || {};
+    if (b.logo === file) return this.saveBrand({ logo: null });
+    return this.saveBrand({ refs: (b.refs || []).filter(f => f !== file) });
+  }
+
+  /** Re-read the identity from the current references (after adding/removing some). */
+  async reanalyzeBrand() {
+    const b = this.getBrand() || {};
+    const files = [...(b.refs || []).slice(0, 5), b.logo].filter(Boolean);
+    if (!files.length) throw new Error('ما في صور مرجعية — اضغط «تعلّم من صفحتي» أو ارفع تصاميمك.');
+    return this.saveBrand({ guide: await this.analyzeBrand(files), learned_at: new Date().toISOString() });
+  }
+
+  /**
+   * Art director: 3 different concepts for this post, each in the page's identity,
+   * each with a short on-image headline.
+   */
   async imagePrompts(topic) {
-    const brand = String(this.getConfig().brand_style || '').trim() || 'modern, clean, professional tech brand; deep navy and sky-blue palette with soft glow';
-    const rules = 'Square 1:1 social media post image. Absolutely no text, no letters, no numbers, no logos, no watermarks. High quality, eye-catching, uncluttered composition with one clear focal point.';
+    const brand = this.brandDirection();
+    const lang = this.getConfig().language;
+    const headlineLang = lang === 'en' ? 'English' : 'Arabic (Levantine-friendly, simple Modern Standard wording)';
+    const fixed = (headline) => [
+      'Format: vertical 4:5 Instagram/Facebook feed post, 1080x1350, social-ad quality, sharp and print-clean.',
+      'The reference images show this brand\'s REAL published posts and logo: match their palette, typography style, layout system, spacing and finish so the new post looks like it came from the same designer. Do not copy their wording or photos.',
+      headline ? `Render this headline exactly, letter for letter, correctly shaped and right-to-left if Arabic, large and legible, as the only text on the image: "${headline}".` : 'No text on the image.',
+      'Place the brand logo from the references small and clean in a corner with safe margins (if a logo is provided).',
+      'No watermarks, no fake UI text, no gibberish letters, no extra captions, no borders unless the references use them.'
+    ].join(' ');
     try {
       const out = await this.aiJson(
-        'You are a senior art director for social media ads. You write short, vivid prompts for an AI image generator.',
+        `You are the creative director of a top social-media design studio in Amman. You design scroll-stopping, on-brand B2B posts that make business owners message the company. You think in visual hierarchy: one idea, one focal point, one headline.`,
         `Company: ${this.companyBrief().slice(0, 600)}
 Post topic: ${topic.title}
-Idea: ${topic.angle}
-Brand look: ${brand}
+Idea: ${topic.angle || ''}
 
-Write exactly 3 DIFFERENT image prompts in English for this post, each in a different visual style:
-1) photorealistic scene with people or a real workplace (Middle Eastern / Arab business context),
-2) polished 3D illustration,
-3) minimal conceptual graphic / visual metaphor.
-Each prompt: 40-70 words, describes subject, setting, lighting, mood and colors. ${rules}
-Return JSON only: {"prompts":[{"style":"اسم الستايل بالعربي (كلمتين)","prompt":"..."}]}`, 0.9);
-      const list = (out.prompts || []).filter(p => p && p.prompt).slice(0, 3).map(p => ({ style: String(p.style || 'تصميم').slice(0, 40), prompt: `${String(p.prompt).slice(0, 700)} ${rules}` }));
+BRAND IDENTITY (follow strictly):
+${brand}
+
+Create exactly 3 DIFFERENT post concepts, each a different composition but all clearly the same brand:
+A) a human, photographic scene (Arab business owner / team in a real Jordanian workplace) with the headline on a brand-colour panel,
+B) a bold typographic layout where the headline is the hero, supported by one simple icon or 3D object,
+C) a conceptual visual metaphor (before/after, problem/solution, or a striking object) with the headline.
+For each concept write:
+- "headline": 3-7 words in ${headlineLang}, punchy, a hook (no prices, no promises with numbers),
+- "prompt": 90-140 words in English for the image model: subject, composition (where the headline sits, where the focal point is), camera/lens or render style, lighting, exact brand colours by hex, materials, mood.
+Return JSON only: {"concepts":[{"style":"اسم المفهوم بالعربي (كلمتين)","headline":"...","prompt":"..."}]}`, 0.85);
+      const list = (out.concepts || out.prompts || []).filter(p => p && p.prompt).slice(0, 3).map(p => ({
+        style: String(p.style || 'تصميم').slice(0, 40),
+        headline: String(p.headline || '').slice(0, 80),
+        prompt: `${String(p.prompt).slice(0, 1200)} BRAND: ${brand} ${fixed(String(p.headline || '').slice(0, 80))}`
+      }));
       if (list.length) return list;
     } catch (e) {
       console.error('[Marketing] image prompts failed:', e.response?.data?.error?.message || e.message);
     }
     const subject = `${topic.title}. ${topic.angle || ''}`.slice(0, 300);
+    const h = String(topic.title || '').slice(0, 60);
     return [
-      { style: 'صورة واقعية', prompt: `Photorealistic photo of a confident Arab business owner in a modern office using a laptop and smartphone, concept: ${subject}. Natural light, shallow depth of field. ${brand}. ${rules}` },
-      { style: 'رسم ثلاثي الأبعاد', prompt: `Polished 3D illustration, concept: ${subject}. Floating chat bubbles, charts and a friendly robot assistant, soft studio lighting. ${brand}. ${rules}` },
-      { style: 'تصميم بسيط', prompt: `Minimal conceptual graphic, visual metaphor for: ${subject}. Simple geometric shapes, lots of negative space, bold contrast. ${brand}. ${rules}` }
+      { style: 'صورة واقعية', headline: h, prompt: `Photorealistic scene of a confident Arab business owner in a modern Amman office reviewing customer messages on a phone, concept: ${subject}. Natural window light, 50mm lens, shallow depth of field, headline on a solid brand-colour panel at the top. BRAND: ${brand} ${fixed(h)}` },
+      { style: 'تصميم طباعي', headline: h, prompt: `Bold typographic post: the headline is the hero, centred, supported by one glossy 3D chat-bubble icon, clean background in the brand colours, generous margins. Concept: ${subject}. BRAND: ${brand} ${fixed(h)}` },
+      { style: 'فكرة بصرية', headline: h, prompt: `Conceptual visual metaphor for: ${subject}. One striking object, studio lighting, minimal set, strong contrast, headline in the upper third. BRAND: ${brand} ${fixed(h)}` }
     ];
   }
 
@@ -344,10 +508,10 @@ ${this.langRule()}
   async generateImages(id) {
     const plan = this.mustGet(id, ['image', 'caption', 'time']);
     const prompts = await this.imagePrompts(plan.topic);
-    const made = await imageService.generateMany(prompts);
+    const made = await imageService.generateMany(prompts, this.brandImages());
     const fresh = this.mustGet(id);
     // Keep earlier good images (e.g. an uploaded one) and add the new ones.
-    fresh.images = [...made.filter(m => m.file).map(m => ({ file: m.file, style: m.style, engine: m.engine })), ...(fresh.images || []).filter(im => im.file)].slice(0, 9);
+    fresh.images = [...made.filter(m => m.file).map(m => ({ file: m.file, style: m.style, engine: m.engine, headline: m.headline || '' })), ...(fresh.images || []).filter(im => im.file)].slice(0, 16);
     fresh.image_error = made.every(m => m.error) ? made[0]?.error || 'تعذر توليد الصور' : '';
     fresh.status = 'image';
     return this.savePlan(fresh);
@@ -359,6 +523,73 @@ ${this.langRule()}
     const file = await imageService.save(buffer);
     plan.images = [{ file, style: 'صورتك', engine: 'upload' }, ...(plan.images || [])];
     plan.image_error = '';
+    return this.savePlan(plan);
+  }
+
+  /**
+   * Image chat: edit one of the images by instruction. The result is added as a new
+   * version next to the original, so nothing is lost and you can compare.
+   */
+  async editImage(id, file, message) {
+    const plan = this.mustGet(id, ['image', 'caption', 'time']);
+    const msg = String(message || '').trim().slice(0, 600);
+    if (!msg) throw new Error('اكتب شو بدك تعدّل');
+    const src = (plan.images || []).find(im => im.file === file);
+    if (!src) throw new Error('اختار صورة من القائمة');
+    const history = (plan.image_chat || []).filter(m => m.target === file || m.result === file).slice(-6)
+      .map(m => `- ${m.role === 'user' ? 'Owner asked' : 'Done'}: ${m.text}`).join('\n');
+    const prompt = [
+      'You are a senior designer editing the FIRST attached image (an existing social-media post).',
+      `Apply this change requested by the owner (may be in Arabic): "${msg}".`,
+      'Change only what is asked. Keep everything else the same: composition, headline wording and spelling, logo, colours, style and 4:5 framing — unless the request says otherwise.',
+      'If the request changes text, render the new text exactly, correctly shaped right-to-left for Arabic.',
+      history && `Earlier edits on this design:\n${history}`,
+      `Brand identity to stay within: ${this.brandDirection()}`,
+      'The other attached images (if any) are the brand logo and published posts — use them only as style references.'
+    ].filter(Boolean).join('\n');
+    const r = await imageService.edit(file, prompt, this.brandImages({ max: 1 }));
+    const fresh = this.mustGet(id);
+    const version = (fresh.images || []).filter(im => im.parent === file || im.root === (src.root || file)).length + 1;
+    fresh.images = [{ file: r.file, style: `تعديل ${version}`, engine: r.engine, parent: file, root: src.root || file, note: msg, headline: src.headline || '' }, ...(fresh.images || [])].slice(0, 16);
+    fresh.image_chat = [...(fresh.image_chat || []),
+      { role: 'user', text: msg, target: file, at: new Date().toISOString() },
+      { role: 'assistant', text: 'عدّلتها ✅', result: r.file, target: file, at: new Date().toISOString() }].slice(-40);
+    fresh.image_error = '';
+    return this.savePlan(fresh);
+  }
+
+  /**
+   * Caption chat: rewrite the caption by instruction ("shorter", "more formal", "add a question").
+   * Returns the plan with caption_draft updated; nothing is chosen until you approve it.
+   */
+  async captionChat(id, current, message) {
+    const plan = this.mustGet(id, ['caption', 'time']);
+    const msg = String(message || '').trim().slice(0, 600);
+    const text = String(current || plan.caption_draft || plan.caption || '').trim();
+    if (!msg) throw new Error('اكتب شو بدك تعدّل');
+    if (!text) throw new Error('اختار أو اكتب كابشن أول');
+    const history = (plan.caption_chat || []).slice(-8).map(m => `${m.role === 'user' ? 'صاحب الشركة' : 'أنت'}: ${m.text}`).join('\n');
+    const voice = this.getBrand()?.guide?.mood ? `نبرة الهوية: ${this.getBrand().guide.mood}` : '';
+    const out = await this.aiJson(
+      `أنت كاتب محتوى سوشال ميديا محترف لهذه الشركة:
+${this.companyBrief()}
+${voice}
+بتعدّل الكابشن حسب طلب صاحب الشركة بالزبط، وبتحافظ على باقي الكابشن إلا إذا طلب غير هيك. بدون Markdown، بدون أسعار، والدعوة للتفاعل بآخره بتضل.`,
+      `موضوع البوست: ${plan.topic?.title || ''}
+الكابشن الحالي:
+"""
+${text}
+"""
+${history ? `المحادثة لحد هلق:\n${history}\n` : ''}الطلب الجديد: ${msg}
+${this.langRule()}
+
+أعد JSON فقط: {"caption":"الكابشن كامل بعد التعديل مع الهاشتاغات بآخره","reply":"جملة قصيرة شو غيّرت"}`, 0.6);
+    const caption = aiService.toPlainText(String(out.caption || '')).slice(0, 2200);
+    if (!caption) throw new Error('ما قدر الذكاء الاصطناعي يعدّل — جرّب صياغة ثانية');
+    plan.caption_draft = caption;
+    plan.caption_chat = [...(plan.caption_chat || []),
+      { role: 'user', text: msg, at: new Date().toISOString() },
+      { role: 'assistant', text: String(out.reply || 'تم التعديل').slice(0, 300), caption, at: new Date().toISOString() }].slice(-40);
     return this.savePlan(plan);
   }
 
@@ -574,6 +805,8 @@ ${this.langRule()}
       channels: publisher.channels(),
       public_url: publisher.publicBaseUrl(),
       ai_ready: aiService.getProviders().length > 0,
+      brand: (() => { const b = this.getBrand(); return b ? { ...b, logo_url: b.logo ? `/media/${b.logo}` : null, ref_urls: (b.refs || []).map(f => ({ file: f, url: `/media/${f}` })) } : null; })(),
+      image_engine: imageService.attempts().map(a => imageService.label(a))[0] || '',
       plans: this.listPlans().slice(0, 40)
     };
   }

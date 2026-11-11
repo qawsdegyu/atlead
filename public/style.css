@@ -1182,3 +1182,40 @@ button.mk-option:hover { border-color: var(--primary); background: var(--primary
   .grid-2 { grid-template-columns: 1fr; }
   .top-badges { display: none; }
 }
+
+/* ---- Image studio + edit chats ---- */
+.mk-image { aspect-ratio: 4 / 5; }
+.mk-image.focused { border-color: var(--primary); }
+.mk-preview img { aspect-ratio: 4 / 5; }
+.mk-studio { display: grid; grid-template-columns: minmax(0, 360px) 1fr; gap: 16px; background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 14px; margin-bottom: 16px; }
+.mk-studio-caption { grid-template-columns: 1fr; margin-top: 16px; }
+.mk-studio-img { position: relative; border-radius: var(--radius-md); overflow: hidden; background: #000; align-self: start; }
+.mk-studio-img img { width: 100%; display: block; aspect-ratio: 4 / 5; object-fit: cover; }
+.mk-chat { display: flex; flex-direction: column; min-width: 0; }
+.mk-chat-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; }
+.mk-chat-head i { color: var(--primary); margin-inline-end: 6px; }
+.mk-chat-log { flex: 1; min-height: 120px; max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); }
+.mk-chat-empty { color: var(--text-muted); font-size: 12.5px; line-height: 1.8; }
+.mk-msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
+.mk-msg.me { align-self: flex-start; background: var(--primary); color: #fff; border-start-start-radius: 4px; }
+.mk-msg.ai { align-self: flex-end; background: var(--bg-raised); border: 1px solid var(--border-strong); border-start-end-radius: 4px; }
+.mk-msg.ai a { color: #8fb6ff; }
+.mk-msg.typing { color: var(--text-secondary); }
+.mk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
+.mk-chip { background: transparent; border: 1px solid var(--border-strong); color: var(--text-secondary); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.mk-chip:hover { border-color: var(--primary); color: var(--text-primary); }
+.mk-chat-input { display: flex; gap: 8px; align-items: stretch; }
+.mk-chat-input textarea { resize: none; }
+.mk-draft { margin-bottom: 10px; line-height: 1.8; }
+/* design identity */
+.mk-brand-summary { font-size: 13.5px; line-height: 1.8; margin-bottom: 10px; }
+.mk-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.mk-swatch { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-secondary); direction: ltr; background: var(--bg-raised); border: 1px solid var(--border-color); border-radius: 999px; padding: 3px 10px 3px 4px; }
+.mk-swatch i { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255,255,255,.2); }
+.mk-brand-files { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.mk-brand-file { position: relative; width: 72px; height: 90px; border-radius: var(--radius-md); overflow: hidden; background: var(--bg-raised); border: 1px solid var(--border-strong); display: grid; place-items: center; font-size: 11px; color: var(--text-muted); }
+.mk-brand-file.logo { width: 72px; height: 72px; align-self: center; }
+.mk-brand-file img { width: 100%; height: 100%; object-fit: cover; }
+.mk-brand-file.logo img { object-fit: contain; background: #fff; }
+.mk-brand-file button { position: absolute; top: 3px; inset-inline-end: 3px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: rgba(0,0,0,.65); color: #fff; cursor: pointer; line-height: 1; }
+@media (max-width: 900px) { .mk-studio { grid-template-columns: 1fr; } }

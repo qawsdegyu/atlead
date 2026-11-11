@@ -19,7 +19,8 @@ const step = (fn) => async (req, res) => {
     res.json({ success: true, plan: marketingService.view(plan) });
   } catch (err) {
     console.error('[Marketing API]', err.message);
-    res.status(400).json({ success: false, message: err.response?.data?.error?.message || err.message });
+    const m = err.response?.data?.error?.message || err.message;
+    res.status(400).json({ success: false, message: m === 'NO_AI_KEY' ? 'ما في مفتاح ذكاء اصطناعي شغال — حطه بإعدادات الربط ← الذكاء الاصطناعي.' : m });
   }
 };
 
@@ -45,6 +46,9 @@ router.post('/plans/:id/image-upload', upload.single('image'), step(req => {
   if (!req.file || !/^image\//.test(req.file.mimetype)) throw new Error('ارفع ملف صورة (JPG / PNG)');
   return marketingService.addUploadedImage(req.params.id, req.file.buffer);
 }));
+// Edit chats: "make the title bigger" on an image, "shorter and more formal" on the caption.
+router.post('/plans/:id/image-chat', step(req => marketingService.editImage(req.params.id, req.body.file, req.body.message)));
+router.post('/plans/:id/caption-chat', step(req => marketingService.captionChat(req.params.id, req.body.text || '', req.body.message)));
 router.post('/plans/:id/caption', step(req => marketingService.chooseCaption(req.params.id, { index: req.body.index ?? null, text: req.body.text || '' })));
 router.post('/plans/:id/schedule', step(req => marketingService.schedule(req.params.id, { index: req.body.index ?? null, iso: req.body.iso || '', now: req.body.now === true })));
 router.post('/plans/:id/regenerate', step(req => marketingService.regenerate(req.params.id, req.body.step)));
@@ -63,6 +67,30 @@ router.post('/plans/:id/back', step(req => {
   plan.status = prev;
   return marketingService.savePlan(plan);
 }));
+
+// --- Visual identity (learned from the page's own posts) ---
+const brandReply = (res, brand, message) => res.json({
+  success: true, message,
+  brand: brand ? { ...brand, logo_url: brand.logo ? `/media/${brand.logo}` : null, ref_urls: (brand.refs || []).map(f => ({ file: f, url: `/media/${f}` })) } : null
+});
+const brandFail = (res, err) => res.status(400).json({ success: false, message: err.response?.data?.error?.message || err.message });
+
+router.post('/brand/learn', async (req, res) => {
+  try { brandReply(res, await marketingService.learnBrand(), 'تعلّمنا هوية التصميم من صفحتك ✅'); } catch (e) { brandFail(res, e); }
+});
+router.post('/brand/reanalyze', async (req, res) => {
+  try { brandReply(res, await marketingService.reanalyzeBrand(), 'حدّثنا هوية التصميم ✅'); } catch (e) { brandFail(res, e); }
+});
+router.post('/brand/upload', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file || !/^image\//.test(req.file.mimetype)) throw new Error('ارفع ملف صورة (PNG / JPG)');
+    const kind = req.body.kind === 'logo' ? 'logo' : 'ref';
+    brandReply(res, await marketingService.addBrandFile(req.file.buffer, kind), kind === 'logo' ? 'تم حفظ اللوغو ✅' : 'تمت إضافة التصميم كمرجع ✅');
+  } catch (e) { brandFail(res, e); }
+});
+router.post('/brand/remove', (req, res) => {
+  try { brandReply(res, marketingService.removeBrandFile(String(req.body.file || '')), 'تم الحذف'); } catch (e) { brandFail(res, e); }
+});
 
 // Market research: competitors, our best posts, news.
 router.get('/research', async (req, res) => {

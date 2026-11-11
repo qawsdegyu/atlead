@@ -22,6 +22,8 @@
   let overview = null;
   let plan = null;
   let busy = false;
+  let focusFile = null;   // image open in the studio (image step)
+  let captionDraft = '';  // caption being refined in the caption chat
 
   async function api(url, body, method = 'POST') {
     const opts = { method, headers: {} };
@@ -59,7 +61,29 @@
     }
   }
 
+  async function chatCall(logId, msg, waiting, fn) {
+    if (busy) return;
+    busy = true;
+    const log = $(logId);
+    if (log) {
+      log.querySelector('.mk-chat-empty')?.remove();
+      log.insertAdjacentHTML('beforeend', `<div class="mk-msg me">${esc(msg)}</div><div class="mk-msg ai typing"><i class="fa-solid fa-spinner fa-spin"></i> ${esc(waiting)}</div>`);
+      log.scrollTop = log.scrollHeight;
+    }
+    document.querySelectorAll('#mk-wizard-body [data-act="image-send"], #mk-wizard-body [data-act="caption-send"]').forEach(x => { x.disabled = true; });
+    try {
+      await fn();
+    } catch (err) {
+      showToast(err.message, 'error');
+      log?.querySelector('.typing')?.remove();
+      document.querySelectorAll('#mk-wizard-body [data-act="image-send"], #mk-wizard-body [data-act="caption-send"]').forEach(x => { x.disabled = false; });
+    } finally {
+      busy = false;
+    }
+  }
+
   function setPlan(p) {
+    if (!p || !plan || p.id !== plan.id || p.status !== plan.status) { focusFile = null; captionDraft = ''; }
     plan = p;
     const url = new URL(location.href);
     url.searchParams.set('tab', 'marketing');
@@ -121,19 +145,43 @@
         <button class="btn btn-danger btn-sm" data-act="cancel">إلغاء</button></div>`;
     } else if (s === 'image') {
       const imgs = plan.images || [];
+      if (focusFile && !imgs.some(im => im.file === focusFile)) focusFile = null;
+      const fi = imgs.findIndex(im => im.file === focusFile);
+      const f = fi >= 0 ? imgs[fi] : null;
+      const chat = f ? (plan.image_chat || []).filter(c => c.target === f.file || c.result === f.file || (f.root && (c.target === f.root))) : [];
       body.innerHTML = `${summary()}
         <h4 class="mk-q">2. اختار الصورة</h4>
+        <p class="form-hint" style="margin:-8px 0 12px;">اضغط على أي صورة لتكبيرها وتعديلها بالمحادثة، أو اعتمدها مباشرة.</p>
         ${plan.image_error ? `<div class="mk-alert">${esc(plan.image_error)}<br><small>تقدر ترفع صورة من جهازك، أو تجرّب مرة ثانية.</small></div>` : ''}
+        ${f ? `
+        <div class="mk-studio">
+          <div class="mk-studio-img"><img src="${esc(f.url)}" alt="">
+            <span class="mk-image-meta">${esc(f.style || '')}${f.engine && f.engine !== 'upload' ? ` · ${esc(f.engine)}` : ''}</span></div>
+          <div class="mk-chat">
+            <div class="mk-chat-head"><b><i class="fa-solid fa-wand-magic-sparkles"></i> عدّل هالصورة</b>
+              <button class="btn btn-secondary btn-sm" data-act="close-studio" title="رجوع للصور"><i class="fa-solid fa-xmark"></i></button></div>
+            <div class="mk-chat-log" id="mk-image-log">${chat.length ? chat.map(c => c.role === 'user'
+              ? `<div class="mk-msg me">${esc(c.text)}</div>`
+              : `<div class="mk-msg ai">${esc(c.text)}${c.result && c.result !== f.file ? ` <a href="#" data-act="focus-file" data-file="${esc(c.result)}">افتح النسخة</a>` : ''}</div>`).join('')
+              : '<div class="mk-chat-empty">اكتب أي تعديل بلغتك — مثلاً: «كبّر العنوان»، «خلّي الخلفية كحلية»، «غيّر الجملة لـ…»، «ضيف صورة موظف مبتسم».</div>'}</div>
+            <div class="mk-chips">${['كبّر العنوان وخلّيه أوضح', 'خلّي الألوان أقرب للبراند', 'بسّط التصميم وشيل الزحمة', 'خلّي الصورة أكثر واقعية'].map(t => `<button class="mk-chip" data-act="image-chip" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+            <div class="mk-chat-input"><textarea id="mk-image-msg" class="form-control" rows="2" placeholder="شو بدك تعدّل؟"></textarea>
+              <button class="btn btn-primary" data-act="image-send"><i class="fa-solid fa-paper-plane"></i></button></div>
+            <button class="btn btn-success" data-act="image" data-i="${fi}" style="width:100%;margin-top:10px;"><i class="fa-solid fa-check"></i> اعتمد هالصورة وكمّل للكابشن</button>
+          </div>
+        </div>` : ''}
         <div class="mk-images">${imgs.map((im, i) => `
-          <button class="mk-image" data-act="image" data-i="${i}">
+          <button class="mk-image${im.file === focusFile ? ' focused' : ''}" data-act="focus" data-i="${i}" title="اضغط للتكبير والتعديل">
             <img src="${esc(im.url)}" alt="" loading="lazy">
-            <span class="mk-letter">${'ABCDEFGHI'[i]}</span>
+            <span class="mk-letter">${i + 1}</span>
             <span class="mk-image-meta">${esc(im.style || '')}${im.engine && im.engine !== 'upload' ? ` · ${esc(im.engine)}` : ''}</span>
           </button>`).join('')}
           <label class="mk-image mk-upload"><input type="file" accept="image/*" id="mk-upload" hidden>
             <i class="fa-solid fa-cloud-arrow-up"></i><span>ارفع صورتك</span></label>
         </div>
         <div class="mk-actions">${backBtn()}<button class="btn btn-secondary btn-sm" data-act="regen" data-step="images"><i class="fa-solid fa-rotate"></i> ولّد صور جديدة</button></div>`;
+      const ilog = $('mk-image-log'); if (ilog) ilog.scrollTop = ilog.scrollHeight;
+      $('mk-image-msg')?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); body.querySelector('[data-act="image-send"]').click(); } });
       $('mk-upload').addEventListener('change', (e) => {
         const f = e.target.files[0];
         if (!f) return;
@@ -152,7 +200,8 @@
               <div class="mk-hashtags">${esc((c.hashtags || []).join(' '))}</div>
               <div class="mk-actions" style="margin-top:10px;">
                 <button class="btn btn-primary btn-sm" data-act="caption" data-i="${i}"><i class="fa-solid fa-check"></i> اختار هذا</button>
-                <button class="btn btn-secondary btn-sm" data-act="edit-caption" data-i="${i}"><i class="fa-solid fa-pen"></i> عدّل قبل ما تختار</button>
+                <button class="btn btn-secondary btn-sm" data-act="chat-caption" data-i="${i}"><i class="fa-solid fa-wand-magic-sparkles"></i> عدّله بالذكاء الاصطناعي</button>
+                <button class="btn btn-secondary btn-sm" data-act="edit-caption" data-i="${i}"><i class="fa-solid fa-pen"></i> عدّل بإيدك</button>
               </div></div>
           </div>`).join('')}
         </div>
@@ -160,7 +209,23 @@
           <textarea id="mk-caption-edit" class="form-control" rows="9"></textarea>
           <div class="mk-actions"><button class="btn btn-primary btn-sm" data-act="caption-custom"><i class="fa-solid fa-check"></i> اعتمد النص المعدّل</button></div>
         </div>
+        ${captionDraft ? `
+        <div class="mk-studio mk-studio-caption" id="mk-caption-studio">
+          <div class="mk-chat" style="flex:1;">
+            <div class="mk-chat-head"><b><i class="fa-solid fa-wand-magic-sparkles"></i> عدّل الكابشن بالمحادثة</b>
+              <button class="btn btn-secondary btn-sm" data-act="close-caption-chat" title="إغلاق"><i class="fa-solid fa-xmark"></i></button></div>
+            <textarea id="mk-caption-draft" class="form-control mk-draft" rows="8">${esc(captionDraft)}</textarea>
+            <div class="mk-chat-log" id="mk-caption-log">${(plan.caption_chat || []).slice(-10).map(c => `<div class="mk-msg ${c.role === 'user' ? 'me' : 'ai'}">${esc(c.text)}</div>`).join('') || '<div class="mk-chat-empty">اطلب أي تعديل — «أقصر»، «أكثر رسمية»، «ضيف سؤال بالأول»، «بالإنجليزي».</div>'}</div>
+            <div class="mk-chips">${['خلّيه أقصر', 'أقوى بأول سطر', 'نبرة أكثر رسمية', 'ضيف إيموجي خفيفة', 'هاشتاغات أكثر'].map(t => `<button class="mk-chip" data-act="caption-chip" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+            <div class="mk-chat-input"><textarea id="mk-caption-msg" class="form-control" rows="2" placeholder="شو بدك تغيّر بالكابشن؟"></textarea>
+              <button class="btn btn-primary" data-act="caption-send"><i class="fa-solid fa-paper-plane"></i></button></div>
+            <button class="btn btn-success" data-act="caption-approve" style="width:100%;margin-top:10px;"><i class="fa-solid fa-check"></i> اعتمد هالكابشن وكمّل للوقت</button>
+          </div>
+        </div>` : ''}
         <div class="mk-actions">${backBtn()}<button class="btn btn-secondary btn-sm" data-act="regen" data-step="captions"><i class="fa-solid fa-rotate"></i> اكتب كابشنات غيرهم</button></div>`;
+      const clog = $('mk-caption-log'); if (clog) clog.scrollTop = clog.scrollHeight;
+      $('mk-caption-msg')?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); body.querySelector('[data-act="caption-send"]').click(); } });
+      if (captionDraft) $('mk-caption-studio')?.scrollIntoView({ block: 'nearest' });
     } else if (s === 'time') {
       body.innerHTML = `${summary()}
         <h4 class="mk-q">4. اختار ساعة النشر</h4>
@@ -224,6 +289,36 @@
     const act = b.dataset.act;
     const i = Number(b.dataset.i);
     const P = plan ? `/api/marketing/plans/${plan.id}` : '';
+    if (act === 'focus') { focusFile = plan.images[i]?.file || null; render(); $('mk-image-msg')?.focus(); return; }
+    if (act === 'focus-file') { e.preventDefault(); focusFile = b.dataset.file; render(); return; }
+    if (act === 'close-studio') { focusFile = null; render(); return; }
+    if (act === 'image-chip') { const t = $('mk-image-msg'); t.value = b.dataset.text; t.focus(); return; }
+    if (act === 'image-send') {
+      const msg = $('mk-image-msg').value.trim();
+      if (!msg) return showToast('اكتب شو بدك تعدّل', 'error');
+      return chatCall('mk-image-log', msg, 'جاري تعديل الصورة… (ممكن ياخد لحد دقيقة)', async () => {
+        const d = await api(`${P}/image-chat`, { file: focusFile, message: msg });
+        plan = d.plan; focusFile = d.plan.images[0]?.file || focusFile; render();
+      });
+    }
+    if (act === 'chat-caption') { const c = plan.captions[i]; captionDraft = `${c.text}\n\n${(c.hashtags || []).join(' ')}`.trim(); render(); $('mk-caption-msg')?.focus(); return; }
+    if (act === 'close-caption-chat') { captionDraft = ''; render(); return; }
+    if (act === 'caption-chip') { const t = $('mk-caption-msg'); t.value = b.dataset.text; t.focus(); return; }
+    if (act === 'caption-send') {
+      const msg = $('mk-caption-msg').value.trim();
+      if (!msg) return showToast('اكتب شو بدك تغيّر', 'error');
+      const current = $('mk-caption-draft').value;
+      return chatCall('mk-caption-log', msg, 'جاري تعديل الكابشن…', async () => {
+        const d = await api(`${P}/caption-chat`, { text: current, message: msg });
+        plan = d.plan; captionDraft = d.plan.caption_draft || current; render();
+      });
+    }
+    if (act === 'caption-approve') {
+      const t = $('mk-caption-draft').value.trim();
+      if (!t) return showToast('الكابشن فاضي', 'error');
+      captionDraft = '';
+      return run('جاري حساب أفضل أوقات النشر...', () => api(`${P}/caption`, { text: t }));
+    }
     if (act === 'topic') run('جاري تصميم 3 صور مختلفة للموضوع...', () => api(`${P}/topic`, { index: i }));
     else if (act === 'custom' || act === 'custom-new') {
       const v = $(act === 'custom' ? 'mk-custom-topic' : 'mk-custom-new').value.trim();
@@ -382,6 +477,55 @@
   $('mk-btn-refresh-research').addEventListener('click', () => loadResearch(true));
 
   // ---------- setup ----------
+  function renderBrand(b) {
+    const box = $('mk-brand-box');
+    if (!box) return;
+    const g = b?.guide;
+    box.innerHTML = `
+      ${g ? `<p class="mk-brand-summary">${esc(g.summary_ar || '')}</p>
+        <div class="mk-swatches">${(g.palette || []).map(c => `<span class="mk-swatch" title="${esc(c.role)}"><i style="background:${esc(c.hex)}"></i>${esc(c.hex)}</span>`).join('')}</div>
+        <div class="form-hint" style="margin:6px 0 10px;">${esc([g.typography, g.mood].filter(Boolean).join(' — '))}</div>`
+        : '<p class="form-hint" style="margin-bottom:10px;">لسا ما تعلّمنا هوية تصميمك. اضغط «تعلّم من صفحتي» وبنقرأ بوستاتك على إنستغرام ونطلع الألوان والخطوط وطريقة التصميم، عشان كل صورة جديدة تطلع بنفس الستايل.</p>'}
+      <div class="mk-brand-files">
+        <div class="mk-brand-file logo">${b?.logo_url ? `<img src="${esc(b.logo_url)}" alt=""><button data-brand-remove="${esc(b.logo)}" title="حذف">×</button>` : '<span>اللوغو</span>'}</div>
+        ${(b?.ref_urls || []).map(r => `<div class="mk-brand-file"><img src="${esc(r.url)}" alt=""><button data-brand-remove="${esc(r.file)}" title="حذف">×</button></div>`).join('')}
+      </div>
+      <div class="mk-actions">
+        <button type="button" class="btn btn-primary btn-sm" id="mk-brand-learn"><i class="fa-brands fa-instagram"></i> ${g ? 'أعد التعلّم من صفحتي' : 'تعلّم من صفحتي'}</button>
+        <label class="btn btn-secondary btn-sm" style="cursor:pointer;"><i class="fa-solid fa-upload"></i> ارفع اللوغو<input type="file" accept="image/*" hidden data-brand-upload="logo"></label>
+        <label class="btn btn-secondary btn-sm" style="cursor:pointer;"><i class="fa-solid fa-images"></i> ضيف تصميم كمرجع<input type="file" accept="image/*" hidden data-brand-upload="ref"></label>
+        ${(b?.refs || []).length ? '<button type="button" class="btn btn-secondary btn-sm" id="mk-brand-reanalyze"><i class="fa-solid fa-rotate"></i> حلّل من جديد</button>' : ''}
+      </div>
+      ${b?.learned_at ? `<div class="form-hint" style="margin-top:6px;">من ${esc(b.source || 'الصفحة')} — ${esc(String(b.posts_analyzed || (b.refs || []).length))} تصاميم، ${new Date(b.learned_at).toLocaleDateString('en-GB')}${overview?.image_engine ? ` · المولّد: ${esc(overview.image_engine)}` : ''}</div>` : ''}`;
+  }
+
+  async function brandCall(waiting, fn) {
+    const box = $('mk-brand-box');
+    const old = box.innerHTML;
+    box.innerHTML = `<div class="mk-loading" style="padding:20px;"><div class="mk-spinner"></div><p>${esc(waiting)}</p></div>`;
+    try {
+      const d = await fn();
+      showToast(d.message || 'تم', 'success');
+      if (overview) overview.brand = d.brand;
+      renderBrand(d.brand);
+    } catch (e) { showToast(e.message, 'error'); box.innerHTML = old; }
+  }
+
+  $('mk-pane-setup')?.addEventListener('click', (e) => {
+    if (e.target.closest('#mk-brand-learn')) brandCall('جاري قراءة بوستات صفحتك وتحليل التصميم… (حوالي دقيقة)', () => api('/api/marketing/brand/learn', {}));
+    else if (e.target.closest('#mk-brand-reanalyze')) brandCall('جاري التحليل…', () => api('/api/marketing/brand/reanalyze', {}));
+    const rm = e.target.closest('[data-brand-remove]');
+    if (rm) brandCall('…', () => api('/api/marketing/brand/remove', { file: rm.dataset.brandRemove }));
+  });
+  $('mk-pane-setup')?.addEventListener('change', (e) => {
+    const inp = e.target.closest('[data-brand-upload]');
+    if (!inp || !inp.files[0]) return;
+    const fd = new FormData();
+    fd.append('image', inp.files[0]);
+    fd.append('kind', inp.dataset.brandUpload);
+    brandCall('جاري الرفع…', () => api('/api/marketing/brand/upload', fd));
+  });
+
   async function fillSetup() {
     let s;
     try { s = (await api('/api/settings', undefined, 'GET')).settings; } catch { return; }
@@ -404,6 +548,7 @@
     $('mk-pub-tg').checked = m.publish_telegram_channel === true;
     $('mk-public-url').value = m.public_url || '';
     if (!m.public_url && overview?.public_url) $('mk-public-url').placeholder = `${overview.public_url} (تلقائي)`;
+    renderBrand(overview?.brand);
     const ch = overview?.channels || {};
     $('mk-channels-status').innerHTML = Object.values(ch).map(c => `<div class="mk-result ${c.ready ? 'ok' : 'bad'}"><i class="fa-solid ${c.ready ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i> <b>${esc(c.label)}</b> ${c.ready ? 'جاهز' : esc(c.note)}</div>`).join('');
   }

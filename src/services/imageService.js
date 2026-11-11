@@ -1,7 +1,13 @@
 /**
  * Post image generation. Uses whichever AI key is configured (Gemini / OpenAI /
  * OpenRouter), and falls back to the free Pollinations service when none can
- * make images. Every image is saved as a 1080x1080 JPEG (what Instagram requires).
+ * make images. Every image is saved as a 1080x1350 JPEG (Instagram's 4:5 portrait —
+ * the size that takes the most space in the feed).
+ *
+ * Best model (Nov 2026, via OpenRouter): Nano Banana Pro (google/gemini-3-pro-image) —
+ * Google's most advanced image generation + editing model; reads reference images
+ * (the page's own posts + logo) and renders text inside the image. Nano Banana 2.1 is
+ * the automatic fallback.
  */
 const axios = require('axios');
 const fs = require('fs');
@@ -14,7 +20,12 @@ let sharp = null;
 try { sharp = require('sharp'); } catch { console.warn('[Images] "sharp" not installed — images are saved as generated (run npm install).'); }
 
 const BUCKET = 'marketing-images';
-const DEFAULT_MODELS ={ gemini: 'gemini-2.5-flash-image', openai: 'gpt-image-1', openrouter: 'google/gemini-2.5-flash-image' };
+const DEFAULT_MODELS = { gemini: 'gemini-2.5-flash-image', openai: 'gpt-image-1', openrouter: 'google/gemini-3-pro-image' };
+// Tried in order on OpenRouter (the first one that works wins).
+const OPENROUTER_CHAIN = ['google/gemini-3-pro-image', 'google/gemini-nano-banana-2.1', 'google/gemini-3.1-flash-image'];
+const POST_W = 1080;
+const POST_H = 1350;
+const ASPECT = '4:5';
 const errMsg = (e) => e.response?.data?.error?.message || e.message;
 const fromDataUrl = (url) => Buffer.from(String(url).split(',').pop(), 'base64');
 
@@ -32,12 +43,29 @@ class ImageService {
     return /^mk_[a-z0-9]+\.(jpg|png|webp)$/.test(String(name)) ? path.join(this.dir(), name) : null;
   }
 
-  /** Normalise any image to a square JPEG and store it. Returns the file name. */
-  async save(buffer) {
+  /** Data URL of a stored image (sent to the model as a reference / for editing). */
+  dataUrl(name) {
+    const file = this.filePath(name);
+    if (!file || !fs.existsSync(file)) return null;
+    const ext = path.extname(file).slice(1);
+    return `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${fs.readFileSync(file).toString('base64')}`;
+  }
+
+  /**
+   * Store an image. kind "post" → 1080x1350 JPEG (cropped to 4:5);
+   * kind "ref" → reference/logo, kept whole (max 1024px, PNG keeps transparency).
+   */
+  async save(buffer, kind = 'post') {
     let ext = 'jpg';
     let out = buffer;
-    if (sharp) {
-      out = await sharp(buffer).rotate().resize(1080, 1080, { fit: 'cover', position: 'attention' }).jpeg({ quality: 88 }).toBuffer();
+    if (sharp && kind === 'ref') {
+      const meta = await sharp(buffer).metadata();
+      const png = !!meta.hasAlpha;
+      const img = sharp(buffer).rotate().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true });
+      out = png ? await img.png().toBuffer() : await img.jpeg({ quality: 90 }).toBuffer();
+      ext = png ? 'png' : 'jpg';
+    } else if (sharp) {
+      out = await sharp(buffer).rotate().resize(POST_W, POST_H, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
     } else if (buffer[0] === 0x89 && buffer[1] === 0x50) {
       ext = 'png';
     }
@@ -80,14 +108,19 @@ class ImageService {
     return n;
   }
 
-  async viaProvider(p, prompt) {
+  /**
+   * One image from one provider. images = data URLs given to the model as input
+   * (for editing: the image to edit first; then logo / design references).
+   */
+  async viaProvider(p, prompt, images = [], model = null) {
     const custom = storageService.getSettings().marketing?.image_model;
-    const model = (custom && String(custom).trim()) || DEFAULT_MODELS[p.type];
+    model = model || (custom && String(custom).trim()) || DEFAULT_MODELS[p.type];
     if (p.type === 'gemini') {
+      const parts = [{ text: prompt }, ...images.map(u => ({ inline_data: { mime_type: u.slice(5, u.indexOf(';')), data: u.split(',')[1] } }))];
       const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${p.key}`, {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
-      }, { timeout: 90000 });
+        contents: [{ parts }],
+        generationConfig: { responseModalities: ['TEXT', 'IMAGE'], imageConfig: { aspectRatio: ASPECT } }
+      }, { timeout: 150000 });
       for (const part of res.data?.candidates?.[0]?.content?.parts || []) {
         const data = part.inlineData?.data || part.inline_data?.data;
         if (data) return Buffer.from(data, 'base64');
@@ -95,7 +128,7 @@ class ImageService {
       throw new Error('Gemini returned no image');
     }
     if (p.type === 'openai') {
-      const res = await axios.post('https://api.openai.com/v1/images/generations', { model, prompt, size: '1024x1024', n: 1 }, {
+      const res = await axios.post('https://api.openai.com/v1/images/generations', { model, prompt, size: '1024x1536', n: 1 }, {
         headers: { Authorization: `Bearer ${p.key}` }, timeout: 120000
       });
       const d = res.data?.data?.[0] || {};
@@ -104,9 +137,20 @@ class ImageService {
       throw new Error('OpenAI returned no image');
     }
     if (p.type === 'openrouter') {
-      const res = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-        model, messages: [{ role: 'user', content: prompt }], modalities: ['image', 'text']
-      }, { headers: { Authorization: `Bearer ${p.key}` }, timeout: 120000 });
+      const content = images.length
+        ? [{ type: 'text', text: prompt }, ...images.map(u => ({ type: 'image_url', image_url: { url: u } }))]
+        : prompt;
+      const messages = [{ role: 'user', content }];
+      const post = (b) => axios.post('https://openrouter.ai/api/v1/chat/completions', b, { headers: { Authorization: `Bearer ${p.key}` }, timeout: 180000 });
+      let res;
+      try {
+        res = await post({ model, messages, modalities: ['image', 'text'], image_config: { aspect_ratio: ASPECT, image_size: '2K' } });
+      } catch (e) {
+        // A provider that rejects an option still gets the request, without it.
+        if (e.response?.status !== 400) throw e;
+        res = await post({ model, messages, modalities: ['image', 'text'], image_config: { aspect_ratio: ASPECT } })
+          .catch(() => post({ model, messages, modalities: ['image', 'text'] }));
+      }
       const url = res.data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
       if (!url) throw new Error(res.data?.error?.message || 'OpenRouter returned no image');
       return url.startsWith('data:') ? fromDataUrl(url) : Buffer.from((await axios.get(url, { responseType: 'arraybuffer', timeout: 60000 })).data);
@@ -128,7 +172,7 @@ class ImageService {
 
   async pollinationsOnce(prompt) {
     const res = await axios.get(`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.slice(0, 900))}`, {
-      params: { width: 1080, height: 1080, nologo: 'true', seed: Math.floor(Math.random() * 1e9) },
+      params: { width: POST_W, height: POST_H, nologo: 'true', seed: Math.floor(Math.random() * 1e9) },
       responseType: 'arraybuffer', timeout: 120000
     });
     const buf = Buffer.from(res.data);
@@ -136,23 +180,42 @@ class ImageService {
     return buf;
   }
 
-  /** One image from a prompt. Returns { file, engine } or throws with the last error. */
-  async generate(prompt) {
-    const providers = aiService.getProviders().filter(p => DEFAULT_MODELS[p.type]);
-    let lastErr = new Error('لا يوجد مفتاح AI يدعم توليد الصور (Gemini / OpenAI / OpenRouter)');
-    // A provider that just failed (no credit, model not allowed) is skipped for 10 minutes.
+  /** (provider, model) pairs to try, best first. A pair that just failed is skipped for 10 minutes. */
+  attempts() {
+    const custom = String(storageService.getSettings().marketing?.image_model || '').trim();
     this._bad = this._bad || new Map();
-    for (const p of providers) {
-      if (Date.now() - (this._bad.get(p.key) || 0) < 10 * 60 * 1000) continue;
+    const out = [];
+    for (const p of aiService.getProviders().filter(x => DEFAULT_MODELS[x.type])) {
+      const models = p.type === 'openrouter' ? [...new Set([custom, ...OPENROUTER_CHAIN].filter(Boolean))] : [custom || DEFAULT_MODELS[p.type]];
+      for (const model of models) out.push({ p, model });
+    }
+    return out.filter(a => Date.now() - (this._bad.get(`${a.p.key}|${a.model}`) || 0) > 10 * 60 * 1000);
+  }
+
+  label(a) {
+    const names = { 'google/gemini-3-pro-image': 'Nano Banana Pro', 'google/gemini-nano-banana-2.1': 'Nano Banana 2.1', 'google/gemini-3.1-flash-image': 'Nano Banana 2' };
+    return names[a.model] || `${a.p.label} (${a.model})`;
+  }
+
+  /**
+   * One image from a prompt. images = data URLs of the logo / design references
+   * (for an edit, the image being edited comes first).
+   * Returns { file, engine } or throws with the last error.
+   */
+  async generate(prompt, images = [], { allowFree = true } = {}) {
+    let lastErr = new Error('لا يوجد مفتاح AI يدعم توليد الصور (Gemini / OpenAI / OpenRouter)');
+    for (const a of this.attempts()) {
+      if (images.length && a.p.type === 'openai' && !allowFree) continue; // can't edit through this endpoint
       try {
-        return { file: await this.save(await this.viaProvider(p, prompt)), engine: p.label };
+        const refs = a.p.type === 'openai' ? [] : images;
+        return { file: await this.save(await this.viaProvider(a.p, prompt, refs, a.model)), engine: this.label(a) };
       } catch (e) {
-        lastErr = new Error(`${p.label}: ${errMsg(e)}`);
-        this._bad.set(p.key, Date.now());
+        lastErr = new Error(`${this.label(a)}: ${errMsg(e)}`);
+        this._bad.set(`${a.p.key}|${a.model}`, Date.now());
         console.error('[Images]', lastErr.message);
       }
     }
-    if (storageService.getSettings().marketing?.free_image_fallback !== false) {
+    if (allowFree && storageService.getSettings().marketing?.free_image_fallback !== false) {
       try {
         return { file: await this.save(await this.viaPollinations(prompt)), engine: 'Pollinations (مجاني)' };
       } catch (e) {
@@ -163,11 +226,22 @@ class ImageService {
     throw lastErr;
   }
 
+  /**
+   * Edit an existing image by instruction ("make the title bigger", "use our blue").
+   * The image itself goes first, then the logo / references. Returns { file, engine }.
+   * Editing needs a model that reads images, so the free generator is never used here.
+   */
+  async edit(fileName, prompt, refs = []) {
+    const src = this.dataUrl(fileName) || (await this.ensureLocal(fileName) && this.dataUrl(fileName));
+    if (!src) throw new Error('الصورة الأصلية مش موجودة');
+    return this.generate(prompt, [src, ...refs], { allowFree: false });
+  }
+
   /** Several images in parallel; failures are returned as { error } so the rest still show. */
-  async generateMany(prompts) {
+  async generateMany(prompts, images = []) {
     return Promise.all(prompts.map(async (p) => {
       try {
-        const r = await this.generate(p.prompt);
+        const r = await this.generate(p.prompt, images);
         return { ...p, ...r };
       } catch (e) {
         return { ...p, error: e.message };

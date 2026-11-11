@@ -530,6 +530,52 @@ Your previous answer was in Arabic. The customer writes in English — return th
     return parts.join('\n');
   }
 
+  /**
+   * Look at images and answer in JSON (used to learn the page's visual identity).
+   * images = data URLs. Tries every configured provider that can read images.
+   */
+  async visionJson(system, prompt, images = [], { timeout = 90000 } = {}) {
+    let lastErr = new Error('NO_AI_KEY');
+    for (const p of this.getProviders()) {
+      try {
+        let text = '';
+        if (p.type === 'gemini') {
+          const parts = [{ text: prompt }, ...images.map(u => ({ inline_data: { mime_type: u.slice(5, u.indexOf(';')), data: u.split(',')[1] } }))];
+          const res = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/${p.model}:generateContent?key=${p.key}`, {
+            systemInstruction: { parts: [{ text: system }] }, contents: [{ parts }],
+            generationConfig: { temperature: 0.3, responseMimeType: 'application/json' }
+          }, { timeout });
+          text = res.data?.candidates?.[0]?.content?.parts?.map(x => x.text || '').join('') || '';
+        } else if (p.type === 'anthropic') {
+          const res = await axios.post('https://api.anthropic.com/v1/messages', {
+            model: p.model, max_tokens: 2500, temperature: 0.3, system: `${system}\n\nأعد JSON صالح فقط.`,
+            messages: [{ role: 'user', content: [
+              ...images.map(u => ({ type: 'image', source: { type: 'base64', media_type: u.slice(5, u.indexOf(';')), data: u.split(',')[1] } })),
+              { type: 'text', text: prompt }
+            ] }]
+          }, { headers: { 'x-api-key': p.key, 'anthropic-version': '2023-06-01' }, timeout });
+          text = (res.data?.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+        } else if (p.type === 'openai' || p.type === 'openrouter') {
+          const res = await axios.post(`${OPENAI_COMPATIBLE[p.type].base}/chat/completions`, {
+            model: p.model, temperature: 0.3, response_format: { type: 'json_object' },
+            messages: [{ role: 'system', content: system }, { role: 'user', content: [
+              { type: 'text', text: prompt }, ...images.map(u => ({ type: 'image_url', image_url: { url: u } }))
+            ] }]
+          }, { headers: { Authorization: `Bearer ${p.key}` }, timeout });
+          text = res.data?.choices?.[0]?.message?.content || '';
+        } else continue;
+        let c = String(text).trim().replace(/^```(json)?/, '').replace(/```$/, '').trim();
+        const a = c.indexOf('{'); const b = c.lastIndexOf('}');
+        if (a >= 0 && b > a) c = c.slice(a, b + 1);
+        return JSON.parse(c);
+      } catch (err) {
+        lastErr = err;
+        console.error(`[AI] ${p.label} vision failed:`, err.response?.data?.error?.message || err.message);
+      }
+    }
+    throw lastErr;
+  }
+
   // Generic "give me JSON" call used for comment analysis.
   async callJson(systemPrompt, userPrompt) {
     if (!this.getProviders().length) return null;

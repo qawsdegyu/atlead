@@ -48,10 +48,36 @@ class SchedulerService {
       }
     }));
     await step('supabase sync', () => require('./supabaseSync').tick());
+    await step('sheets retry', () => this.retryUnsyncedLeads());
     await step('follow-up', () => followUpService.runOnce(getAdapter));
     await step('daily report', () => reportService.maybeSend());
     await step('backup', () => backupService.maybeRun());
     this.running = false;
+  }
+
+  /**
+   * Every 10 minutes: customers that never reached Google Sheets / Form (e.g. they
+   * came in before the sheet was connected, or Google was down) are sent again.
+   * At most 5 per run to stay inside Google's write quota.
+   */
+  async retryUnsyncedLeads() {
+    const now = Date.now();
+    if (this._lastSheetsRetry && now - this._lastSheetsRetry < 10 * 60 * 1000) return;
+    this._lastSheetsRetry = now;
+    const sheets = require('./googleSheetsService');
+    if (!sheets.isConfigured()) return;
+    const cfg = storageService.getSettings().google_sheets || {};
+    const formOn = !!(cfg.form_url && cfg.form_auto_sync !== false);
+    const sheetOn = !!(sheets.getApiConfig() || cfg.webhook_url);
+    const pending = storageService.getLeads().filter(l =>
+      !String(l.channel || '').startsWith('simulator') &&
+      ((sheetOn && !l.google_sheet_synced) || (formOn && !l.google_form_fp))
+    ).slice(0, 5);
+    for (const lead of pending) {
+      // Not "_manual": the Form's change-detection still applies, so no duplicate rows.
+      const r = await sheets.syncLead(lead);
+      console.log(`[Scheduler] sheets retry ${lead.id}: ${r.success ? 'ok' : r.message}`);
+    }
   }
 }
 

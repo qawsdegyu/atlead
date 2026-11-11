@@ -209,14 +209,20 @@ class ImageService {
    * Returns { file, engine } or throws with the last error.
    */
   async generate(prompt, images = [], { allowFree = true, aspect = ASPECT, kind = 'post' } = {}) {
-    let lastErr = new Error('لا يوجد مفتاح AI يدعم توليد الصور (Gemini / OpenAI / OpenRouter)');
-    for (const a of this.attempts()) {
+    const list = this.attempts();
+    // Every model is resting after a recent failure → say why (e.g. no credit), not "no key".
+    let lastErr = new Error(!list.length && this._lastReason ? this._lastReason : 'لا يوجد مفتاح AI يدعم توليد الصور (Gemini / OpenAI / OpenRouter)');
+    for (const a of list) {
       if (images.length && a.p.type === 'openai' && !allowFree) continue; // can't edit through this endpoint
       try {
         const refs = a.p.type === 'openai' ? [] : images;
         return { file: await this.save(await this.viaProvider(a.p, prompt, refs, a.model, aspect), kind, aspect), engine: this.label(a) };
       } catch (e) {
-        lastErr = new Error(`${this.label(a)}: ${errMsg(e)}`);
+        const reason = errMsg(e);
+        lastErr = new Error(/credit|insufficient|payment|402/i.test(reason + (e.response?.status || ''))
+          ? 'رصيد OpenRouter خلص — اشحن من openrouter.ai ← Credits وبعدين اضغط «كمّل الناقص».'
+          : `${this.label(a)}: ${reason}`);
+        this._lastReason = lastErr.message;
         this._bad.set(`${a.p.key}|${a.model}`, Date.now());
         console.error('[Images]', lastErr.message);
       }

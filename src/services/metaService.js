@@ -24,7 +24,101 @@ const UPLOADS_DIR = storageService.getUploadsDir();
 const metaConfig = () => storageService.getSettings().meta || {};
 const ECHO_SETTLE_MS = Number(process.env.ECHO_SETTLE_MS || 3000);
 
+// Every permission the system uses (chat, comments, research, publishing).
+const REQUIRED_SCOPES = {
+  pages_show_list: 'عرض صفحاتك',
+  business_management: 'صفحات مملوكة لـ Business Manager',
+  pages_messaging: 'رسائل الماسنجر',
+  pages_manage_metadata: 'الاشتراك بالويب هوك',
+  pages_read_engagement: 'قراءة منشورات الصفحة',
+  pages_read_user_content: 'قراءة تعليقات الفيس',
+  pages_manage_engagement: 'الرد على تعليقات الفيس',
+  pages_manage_posts: 'نشر البوستات على فيسبوك',
+  instagram_basic: 'قراءة حساب الإنستا والمنافسين',
+  instagram_manage_messages: 'رسائل الإنستا (DM)',
+  instagram_manage_comments: 'الرد على تعليقات الإنستا',
+  instagram_content_publish: 'نشر البوستات على إنستغرام'
+};
+const PUBLISH_SCOPES = ['pages_manage_posts', 'instagram_content_publish'];
+
 class MetaService {
+  get REQUIRED_SCOPES() { return REQUIRED_SCOPES; }
+
+  // ---- One-click connect (Facebook Login → permanent Page token, all permissions) ----
+  /** Our app id: typed in the dashboard, or read from the current token. */
+  async getAppId() {
+    const cfg = metaConfig();
+    if (cfg.app_id) return String(cfg.app_id).trim();
+    if (!cfg.page_access_token) return null;
+    try {
+      const id = (await axios.get(`${GRAPH}/app`, { params: { access_token: cfg.page_access_token, fields: 'id' }, timeout: 10000 })).data?.id;
+      if (id) storageService.updateSettings({ meta: { app_id: id } });
+      return id || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Facebook Login dialog URL. The admin approves once; the callback stores the tokens. */
+  async oauthStartUrl(redirectUri) {
+    const cfg = metaConfig();
+    const appId = await this.getAppId();
+    if (!appId) throw new Error('اكتب App ID بإعدادات Meta (من developers.facebook.com ← تطبيقك ← App settings ← Basic).');
+    if (!cfg.app_secret) throw new Error('اكتب App Secret بإعدادات Meta (بنفس الصفحة: App settings ← Basic) واضغط حفظ.');
+    const state = require('crypto').randomBytes(16).toString('hex');
+    storageService.setState('meta_oauth', { state, redirectUri, at: Date.now() });
+    const params = new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, state, response_type: 'code' });
+    // Business-type apps can use a "Facebook Login for Business" configuration instead of a scope list.
+    if (cfg.login_config_id) params.set('config_id', String(cfg.login_config_id).trim());
+    else {
+      params.set('scope', Object.keys(REQUIRED_SCOPES).join(','));
+      params.set('auth_type', 'rerequest'); // ask again for anything declined before
+    }
+    return `https://www.facebook.com/${GRAPH_API_VERSION}/dialog/oauth?${params}`;
+  }
+
+  /** Callback: code → user token → long-lived → permanent Page token (saved) → webhook subscription. */
+  async oauthCallback({ code, state, error_description }) {
+    const saved = storageService.getState('meta_oauth') || {};
+    if (error_description) throw new Error(`Facebook: ${error_description}`);
+    if (!code || !state || state !== saved.state || Date.now() - (saved.at || 0) > 20 * 60 * 1000) {
+      throw new Error('رابط الربط انتهى أو غير صالح — اضغط زر الربط مرة ثانية.');
+    }
+    storageService.setState('meta_oauth', null);
+    const cfg = metaConfig();
+    const appId = await this.getAppId();
+    const ex = (await axios.get(`${GRAPH}/oauth/access_token`, {
+      params: { client_id: appId, client_secret: cfg.app_secret, redirect_uri: saved.redirectUri, code }, timeout: 15000
+    })).data;
+    if (!ex?.access_token) throw new Error('Facebook ما رجّع رمز دخول');
+
+    // Which permissions were actually granted (the admin can untick some in the dialog).
+    let granted = [];
+    try {
+      const perms = (await axios.get(`${GRAPH}/me/permissions`, { params: { access_token: ex.access_token }, timeout: 10000 })).data?.data || [];
+      granted = perms.filter(p => p.status === 'granted').map(p => p.permission);
+    } catch { /* optional */ }
+
+    const conv = await this.convertUserTokenToPageToken(ex.access_token);
+    if (!conv.converted || conv.error) throw new Error(conv.error || 'ما قدرنا نجيب رمز الصفحة');
+    storageService.updateSettings({ meta: { app_id: appId, granted_scopes: granted, connected_at: new Date().toISOString(), _ids_checked: true } });
+    const sub = await this.subscribePage();
+    const missing = granted.length ? Object.keys(REQUIRED_SCOPES).filter(s => !granted.includes(s)) : [];
+    return {
+      page: conv.page?.name || conv.page?.id,
+      instagram: conv.page?.instagram_business_account?.username || '',
+      longLived: conv.longLived,
+      subscribed: sub.success,
+      missing
+    };
+  }
+
+  /** Can we publish? (used by the marketing tab). */
+  publishScopesStatus() {
+    const granted = metaConfig().granted_scopes || [];
+    if (!granted.length) return null; // unknown (token pasted by hand)
+    return Object.fromEntries(PUBLISH_SCOPES.map(s => [s, granted.includes(s)]));
+  }
   /**
    * If a USER token was pasted (e.g. from Graph API Explorer), turn it into the
    * Page token automatically: (optionally) make it long-lived with the App Secret,
@@ -261,21 +355,18 @@ class MetaService {
         add('token', 'صلاحية الرمز', false, errMsg(e));
       }
     }
-    const need = {
-      pages_messaging: 'رسائل الماسنجر',
-      instagram_basic: 'قراءة حساب الإنستا',
-      instagram_manage_messages: 'رسائل الإنستا (DM)',
-      instagram_manage_comments: 'الرد على تعليقات الإنستا',
-      pages_read_engagement: 'قراءة منشورات الصفحة',
-      pages_read_user_content: 'قراءة تعليقات الفيس',
-      pages_manage_engagement: 'الرد على تعليقات الفيس',
-      pages_manage_metadata: 'الاشتراك بالويب هوك'
-    };
+    // business_management / pages_show_list only matter while connecting, not on the Page token.
+    const need = Object.fromEntries(Object.entries(REQUIRED_SCOPES).filter(([k]) => !['business_management', 'pages_show_list'].includes(k)));
+    if (!scopes.length && cfg.granted_scopes?.length) scopes = cfg.granted_scopes; // from the one-click connect
     if (scopes.length) {
       const missing = Object.keys(need).filter(s => !scopes.includes(s));
       add('scopes', 'صلاحيات الرمز', missing.length === 0,
         missing.length ? `ناقص: ${missing.map(s => `${s} (${need[s]})`).join('، ')}` : `كل الصلاحيات موجودة (${Object.keys(need).length}).`,
-        missing.length ? 'اعمل رمز مستخدم جديد من Graph API Explorer وفيه الصلاحيات الناقصة، والصقه بخانة Page Access Token واضغط فحص الاتصال.' : '');
+        missing.length ? 'اضغط «ربط Meta تلقائياً بكل الصلاحيات» ووافق على كل الصلاحيات بنافذة فيسبوك.' : '');
+      const pub = PUBLISH_SCOPES.filter(s => !scopes.includes(s));
+      add('publish', 'نشر البوستات (التسويق الذكي)', pub.length === 0,
+        pub.length ? `ناقص: ${pub.join('، ')}` : 'فيسبوك وإنستغرام جاهزين للنشر.',
+        pub.length ? 'اضغط «ربط Meta تلقائياً بكل الصلاحيات». إذا ما ظهرت الصلاحية بنافذة فيسبوك: أضفها للتطبيق من App Review ← Permissions and Features.' : '');
     }
 
     // 2) App-level webhook subscriptions (which objects/fields Meta sends us)

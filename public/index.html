@@ -721,6 +721,45 @@
               </h4>
               <div id="meta-diagnose-result" style="display: none; margin-bottom: 14px; font-size: 12.5px; line-height: 1.8;"></div>
 
+              <!-- One-click connect: Facebook Login → permanent Page token with every permission -->
+              <div class="meta-connect-box">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                  <div>
+                    <strong><i class="fa-solid fa-plug-circle-bolt"></i> ربط تلقائي بكل الصلاحيات</strong>
+                    <div class="form-hint" style="margin-top: 2px;">بتوافق مرة وحدة بنافذة فيسبوك، والنظام بياخد رمز صفحة دائم فيه كل الصلاحيات (رسائل، تعليقات، نشر بوستات، دراسة منافسين) — بدون نسخ ولصق رموز.</div>
+                  </div>
+                  <a class="btn btn-primary btn-sm" id="btn-meta-oauth" href="/api/meta/oauth/start"><i class="fa-brands fa-facebook"></i> ربط Meta تلقائياً</a>
+                </div>
+                <div class="grid-2" style="margin-top: 12px;">
+                  <div class="form-group" style="margin-bottom: 8px;">
+                    <label class="form-label">App ID</label>
+                    <input type="text" id="meta-app-id" class="form-control" placeholder="من App settings ← Basic">
+                  </div>
+                  <div class="form-group" style="margin-bottom: 8px;">
+                    <label class="form-label">Login Configuration ID (اختياري)</label>
+                    <input type="text" id="meta-login-config-id" class="form-control" placeholder="لتطبيقات Business فقط">
+                  </div>
+                </div>
+                <div class="form-group" style="margin-bottom: 8px;">
+                  <label class="form-label" style="font-size: 12px;">رابط الرجوع (Valid OAuth Redirect URI) — حطه مرة وحدة بإعدادات Facebook Login بالتطبيق:</label>
+                  <div style="display: flex; gap: 8px;">
+                    <input type="text" id="meta-oauth-redirect" class="form-control" style="font-size: 11px; direction: ltr;" readonly>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('meta-oauth-redirect').value); showToast('تم نسخ الرابط!', 'info');">نسخ</button>
+                  </div>
+                </div>
+                <details class="form-hint">
+                  <summary style="cursor: pointer;">خطوات أول مرة (5 دقائق) والصلاحيات المطلوبة</summary>
+                  <ol style="padding-inline-start: 18px; line-height: 1.9; margin-top: 6px;">
+                    <li>developers.facebook.com ← تطبيقك ← <b>App settings ← Basic</b>: انسخ App ID و App Secret لهون واضغط <b>حفظ</b>.</li>
+                    <li>من <b>Add product</b> ضيف <b>Facebook Login</b> (أو Facebook Login for Business) ← Settings ← الصق <b>رابط الرجوع</b> بخانة Valid OAuth Redirect URIs ← Save.</li>
+                    <li>اضغط <b>ربط Meta تلقائياً</b>، اختار صفحتك وحساب الإنستغرام، ووافق على كل الصلاحيات.</li>
+                    <li>بعدين اضغط <b>فحص الإنستا والتعليقات</b> — لازم كل الأسطر تكون ✅.</li>
+                  </ol>
+                  <div id="meta-scopes-list" style="margin-top: 6px;"></div>
+                  <div style="margin-top: 6px;">ملاحظة: ما دام التطبيق بوضع Development، كل الصلاحيات بتشتغل لحساباتك (الأدمن). عشان البوت يرد على أي حد، لازم App Review لصلاحيات الرسائل والتعليقات من Meta.</div>
+                </details>
+              </div>
+
               <div class="form-group">
                 <label class="form-label">Page Access Token (رمز وصول الصفحة)</label>
                 <input type="password" id="meta-access-token" class="form-control" placeholder="EAA...">

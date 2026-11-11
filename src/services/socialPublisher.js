@@ -34,17 +34,24 @@ class SocialPublisher {
     const mk = s.marketing || {};
     const tg = telegramService.getConfig();
     const base = this.publicBaseUrl();
+    // Known only after the one-click connect; a hand-pasted token is tried as is.
+    const scopes = require('./metaService').publishScopesStatus() || {};
+    const fbScope = scopes.pages_manage_posts !== false;
+    const igScope = scopes.instagram_content_publish !== false;
+    const reconnect = ' — اضغط «ربط Meta تلقائياً» بإعدادات الربط ووافق على صلاحية النشر';
     return {
       facebook: {
         label: 'فيسبوك', enabled: mk.publish_facebook !== false,
-        ready: !!(meta.page_access_token && meta.page_id),
-        note: meta.page_access_token && meta.page_id ? '' : 'اربط صفحة فيسبوك من الإعدادات'
+        ready: !!(meta.page_access_token && meta.page_id && fbScope),
+        note: !(meta.page_access_token && meta.page_id) ? 'اربط صفحة فيسبوك («ربط Meta تلقائياً» بإعدادات الربط)'
+          : !fbScope ? `ناقص صلاحية pages_manage_posts${reconnect}` : ''
       },
       instagram: {
         label: 'إنستغرام', enabled: mk.publish_instagram !== false,
-        ready: !!(meta.page_access_token && meta.instagram_account_id && base),
-        note: !meta.instagram_account_id ? 'ما في حساب إنستغرام أعمال مربوط'
-          : !base ? 'إنستغرام بيحتاج رابط عام https للسيرفر (بيشتغل تلقائياً على Railway، أو اكتب الرابط العام بالإعدادات)' : ''
+        ready: !!(meta.page_access_token && meta.instagram_account_id && base && igScope),
+        note: !meta.instagram_account_id ? 'ما في حساب إنستغرام أعمال مربوط بالصفحة'
+          : !igScope ? `ناقص صلاحية instagram_content_publish${reconnect}`
+            : !base ? 'إنستغرام بيحتاج رابط عام https للسيرفر (بيشتغل تلقائياً على Railway، أو اكتب الرابط العام بالإعدادات)' : ''
       },
       telegram: {
         label: 'قناة تليجرام', enabled: mk.publish_telegram_channel === true,

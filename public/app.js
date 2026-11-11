@@ -821,6 +821,9 @@ async function loadSettings() {
       document.getElementById('meta-auto-reply-comments').checked = s.meta?.auto_reply_comments !== false;
       document.getElementById('meta-auto-dm-on-interest').checked = s.meta?.auto_dm_on_interest !== false;
       document.getElementById('meta-app-secret').value = s.meta?.app_secret || '';
+      document.getElementById('meta-app-id').value = s.meta?.app_id || '';
+      document.getElementById('meta-login-config-id').value = s.meta?.login_config_id || '';
+      loadMetaOauthInfo();
       document.getElementById('meta-comment-reply-template').value = s.meta?.comment_reply_template || '';
       document.getElementById('meta-auto-dm-template').value = s.meta?.auto_dm_template || '';
 
@@ -923,6 +926,8 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
       auto_reply_comments: document.getElementById('meta-auto-reply-comments').checked,
       auto_dm_on_interest: document.getElementById('meta-auto-dm-on-interest').checked,
       app_secret: document.getElementById('meta-app-secret').value,
+      app_id: document.getElementById('meta-app-id').value.trim(),
+      login_config_id: document.getElementById('meta-login-config-id').value.trim(),
       comment_reply_template: document.getElementById('meta-comment-reply-template').value,
       auto_dm_template: document.getElementById('meta-auto-dm-template').value
     },
@@ -1018,6 +1023,51 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
   } catch (err) {
     showToast('فشل حفظ الإعدادات', 'error');
   }
+});
+
+// One-click Meta connect: return link + which permissions are granted.
+async function loadMetaOauthInfo() {
+  try {
+    const d = await (await fetch('/api/meta/oauth/info')).json();
+    if (!d.success) return;
+    document.getElementById('meta-oauth-redirect').value = d.redirect_uri;
+    if (!document.getElementById('meta-app-id').value && d.app_id) document.getElementById('meta-app-id').value = d.app_id;
+    const granted = new Set(d.granted || []);
+    document.getElementById('meta-scopes-list').innerHTML = Object.entries(d.scopes).map(([k, label]) =>
+      `<div>${granted.size ? (granted.has(k) ? '✅' : '❌') : '•'} <code>${escapeHtml(k)}</code> — ${escapeHtml(label)}</div>`).join('') +
+      (d.connected_at ? `<div style="margin-top:4px;">آخر ربط: ${escapeHtml(new Date(d.connected_at).toLocaleString('en-GB'))}</div>` : '');
+  } catch { /* optional */ }
+}
+
+// The connect button needs App ID + Secret saved first.
+document.getElementById('btn-meta-oauth')?.addEventListener('click', async (e) => {
+  const appId = document.getElementById('meta-app-id').value.trim();
+  const secret = document.getElementById('meta-app-secret').value.trim();
+  if (!appId || !secret) {
+    e.preventDefault();
+    showToast('اكتب App ID و App Secret أولاً', 'error');
+    return;
+  }
+  e.preventDefault();
+  // Save them (and anything else typed) before leaving for Facebook.
+  await fetch('/api/settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ meta: { app_id: appId, app_secret: secret, login_config_id: document.getElementById('meta-login-config-id').value.trim(), page_id: document.getElementById('meta-page-id').value.trim() } })
+  });
+  location.href = '/api/meta/oauth/start';
+});
+
+// Back from Facebook: show the result.
+window.addEventListener('DOMContentLoaded', () => {
+  const q = new URLSearchParams(location.search);
+  const r = q.get('meta_oauth');
+  if (!r) return;
+  switchTab('settings');
+  showToast(q.get('msg') || (r === 'ok' ? 'تم الربط ✅' : 'فشل الربط'), r === 'ok' ? 'success' : 'error');
+  const box = document.getElementById('meta-diagnose-result');
+  box.style.display = 'block';
+  box.innerHTML = `${r === 'ok' ? '✅' : r === 'partial' ? '⚠️' : '❌'} ${escapeHtml(q.get('msg') || '')}`;
+  history.replaceState(null, '', '/?tab=settings');
 });
 
 // Test Connection Buttons

@@ -1018,3 +1018,6 @@ button.mk-option:hover { border-color: var(--primary); background: var(--primary
   .mk-step span:not(.mk-step-dot) { display: none; }
   .mk-images { grid-template-columns: repeat(2, 1fr); }
 }
+
+.meta-connect-box { background: rgba(2,132,199,0.08); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px; font-size: 13px; }
+.meta-connect-box code { background: rgba(255,255,255,0.08); padding: 0 5px; border-radius: 4px; }

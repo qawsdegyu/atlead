@@ -259,6 +259,48 @@ router.get('/meta/diagnose', async (req, res) => {
   }
 });
 
+// --- ONE-CLICK META CONNECT (Facebook Login → permanent Page token with every permission) ---
+function oauthRedirectUri(req) {
+  const base = require('../services/socialPublisher').publicBaseUrl()
+    || `${String(req.headers['x-forwarded-proto'] || req.protocol).split(',')[0]}://${req.get('host')}`;
+  return `${base}/api/meta/oauth/callback`;
+}
+
+router.get('/meta/oauth/info', async (req, res) => {
+  res.json({
+    success: true,
+    redirect_uri: oauthRedirectUri(req),
+    app_id: await metaService.getAppId(),
+    has_secret: !!storageService.getSettings().meta?.app_secret,
+    scopes: metaService.REQUIRED_SCOPES,
+    granted: storageService.getSettings().meta?.granted_scopes || [],
+    connected_at: storageService.getSettings().meta?.connected_at || null
+  });
+});
+
+router.get('/meta/oauth/start', async (req, res) => {
+  try {
+    res.redirect(await metaService.oauthStartUrl(oauthRedirectUri(req)));
+  } catch (err) {
+    res.redirect(`/?tab=settings&meta_oauth=error&msg=${encodeURIComponent(err.message)}`);
+  }
+});
+
+router.get('/meta/oauth/callback', async (req, res) => {
+  try {
+    const r = await metaService.oauthCallback(req.query);
+    const msg = `تم ربط صفحة ${r.page}${r.instagram ? ` + إنستغرام @${r.instagram}` : ''}`
+      + `${r.longLived ? ' برمز دائم' : ''}${r.subscribed ? '، والصفحة مشتركة بالرسائل والتعليقات' : ''}.`
+      + (r.missing.length ? ` ⚠️ صلاحيات ما انعطت: ${r.missing.join('، ')}` : ' ✅ كل الصلاحيات موجودة.');
+    res.redirect(`/?tab=settings&meta_oauth=${r.missing.length ? 'partial' : 'ok'}&msg=${encodeURIComponent(msg)}`);
+  } catch (err) {
+    const m = err.response?.data?.error?.message || err.message;
+    const hint = /redirect_uri|URL blocked|redirect URI/i.test(m)
+      ? ' — انسخ "رابط الرجوع" من بطاقة Meta وحطه بـ Valid OAuth Redirect URIs بإعدادات Facebook Login بالتطبيق.' : '';
+    res.redirect(`/?tab=settings&meta_oauth=error&msg=${encodeURIComponent(m + hint)}`);
+  }
+});
+
 router.post('/settings/test-whatsapp', async (req, res) => {
   const { phone_number_id, access_token } = req.body;
   const result = await whatsappService.testConnection(phone_number_id || null, unmask(access_token));

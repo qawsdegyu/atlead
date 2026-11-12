@@ -217,7 +217,8 @@ class CrmService {
 
     let lead = await this.upsertLead(conv);
 
-    if (!alreadyHandedOff) {
+    // Call rehearsals (admin tests) never alert the team.
+    if (!alreadyHandedOff && conv.channel !== 'simulator_call') {
       // Email in the background — never delays the conversation flow.
       const convId = conv.id;
       notificationService.sendHandoffEmail(conv, lead).then(async (result) => {

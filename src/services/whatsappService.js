@@ -143,7 +143,7 @@ class WhatsAppService {
           recipient_type: 'individual',
           to: String(conv.external_user_id).replace(/\D/g, ''),
           type: 'text',
-          text: { preview_url: false, body: text }
+          text: { preview_url: /https?:\/\//.test(text), body: text } // links (e.g. the call link) show as a tappable card
         };
         if (quoted?.external_message_id) body.context = { message_id: quoted.external_message_id };
         try {

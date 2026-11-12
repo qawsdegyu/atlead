@@ -230,6 +230,8 @@ class GoogleSheetsService {
     return { token, title: meta.data.properties?.title };
   }
 
+  headers() { return HEADERS; }
+
   leadToRow(lead) {
     const conv = lead.conversation_id ? storageService.getConversationById(lead.conversation_id) : null;
     const purchase = lead.purchase_status || (lead.deal_status === 'won' ? 'won' : lead.deal_status === 'lost' ? 'lost' : 'not_purchased');

@@ -404,6 +404,7 @@ ${transcript}
   }
 
   notifyTeam(conv, s, a) {
+    if (conv.channel === 'simulator_call') return; // rehearsal
     try {
       const telegram = require('./telegramService');
       if (!telegram.isConfigured()) return;

@@ -148,7 +148,7 @@ class CallService {
       conv.customer_phone ? `الهاتف: ${conv.customer_phone}` : '',
       conv.customer_email ? `البريد: ${conv.customer_email}` : ''
     ].filter(Boolean).join('\n');
-    const calendarOn = require('./calendarService').isActive();
+    const calendarOn = !!session.mock_calendar || require('./calendarService').isActive();
     return `أنت مستشار مبيعات صوتي لشركة atlead (أنظمة مبيعات ذكية وأتمتة للشركات) في مكالمة صوتية أونلاين مع عميل محتمل.
 هدف المكالمة (حوالي ${Math.min(cfg.max_minutes, 10)} دقائق): تفهم شغل العميل واحتياجه، وتتأكد هل هو جاد ومستعد يشتري، وإذا كان جاهز تحجزله اجتماع أونلاين مع المهندس.
 
@@ -170,7 +170,7 @@ ${cfg.extra_questions ? `أسئلة إضافية من الإدارة:\n${cfg.ext
 - جاوب فقط من معلومات الشركة تحت. إذا ما بتعرف شي قل إن المهندس رح يوضحه بالاجتماع. لا تخترع.
 - ممنوع تذكر أي سعر أو رقم أو مدة تنفيذ مش مكتوبة حرفياً بالمعلومات. الأسعار بتتحدد مع المهندس.
 - لا تضغط على العميل. إذا مش مهتم أو مش مناسب، اشكره بلطف وأنهِ المكالمة.
-${calendarOn ? `- إذا العميل مهتم وجاهز للخطوة الجاية: استخدم get_free_times لتعرف الأوقات المتاحة، اقترح وقتين أو ثلاثة، ولما يوافق على وقت محدد استخدم book_engineer_meeting. بعد الحجز أكّد له الموعد وقل إن رابط الاجتماع رح يوصله بالمحادثة.` : '- إذا العميل مهتم وجاهز: قل إن المهندس رح يتواصل معه لتحديد موعد الاجتماع.'}
+${calendarOn ? `- حجز اجتماع المهندس، بالترتيب ولا تتجاوز أي خطوة: (1) اسأل العميل إذا حابب يحجز اجتماع أونلاين مع المهندس واستنى جوابه. (2) إذا وافق، استخدم get_free_times. (3) اقترح وقتين أو ثلاثة من النتيجة فقط واستنى يختار. (4) فقط لما يوافق صراحة على وقت محدد استخدم book_engineer_meeting بنفس الوقت. ممنوع تخترع تاريخ أو وقت، وممنوع تحجز بدون موافقته. (5) بعد الحجز أكّد له الموعد وقل إن رابط الاجتماع رح يوصله بالمحادثة.` : '- إذا العميل مهتم وجاهز: قل إن المهندس رح يتواصل معه لتحديد موعد الاجتماع. لا تذكر أي تاريخ أو وقت.'}
 - بالآخر لخّص له الخطوة الجاية بجملة، اشكره، وبعدين استخدم end_call.
 
 معلومات معروفة عن العميل من المحادثة الكتابية:
@@ -275,9 +275,11 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
     const cal = require('./calendarService');
     const conv = storageService.getConversationById(session.conversation_id) || {};
     session.last_activity_at = new Date().toISOString();
+    if (session.mock_calendar) return this.mockTool(session, conv, name, args);
     if (name === 'get_free_times') {
       if (!cal.isActive()) return { available: false, note: 'Calendar is not connected. Tell the customer the engineer will contact them to fix a time.' };
       const slots = await cal.suggestions(6).catch(() => []);
+      session.free_times_checked_at = new Date().toISOString();
       this.save(session);
       return {
         available: slots.length > 0,
@@ -288,6 +290,10 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
     }
     if (name === 'book_engineer_meeting') {
       if (!cal.isActive()) return { booked: false, note: 'Calendar is not connected. Tell the customer the engineer will contact them.' };
+      // Never a time out of thin air: free times must be read and offered first.
+      if (!session.free_times_checked_at) {
+        return { booked: false, note: 'Not booked. First call get_free_times, offer two or three of those times, and wait until the customer clearly agrees to one.' };
+      }
       const said = session.transcript.filter(l => l.role === 'customer').slice(-4).map(l => l.text).join(' ');
       const lang = said ? require('./aiService').detectLanguage(said) : 'ar';
       const r = await cal.book({ start: args.start, conv, lang });
@@ -303,6 +309,34 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
       this.save(session);
       return { ok: true };
     }
+    return { error: 'unknown tool' };
+  }
+
+  /**
+   * Rehearsals only (never real customers): a simulated calendar with three fixed free times,
+   * so the conversation flow (ask → read times → offer → wait → book that exact time) can be checked
+   * when Google Calendar is not connected. Nothing is written to any real calendar.
+   */
+  mockTool(session, conv, name, args) {
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Amman', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + 86400000));
+    const slots = ['10:00', '12:00', '16:00'].map(t => `${day} ${t}`);
+    if (name === 'get_free_times') {
+      session.free_times_checked_at = new Date().toISOString();
+      session.mock_offered = slots;
+      this.save(session);
+      return { available: true, timezone: 'Asia/Amman', slots: slots.map(s => ({ start: s, label_ar: `بكرا الساعة ${s.slice(11)}`, label_en: `tomorrow at ${s.slice(11)}` })) };
+    }
+    if (name === 'book_engineer_meeting') {
+      if (!session.free_times_checked_at) return { booked: false, note: 'Not booked. First call get_free_times, offer two or three of those times, and wait until the customer clearly agrees to one.' };
+      const start = String(args.start || '').trim();
+      if (!slots.includes(start)) return { booked: false, message: `${start} is not one of the free times. Offer: ${slots.join(', ')}` };
+      const appointment = { appointment_at: new Date().toISOString(), appointment_label: `بكرا الساعة ${start.slice(11)} (تجريبي)`, appointment_link: 'https://meet.google.com/rehearsal-only', appointment_event_id: 'rehearsal' };
+      storageService.saveConversation({ id: conv.id, ...appointment, consultation_booked: true });
+      session.appointment = appointment;
+      this.save(session);
+      return { booked: true, message: `Booked ${start}. The meeting link will be sent in the chat.` };
+    }
+    if (name === 'end_call') { session.ending = true; this.save(session); return { ok: true }; }
     return { error: 'unknown tool' };
   }
 
@@ -350,15 +384,24 @@ ${transcript}
 
 بيانات معروفة سابقاً: الاسم ${conv.customer_name || '-'}، النشاط ${conv.business_type || '-'}، الطلب ${conv.customer_requests || '-'}.
 
-أعد JSON فقط بهذه الحقول (نصوص عربية مختصرة وواضحة، والأرقام كما قالها العميل):
-{"customer_name":"","company_name":"","job_title":"","location":"","business_type":"","team_size":"","monthly_volume":"","channels_used":"","current_tools":"","identified_problem":"","goals":"","customer_requests":"","budget":"","timeline":"","decision_maker":"","objections":"","customer_email":"","customer_phone":"","proposed_solution":"","buying_probability":0,"classification":"Hot|Warm|Cold","qualified":true,"summary":"ملخص المكالمة في 3-5 جمل","next_step":"","sentiment":"positive|neutral|negative"}`
+الحكم على الشراء (بناءً على كلام العميل فقط):
+- buying_probability: رقم من 0 إلى 100 يقدّر احتمال أن يشتري فعلاً.
+- qualified = true فقط إذا اجتمعت كلها: عنده نشاط تجاري حقيقي، وعنده مشكلة نحلها، وعنده نية واضحة للبدء أو للاجتماع مع المهندس، وهو صاحب القرار أو يمثّله. غير ذلك false (مثلاً طالب، فضول، بدون شركة، بدون نية، رفض واضح).
+- classification: Hot (جاهز ونيته واضحة)، Warm (مهتم لكن متردد أو ينقصه شيء)، Cold (غير مهتم أو غير مناسب).
+- next_step: ما تم الاتفاق عليه فعلاً بالمكالمة (اجتماع محجوز؟ تواصل الفريق؟ لا شيء؟).
+- أي حقل لم يذكره العميل اتركه "" ولا تكتب نصاً من عندك.
+
+أعد JSON فقط بهذه المفاتيح (قيم نصية عربية مختصرة، والأرقام كما قالها العميل):
+customer_name, company_name, job_title, location, business_type, team_size, monthly_volume, channels_used, current_tools, identified_problem, goals, customer_requests, budget, timeline, decision_maker, objections, customer_email, customer_phone, proposed_solution, buying_probability (رقم), classification (Hot أو Warm أو Cold), qualified (true أو false), summary (ملخص المكالمة في 3-5 جمل), next_step, sentiment (positive أو neutral أو negative).`
     );
     if (!out) return null;
     const clean = {};
     for (const [k, v] of Object.entries(out)) clean[k] = typeof v === 'string' ? v.trim().slice(0, 1500) : v;
     clean.buying_probability = Math.max(0, Math.min(100, Number(clean.buying_probability) || 0));
-    clean.qualified = clean.qualified === true || clean.qualified === 'true';
     if (!['Hot', 'Warm', 'Cold'].includes(clean.classification)) clean.classification = clean.buying_probability >= 70 ? 'Hot' : clean.buying_probability >= 40 ? 'Warm' : 'Cold';
+    // The three signals must agree, otherwise the safe answer wins (no false "ready to buy").
+    if (!clean.buying_probability) clean.buying_probability = { Hot: 80, Warm: 50, Cold: 15 }[clean.classification];
+    clean.qualified = (clean.qualified === true || clean.qualified === 'true') && clean.classification !== 'Cold' && clean.buying_probability >= 50;
     return clean;
   }
 

@@ -105,6 +105,7 @@ test('when the call ends, every detail is analysed and saved on the customer, th
     { id: 'c1', role: 'customer', text: 'عندي عيادة أسنان بعمّان، فريقنا 6 أشخاص وبتجينا حوالي 400 رسالة بالشهر على واتساب وإنستغرام.' },
     { id: 'c1', role: 'customer', text: 'duplicate is ignored' }
   ] } });
+  await http(app.base, `/api/call/${s.token}/tool`, { method: 'POST', json: { name: 'get_free_times', args: {} } });
   await http(app.base, `/api/call/${s.token}/tool`, { method: 'POST', json: { name: 'book_engineer_meeting', args: { start: `${tomorrow} 13:00` } } });
   answers = [{
     company_name: 'عيادة الابتسامة', location: 'عمّان', business_type: 'عيادة أسنان', team_size: '6', monthly_volume: '400 رسالة',
@@ -147,4 +148,25 @@ test('expired or finished links cannot start a call', async () => {
   storage.updateSettings({ ai_call: { enabled: false } }, { skipDbSync: true });
   const s2 = callService.createSession(newConv());
   assert.equal((await http(app.base, `/api/call/${s2.token}`)).body.error, 'disabled');
+});
+
+test('the AI can never book a time it did not read from the calendar first', async () => {
+  const s = callService.createSession(newConv());
+  await http(app.base, `/api/call/${s.token}/start`, { method: 'POST' });
+  const r = await http(app.base, `/api/call/${s.token}/tool`, { method: 'POST', json: { name: 'book_engineer_meeting', args: { start: `${tomorrow} 12:00` } } });
+  assert.equal(r.body.result.booked, false);
+  assert.match(r.body.result.note, /get_free_times/);
+  assert.ok(!calls.some(c => /calendar\/v3\/calendars\/.+\/events/.test(c.url)), 'nothing written to the calendar');
+});
+
+test('a not-interested caller is never marked ready to buy, even if the model says so', async () => {
+  const conv = newConv('ليث');
+  const s = callService.createSession(conv);
+  callService.addTranscript(s.token, [{ id: 'x', role: 'customer', text: 'أنا طالب، بس بسأل لمشروع تخرج.' }]);
+  answers = [{ business_type: '', buying_probability: 0, classification: 'Cold', qualified: true, summary: 'طالب يسأل بدافع الفضول.' }];
+  await callService.finish(s.token);
+  const c = storage.getConversationById(conv.id);
+  assert.equal(c.ai_call_qualified, false);
+  assert.ok(!c.handoff_at, 'not handed to sales');
+  assert.match(c.messages[c.messages.length - 1].content, /إذا عندك أي سؤال/);
 });

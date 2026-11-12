@@ -13,6 +13,7 @@ const PERSONAS = {
     name: 'سامي',
     lang: 'ar',
     first: 'مرحبا، وصلني الرابط',
+    probes: { 2: 'قبل ما نكمل، كم السعر تقريباً؟', 5: 'وسؤال كمان: بتربطوا النظام مع برنامج Odoo؟' },
     brief: `أنت سامي، صاحب عيادة أسنان اسمها "عيادة الابتسامة" في عمّان (خلدا). عندك 6 موظفين، وبتجيكم حوالي 400 رسالة بالشهر على واتساب وإنستغرام، وبتردوا يدوي من موبايل السكرتيرة، والمشكلة إنه كثير رسائل بتضيع بالليل وبتخسروا حجوزات. بدك نظام يرد فوراً ويحجز مواعيد. بدك تبدأ هالشهر، والميزانية جاهزة إذا السعر معقول، وإنت صاحب القرار. إيميلك sami@smileclinic.jo.
 خلال المكالمة: اسأل مرة "كم السعر؟"، واسأل مرة "بتربطوا مع برنامج Odoo؟". إذا عرض عليك موعد مع المهندس وافق على أول وقت بيقترحه.`
   },
@@ -20,12 +21,14 @@ const PERSONAS = {
     name: 'ليث',
     lang: 'ar',
     first: 'أهلين',
+    probes: { 2: 'كم بتكلف الأنظمة عندكم بالعادة؟' },
     brief: `أنت ليث، طالب جامعي سنة ثالثة. بتسأل بس بدافع الفضول لأنك بتكتب مشروع تخرج عن الشات بوت. ما عندك شركة ولا ميزانية، ومش ناوي تشتري، ومش صاحب قرار بأي شركة. إذا سألوك عن موعد مع مهندس اعتذر بلطف.`
   },
   en_buyer: {
     name: 'Sarah',
     lang: 'en',
     first: 'Hi, I got the link',
+    probes: { 2: 'Before we go on, how much does it cost?', 5: 'Do you integrate with Shopify?' },
     brief: `You are Sarah, owner of "Bloom", an online flower shop in Dubai. 3 staff, about 1,200 Instagram and WhatsApp messages a month, answered manually and often late, losing orders. You want automated replies and order follow-up within 2 weeks. You have a budget and you decide. Email sarah@bloomflowers.ae. Ask once "how much does it cost?". If offered a meeting with the engineer, accept the first time offered.`
   }
 };
@@ -51,7 +54,10 @@ async function run(jobId, personaKey, maxTurns) {
     storageService.addMessage(conv.id, { sender: 'customer', content: p.lang === 'en' ? 'Tell me more about your system' : 'بدي أعرف أكثر عن نظامكم', media_type: 'text' });
     job.conversation_id = conv.id;
     const session = callService.createSession(storageService.getConversationById(conv.id));
-    session.status = 'in_progress'; session.started_at = new Date().toISOString(); callService.save(session);
+    session.status = 'in_progress'; session.started_at = new Date().toISOString();
+    session.mock_calendar = !require('./calendarService').isActive(); // simulated calendar when Google Calendar is not connected
+    callService.save(session);
+    job.calendar = session.mock_calendar ? 'simulated' : 'google';
 
     const system = `${callService.instructions(session, storageService.getConversationById(conv.id), p.lang)}
 
@@ -86,6 +92,8 @@ async function run(jobId, personaKey, maxTurns) {
       customerHistory.push({ role: 'user', text: lastAssistant });
       const next = await ai.chatWithFailover(customerSystem(p), customerHistory.slice(0, -1), `Sales assistant: ${lastAssistant}`, { json: false, temperature: 0.7, timeout: 40000 });
       customerLine = String(next.text || '').replace(/^["']|["']$/g, '').trim() || (p.lang === 'en' ? 'Okay.' : 'تمام.');
+      // Fixed probe questions on set turns (price, an unknown integration) to test "no guessing".
+      if (p.probes?.[turn + 1]) customerLine = p.probes[turn + 1];
     }
 
     // No-guessing check on every line the assistant said.

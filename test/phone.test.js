@@ -140,6 +140,30 @@ test('connect: checks Twilio, points the number at the server and gives the forw
   assert.equal(r.success, true, r.message);
   const set = calls.find(c => /IncomingPhoneNumbers\/PN1\.json/.test(c.url));
   assert.equal(new URLSearchParams(String(set.body)).get('VoiceUrl'), `https://${HOST}/voice/incoming`);
-  assert.equal(r.forwarding.all, '**21*0015550001111#');
-  assert.equal(r.forwarding.no_answer, '**61*0015550001111**20#');
+  assert.equal(r.mode, 'no_answer');
+  assert.equal(r.codes.main.code, '**004*0015550001111**25#', 'no answer / busy / off → the AI');
+  assert.equal(r.codes.cancel.code, '##004#');
+});
+
+test('only-unanswered mode: a transfer to your own phone can never loop back to the AI', async () => {
+  const caller = '+962796660000';
+  // The live call asks for a person → we ring your phone (the transfer timeout ends before the carrier forwards).
+  const tw = await twilioPost('/voice/incoming', { CallSid: 'CA900', From: caller, To: '+15550001111' });
+  const t = tw.body.match(/value="([0-9a-f]{32})"/)[1];
+  const twilio = new WebSocket(`${base.replace('http', 'ws')}/voice/stream`);
+  await new Promise(r => twilio.on('open', r));
+  twilio.send(JSON.stringify({ event: 'start', start: { streamSid: 'MZ9', callSid: 'CA900', customParameters: { t } } }));
+  for (let i = 0; i < 60 && !aiReceived.some(x => x.type === 'response.create'); i++) await sleep(25);
+  aiSocket.send(JSON.stringify({ type: 'response.function_call_arguments.done', call_id: 'f9', name: 'transfer_to_human', arguments: '{"reason":"طلب موظف"}' }));
+  for (let i = 0; i < 60 && !calls.some(c => /Calls\/CA900\.json/.test(c.url)); i++) await sleep(25);
+  const twiml = new URLSearchParams(String(calls.find(c => /Calls\/CA900\.json/.test(c.url)).body)).get('Twiml');
+  const timeout = Number(twiml.match(/timeout="(\d+)"/)[1]);
+  assert.ok(timeout < 25, `rings for ${timeout}s, less than the carrier's 25s`);
+  // You don't answer and the carrier forwards that transfer back to Twilio → refused, never a second AI.
+  const back = await twilioPost('/voice/incoming', { CallSid: 'CA901', From: caller, To: '+15550001111' });
+  assert.match(back.body, /<Reject reason="busy"\/>/);
+  // A normal new call from that number later is answered by the AI as usual.
+  const later = await twilioPost('/voice/incoming', { CallSid: 'CA902', From: caller, To: '+15550001111' });
+  assert.match(later.body, /<Connect><Stream/);
+  twilio.close();
 });

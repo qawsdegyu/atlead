@@ -816,7 +816,9 @@ async function loadSettings() {
       document.getElementById('phone-token').value = ph.twilio_auth_token || '';
       document.getElementById('phone-number').value = ph.twilio_number || '';
       document.getElementById('phone-transfer').value = ph.transfer_number || '';
-      document.getElementById('phone-timeout').value = String(ph.transfer_timeout || 20);
+      const pt = Number(ph.transfer_timeout) || 15;
+      document.getElementById('phone-timeout').value = String(pt >= 30 ? 30 : pt >= 18 ? 18 : 15);
+      document.getElementById('phone-mode').value = ph.mode === 'all' ? 'all' : 'no_answer';
       document.getElementById('phone-voice').value = ph.voice || 'marin';
       document.getElementById('phone-announce').checked = ph.announce_transcript !== false;
       const ac = s.ai_call || {};
@@ -875,7 +877,8 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
       twilio_auth_token: document.getElementById('phone-token').value,
       twilio_number: document.getElementById('phone-number').value.trim(),
       transfer_number: document.getElementById('phone-transfer').value.trim(),
-      transfer_timeout: Number(document.getElementById('phone-timeout').value) || 20,
+      transfer_timeout: Number(document.getElementById('phone-timeout').value) || 15,
+      mode: document.getElementById('phone-mode').value,
       voice: document.getElementById('phone-voice').value,
       announce_transcript: document.getElementById('phone-announce').checked
     },
@@ -1681,7 +1684,8 @@ document.getElementById('btn-phone-connect')?.addEventListener('click', async ()
         twilio_auth_token: document.getElementById('phone-token').value,
         twilio_number: document.getElementById('phone-number').value.trim(),
         transfer_number: document.getElementById('phone-transfer').value.trim(),
-        transfer_timeout: Number(document.getElementById('phone-timeout').value) || 20,
+        transfer_timeout: Number(document.getElementById('phone-timeout').value) || 15,
+        mode: document.getElementById('phone-mode').value,
         voice: document.getElementById('phone-voice').value,
         announce_transcript: document.getElementById('phone-announce').checked
       } })
@@ -1689,14 +1693,13 @@ document.getElementById('btn-phone-connect')?.addEventListener('click', async ()
   } catch { /* the check below reports what is missing */ }
   try {
     const r = await (await fetch('/api/phone/connect', { method: 'POST' })).json();
-    const f = r.forwarding;
+    const c = r.codes;
+    const row = (x) => `<div><span>${escapeHtml(x.label)}</span><code dir="ltr">${escapeHtml(x.code)}</code></div>`;
     box.innerHTML = `${r.success ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} ${escapeHtml(r.message || '')}`
-      + (f ? `<div class="phone-codes"><p>اطلب أحد هذه الأكواد من هاتفك (الخط الأردني) لتفعيل التحويل:</p>
-        <div><span>تحويل كل المكالمات للمساعد</span><code dir="ltr">${escapeHtml(f.all)}</code></div>
-        <div><span>إذا لم أرد خلال 20 ثانية</span><code dir="ltr">${escapeHtml(f.no_answer)}</code></div>
-        <div><span>إذا كان الخط مشغولاً</span><code dir="ltr">${escapeHtml(f.busy)}</code></div>
-        <div><span>إذا كان الهاتف مغلقاً</span><code dir="ltr">${escapeHtml(f.unreachable)}</code></div>
-        <div><span>إلغاء كل التحويلات</span><code dir="ltr">${escapeHtml(f.cancel_all)}</code></div></div>` : '');
+      + (c ? `<div class="phone-codes"><p>اطلب هذا الكود من هاتفك (الخط الأردني) واضغط اتصال لتفعيل التحويل:</p>
+        ${row(c.main)}
+        ${c.alternatives.length ? `<p style="margin-top: 6px;">أو كل حالة على حدة:</p>${c.alternatives.map(row).join('')}` : ''}
+        ${row(c.cancel)}</div>` : '');
   } catch (err) {
     box.innerHTML = `<i class="fa-solid fa-circle-xmark st-bad"></i> ${escapeHtml(err.message)}`;
   }

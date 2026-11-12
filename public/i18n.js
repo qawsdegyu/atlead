@@ -730,6 +730,13 @@
     "إذا كان الهاتف مغلقاً": "If the phone is off",
     "إلغاء كل التحويلات": "Cancel all forwarding",
     "هاتف": "Phone",
+    "متى يرد المساعد؟": "When does the assistant answer?",
+    "فقط عندما لا أرد، أو الخط مشغول، أو الهاتف مغلق (موصى به)": "Only when I do not answer, the line is busy, or the phone is off (recommended)",
+    "على كل المكالمات (التحويل يحتاج رقماً ثانياً)": "Every call (transfers need a second number)",
+    "في الوضع الموصى به يمكن أن يكون رقمك نفسه.": "In the recommended mode this can be your own number.",
+    "18 ثانية": "18 seconds",
+    "اطلب هذا الكود من هاتفك (الخط الأردني) واضغط اتصال لتفعيل التحويل:": "Dial this code from your phone (Jordanian line) and press call to turn on forwarding:",
+    "أو كل حالة على حدة:": "Or one case at a time:",
     'لم تُحلَّل هوية تصميمك بعد. اضغط «تعلّم من صفحتي» لقراءة منشوراتك على إنستغرام واستخراج الألوان والخطوط وأسلوب التصميم، لتخرج كل صورة جديدة بالأسلوب نفسه.': "Your design identity has not been analyzed yet. Press \"Learn from my page\" to read your Instagram posts and extract colors, fonts and design style, so every new image follows the same look."
   };
 

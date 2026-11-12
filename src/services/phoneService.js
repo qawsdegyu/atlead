@@ -21,11 +21,16 @@ const DEFAULTS = {
   twilio_auth_token: '',
   twilio_number: '',
   transfer_number: '',
-  transfer_timeout: 20,
+  // no_answer: your phone rings first; the AI answers only unanswered / busy / unreachable calls.
+  // all: the AI answers every call (transfers then need a second number).
+  mode: 'no_answer',
+  transfer_timeout: 15,
   voice: 'marin',
   announce_transcript: true
 };
 const pending = new Map(); // one-time stream tokens issued by /voice/incoming
+const transfersInFlight = new Map(); // caller number → time we rang the team for them (loop guard)
+const CARRIER_DELAY = 25; // seconds your phone rings before the carrier forwards to the AI
 const active = new Map(); // callSid → live call state
 
 const digits = (n) => String(n || '').replace(/\D/g, '');
@@ -35,7 +40,10 @@ const xml = (s) => String(s || '').replace(/[<>&"']/g, c => ({ '<': '&lt;', '>':
 class PhoneService {
   getConfig() {
     const cfg = { ...DEFAULTS, ...(storageService.getSettings().phone_ai || {}) };
-    cfg.transfer_timeout = Math.min(60, Math.max(10, Number(cfg.transfer_timeout) || 20));
+    cfg.mode = cfg.mode === 'all' ? 'all' : 'no_answer';
+    cfg.transfer_timeout = Math.min(60, Math.max(10, Number(cfg.transfer_timeout) || 15));
+    // The transfer must give up before the carrier forwards it back to the AI (no loop).
+    if (cfg.mode === 'no_answer') cfg.transfer_timeout = Math.min(cfg.transfer_timeout, CARRIER_DELAY - 7);
     cfg.twilio_number = e164(cfg.twilio_number);
     cfg.transfer_number = e164(cfg.transfer_number);
     return cfg;
@@ -95,6 +103,13 @@ class PhoneService {
     }
     // A call from our own line would loop.
     if (from && from === c.twilio_number) return '<?xml version="1.0" encoding="UTF-8"?><Response><Reject/></Response>';
+    // A transfer we just rang came back through the carrier's "no answer" forwarding: refuse it, so the
+    // transfer counts as missed (the caller hears the call-back message) instead of reaching the AI again.
+    const rang = transfersInFlight.get(from);
+    if (rang && Date.now() - rang < 90000) {
+      transfersInFlight.delete(from);
+      return '<?xml version="1.0" encoding="UTF-8"?><Response><Reject reason="busy"/></Response>';
+    }
     const token = crypto.randomBytes(16).toString('hex');
     pending.set(token, { callSid: body.CallSid, from, to: e164(body.To), forwardedFrom: e164(body.ForwardedFrom), at: Date.now() });
     for (const [k, v] of pending) if (Date.now() - v.at > 120000) pending.delete(k);
@@ -105,6 +120,7 @@ class PhoneService {
   /** Twilio → the transfer finished (answered, busy, no answer...). */
   afterDial(body = {}, token = '') {
     const status = String(body.DialCallStatus || '');
+    for (const [k, v] of transfersInFlight) if (Date.now() - v > 90000) transfersInFlight.delete(k);
     if (status === 'completed' || status === 'answered') return '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>';
     const callSid = body.CallSid;
     const state = [...active.values()].find(s => s.token === token || s.callSid === callSid) || this._lastByCall?.get(callSid);
@@ -131,10 +147,10 @@ class PhoneService {
     const base = callService.instructions(session, { ...conv, ...known }, 'ar');
     return `${base}
 
-هذه مكالمة هاتفية واردة على رقم الشركة: العميل هو اللي اتصل.
+هذه مكالمة هاتفية واردة على رقم الشركة: العميل هو اللي اتصل.${c.mode === 'no_answer' ? '\n- العميل اتصل على رقم الفريق وما حدا قدر يرد، فأنت بترد بدالهم. لا تقل إن الفريق غير موجود؛ قل إنك مساعد atlead الذكي وبتقدر تساعده هلق.' : ''}
 - ابدأ بالترحيب باسم atlead${c.announce_transcript ? ' وأخبره بجملة قصيرة أن المكالمة تُسجَّل نصياً لخدمته بشكل أفضل' : ''}، واسأله كيف بتقدر تساعده. لا تبدأ بالأسئلة التأهيلية.
 - جاوب على سؤاله من معلومات الشركة فقط. الأسئلة التأهيلية والحجز فقط إذا بيّن اهتمام بالشراء.
-- إذا طلب خدمة العملاء أو موظف أو مدير، أو عنده شكوى أو مشكلة ما بتقدر تحلها من المعلومات، أو أصرّ على إنسان: قل له "لحظة، رح أحوّلك لخدمة العملاء" ثم استخدم transfer_to_human مع سبب مختصر.
+- إذا طلب خدمة العملاء أو موظف أو مدير، أو عنده شكوى أو مشكلة ما بتقدر تحلها من المعلومات، أو أصرّ على إنسان: قل له "لحظة، رح أحاول أحوّلك لخدمة العملاء، وإذا كانوا مشغولين رح يتصلوا فيك بأقرب وقت" ثم استخدم transfer_to_human مع سبب مختصر.
 - لا تقرأ روابط أو إيميلات بصوتك. بعد حجز الاجتماع قل إن التفاصيل ورابط الاجتماع رح يوصلوه على واتساب على نفس الرقم.
 - إذا ما سمعت العميل بوضوح اطلب منه يعيد بلطف.`;
   }
@@ -304,6 +320,7 @@ class PhoneService {
     if (state.transferred) return { transferred: true };
     state.transferred = true;
     state.reason = reason;
+    if (state.from) transfersInFlight.set(state.from, Date.now());
     try {
       await this.twilio('post', `/Calls/${state.callSid}.json`, { Twiml: this.dialTwiml(state.from || c.twilio_number, state.token) });
     } catch (e) {
@@ -345,9 +362,26 @@ class PhoneService {
       return { success: false, message: `تعذّر ربط الرقم: ${e.response?.data?.message || e.message}` };
     }
     const fwd = c.twilio_number.replace('+', '00');
+    const codes = c.mode === 'no_answer'
+      ? {
+        main: { label: 'إذا لم أرد خلال 25 ثانية، أو كان الخط مشغولاً، أو الهاتف مغلقاً', code: `**004*${fwd}**${CARRIER_DELAY}#` },
+        alternatives: [
+          { label: 'إذا لم أرد فقط', code: `**61*${fwd}**${CARRIER_DELAY}#` },
+          { label: 'إذا كان الخط مشغولاً فقط', code: `**67*${fwd}#` },
+          { label: 'إذا كان الهاتف مغلقاً فقط', code: `**62*${fwd}#` }
+        ],
+        cancel: { label: 'إلغاء هذه التحويلات', code: '##004#' }
+      }
+      : {
+        main: { label: 'تحويل كل المكالمات للمساعد', code: `**21*${fwd}#` },
+        alternatives: [],
+        cancel: { label: 'إلغاء التحويل', code: '##21#' }
+      };
     return {
+      mode: c.mode,
+      codes,
       success: true,
-      message: `تم ربط رقم Twilio ${c.twilio_number} بالمساعد.${this.openaiKey() ? '' : ' ينقص OpenAI API Key (بطاقة مكالمة الـ AI).'}${c.transfer_number ? '' : ' ينقص رقم خدمة العملاء للتحويل.'}`,
+      message: `تم ربط رقم Twilio ${c.twilio_number} بالمساعد.${this.openaiKey() ? '' : ' ينقص OpenAI API Key (بطاقة مكالمة الـ AI).'}${c.transfer_number ? '' : ' ينقص رقم خدمة العملاء للتحويل.'}${c.mode === 'all' && c.transfer_number && c.transfer_number === e164(c.my_number) ? ' تنبيه: في وضع "كل المكالمات" لا يمكن التحويل إلى نفس الرقم المحوَّل.' : ''}`,
       forwarding: {
         all: `**21*${fwd}#`,
         no_answer: `**61*${fwd}**20#`,

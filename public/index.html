@@ -1059,11 +1059,18 @@
               </div>
               <div class="grid-2">
                 <div class="form-group"><label class="form-label">رقم Twilio (تُحوَّل إليه المكالمات)</label><input type="text" id="phone-number" class="form-control" placeholder="+1..." dir="ltr"></div>
-                <div class="form-group"><label class="form-label">رقم خدمة العملاء (يرن عند التحويل)</label><input type="text" id="phone-transfer" class="form-control" placeholder="+9627..." dir="ltr"></div>
+                <div class="form-group"><label class="form-label">رقم خدمة العملاء (يرن عند التحويل)</label><input type="text" id="phone-transfer" class="form-control" placeholder="+9627..." dir="ltr"><span class="form-hint">في الوضع الموصى به يمكن أن يكون رقمك نفسه.</span></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">متى يرد المساعد؟</label>
+                <select id="phone-mode" class="form-control">
+                  <option value="no_answer">فقط عندما لا أرد، أو الخط مشغول، أو الهاتف مغلق (موصى به)</option>
+                  <option value="all">على كل المكالمات (التحويل يحتاج رقماً ثانياً)</option>
+                </select>
               </div>
               <div class="grid-2">
                 <div class="form-group"><label class="form-label">مدة الرنين قبل اعتبار التحويل فائتاً</label>
-                  <select id="phone-timeout" class="form-control"><option value="15">15 ثانية</option><option value="20">20 ثانية</option><option value="30">30 ثانية</option></select></div>
+                  <select id="phone-timeout" class="form-control"><option value="15">15 ثانية</option><option value="18">18 ثانية</option><option value="30">30 ثانية</option></select></div>
                 <div class="form-group"><label class="form-label">صوت المساعد</label>
                   <select id="phone-voice" class="form-control"><option value="marin">Marin</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="sage">Sage</option><option value="ash">Ash</option></select></div>
               </div>

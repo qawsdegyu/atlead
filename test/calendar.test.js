@@ -140,3 +140,14 @@ test('agreeing a time is never interrupted by the generic handoff message', asyn
   const r = await ai.generateReply(convOffered(), 'بدي اجتماع، شو الأوقات؟');
   assert.equal(crm.shouldHandoff(r), false);
 });
+
+test('"13/11 الساعة 11:00" is read as 11:00 (not 01:00): a busy time gets "not available", not "outside hours"', async () => {
+  const [, m, d] = tomorrow.split('-').map(Number);
+  assert.equal(cal.choiceFrom(`بناسبني بكرا ${d}/${m} الساعة 11:00`, ''), `${tomorrow} 11:00`);
+  assert.equal(cal.choiceFrom(`${d}/${m} الساعة 4 العصر`, ''), `${tomorrow} 16:00`);
+  answers = [{ reply_text: 'تمام', buying_probability: 60 }];
+  const r = await ai.generateReply(conv(), `بناسبني بكرا ${d}/${m} الساعة 11:00`);
+  assert.equal(inserted.length, 0);
+  assert.match(r.reply_text, /غير متاح/);
+  assert.doesNotMatch(r.reply_text, /خارج أوقات/);
+});

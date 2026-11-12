@@ -338,7 +338,7 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
     const text = this.normalizeTimes(customerText);
     const offered = this.offeredIn(lastBotText);
     // Explicit date and time from the customer: use it (the calendar check decides if it is free).
-    const explicit = this.offeredIn(text.replace(/(\d{1,2})\s*(?:ص|الصبح|صباحاً|am)\b/gi, '$1:00').replace(/الساعة\s*(\d{1,2})(?!:)/g, 'الساعة $1:00'));
+    const explicit = this.offeredIn(text.replace(/(\d{1,2})\s*(?:ص|الصبح|صباحاً|am)\b/gi, '$1:00').replace(/الساعة\s*(\d{1,2})(?![:\d])/g, 'الساعة $1:00'));
     if (explicit.length === 1) return explicit[0];
     if (!offered.length) return null;
     const hm = text.match(/(\d{1,2}):(\d{2})/) || text.match(/(?:الساعة|at)\s*(\d{1,2})\b/i);

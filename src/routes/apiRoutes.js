@@ -406,6 +406,52 @@ router.post('/conversations/:id/reply', async (req, res) => {
 });
 
 // --- LEADS & CRM ROUTES ---
+// --- DELETE (dashboard trash buttons). Removes the data locally and from Supabase.
+router.delete('/conversations/:id', async (req, res) => {
+  const out = storageService.deleteConversation(req.params.id);
+  if (!out) return res.status(404).json({ success: false, message: 'المحادثة غير موجودة' });
+  const db = await supabaseService.deleteConversation(out.conversation);
+  res.json({ success: true, message: 'تم حذف المحادثة وبيانات العميل', db });
+});
+
+// A customer in the CRM: the record and (by default) the conversation behind it.
+router.delete('/leads/:id', async (req, res) => {
+  const lead = storageService.getLeads().find(l => l.id === req.params.id);
+  if (!lead) return res.status(404).json({ success: false, message: 'العميل غير موجود' });
+  const conv = lead.conversation_id && req.query.keep_conversation !== '1' ? storageService.getConversationById(lead.conversation_id) : null;
+  if (conv) {
+    const out = storageService.deleteConversation(conv.id);
+    await supabaseService.deleteConversation(out.conversation);
+  }
+  storageService.deleteLead(lead.id);
+  await supabaseService.deleteLead(lead);
+  res.json({ success: true, message: conv ? 'تم حذف العميل ومحادثته' : 'تم حذف العميل' });
+});
+
+router.delete('/comments/:id', async (req, res) => {
+  const c = storageService.deleteComment(req.params.id);
+  if (!c) return res.status(404).json({ success: false, message: 'التعليق غير موجود' });
+  await supabaseService.deleteComment(c.comment_id);
+  res.json({ success: true, message: 'تم حذف التعليق' });
+});
+
+// --- EXPORT to Excel: ?scope=all|leads|conversations|messages|comments|appointments|posts&lang=ar|en
+router.get('/export', async (req, res) => {
+  try {
+    const exportService = require('../services/exportService');
+    const scope = String(req.query.scope || 'all');
+    const lang = req.query.lang === 'en' ? 'en' : 'ar';
+    const buf = await exportService.build(scope, lang);
+    const day = new Date().toISOString().slice(0, 10);
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="atlead-${scope}-${day}.xlsx"`);
+    res.send(buf);
+  } catch (e) {
+    console.error('[Export]', e);
+    res.status(400).json({ success: false, message: e.message });
+  }
+});
+
 router.get('/leads', (req, res) => {
   const list = storageService.getLeads();
   res.json({ success: true, leads: list });

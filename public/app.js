@@ -157,6 +157,8 @@ function renderConversationList(filter = 'all') {
 }
 
 function selectConversation(id, { open = false } = {}) {
+  const delBtn = document.getElementById('btn-delete-chat');
+  if (delBtn) delBtn.style.display = id ? '' : 'none';
   // On a phone the chat opens full screen only when someone taps a conversation.
   if (open) document.querySelector('.inbox-layout')?.classList.add('chat-open');
   activeConvId = id;
@@ -432,9 +434,21 @@ function renderLeadsTable(leads) {
         <button class="btn btn-secondary btn-sm" onclick="notifyLead('${escapeHtml(l.id)}')" title="إرسال تفاصيل العميل للموظف بالإيميل">
           <i class="fa-solid fa-envelope"></i>
         </button>
+        <button class="btn btn-secondary btn-sm btn-danger-ghost" data-del-lead="${escapeHtml(l.id)}" data-name="${escapeHtml(l.name || '')}" title="حذف العميل">
+          <i class="fa-solid fa-trash"></i>
+        </button>
       </td>
     `;
     tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('[data-del-lead]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(`حذف العميل «${btn.dataset.name}» ومحادثته نهائياً؟ لا يمكن التراجع عن الحذف.`)) return;
+      await deleteItem(`/api/leads/${encodeURIComponent(btn.dataset.delLead)}`);
+      if (activeConvId && !conversations.some(c => c.id === activeConvId)) activeConvId = null;
+      loadLeads(); loadConversations();
+    });
   });
 
   tbody.querySelectorAll('.assign-select').forEach(sel => {
@@ -524,7 +538,7 @@ function renderCommentsTable(comments) {
   tbody.innerHTML = '';
 
   if (comments.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">لا توجد تعليقات مسجلة بعد</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">لا توجد تعليقات مسجلة بعد</td></tr>`;
     return;
   }
 
@@ -553,6 +567,7 @@ function renderCommentsTable(comments) {
         `}
       </td>
       <td style="font-size: 11px; color: var(--text-muted);">${formatTime(c.created_at)}</td>
+      <td><button class="btn btn-secondary btn-sm btn-danger-ghost" data-del-comment="${escapeHtml(c.comment_id)}" title="حذف التعليق"><i class="fa-solid fa-trash"></i></button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -1632,5 +1647,51 @@ document.getElementById('btn-calendar-test')?.addEventListener('click', async ()
       + (r.service_account_email ? `<div class="form-hint" style="margin-top: 6px;">حساب الخدمة: <code dir="ltr">${escapeHtml(r.service_account_email)}</code></div>` : '');
   } catch (err) {
     box.innerHTML = `<i class="fa-solid fa-circle-xmark st-bad"></i> ${escapeHtml(err.message)}`;
+  }
+});
+
+// Delete (conversations, customers, comments) and Excel export.
+async function deleteItem(url) {
+  try {
+    const data = await (await fetch(url, { method: 'DELETE' })).json();
+    showToast(data.message || (data.success ? 'تم الحذف' : 'فشل الحذف'), data.success ? 'success' : 'error');
+    return data.success;
+  } catch (err) {
+    showToast('فشل الحذف', 'error');
+    return false;
+  }
+}
+
+document.getElementById('btn-delete-chat')?.addEventListener('click', async () => {
+  const conv = conversations.find(c => c.id === activeConvId);
+  if (!conv) return;
+  if (!confirm(`حذف محادثة «${conv.customer_name || 'العميل'}» وكل رسائلها وبياناتها نهائياً؟ لا يمكن التراجع عن الحذف.`)) return;
+  if (!(await deleteItem(`/api/conversations/${encodeURIComponent(conv.id)}`))) return;
+  activeConvId = null;
+  document.querySelector('.inbox-layout')?.classList.remove('chat-open');
+  document.getElementById('btn-delete-chat').style.display = 'none';
+  document.getElementById('active-chat-name').textContent = 'اختر محادثة لعرضها';
+  document.getElementById('active-chat-channel').textContent = '-';
+  document.getElementById('active-chat-badge-area').innerHTML = '';
+  document.getElementById('chat-messages').innerHTML = '';
+  loadConversations();
+});
+
+document.addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-del-comment]');
+  if (del) {
+    if (!confirm('حذف هذا التعليق من السجل نهائياً؟')) return;
+    if (await deleteItem(`/api/comments/${encodeURIComponent(del.dataset.delComment)}`)) loadComments();
+    return;
+  }
+  const exp = e.target.closest('[data-export]');
+  if (exp) {
+    const lang = localStorage.getItem('atlead_lang') === 'en' ? 'en' : 'ar';
+    const link = document.createElement('a');
+    link.href = `/api/export?scope=${encodeURIComponent(exp.dataset.export)}&lang=${lang}`;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   }
 });

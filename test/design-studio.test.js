@@ -26,7 +26,7 @@ function fakeWorld({ proFails = false } = {}) {
     const all = JSON.stringify(b.messages);
     let json = {};
     if (all.includes('reverse-engineer')) json = { summary_ar: 'هوية كحلية بسيطة', palette: [{ hex: '#0B1F3A', role: 'background' }, { hex: '#3B82F6', role: 'accent' }, { hex: 'blue', role: 'bad' }], typography: 'bold Arabic sans', layout: 'headline top', logo_usage: 'bottom-left small', mood: 'calm, premium', dont: ['neon'], art_direction_en: 'Navy background, blue accents, bold Arabic headline at top.' };
-    else if (all.includes('post concepts')) json = { concepts: [1, 2, 3].map(n => ({ style: `مفهوم ${n}`, headline: `عنوان ${n}`, prompt: `concept ${n}` })) };
+    else if (all.includes('post concepts')) json = { concepts: [1, 2, 3].map(n => ({ style: `مفهوم ${n}`, headline: n === 3 ? 'عنوان عربي' : `Headline ${n}`, prompt: `concept ${n}` })) };
     else if (all.includes('الطلب الجديد')) json = { caption: '**كابشن أقصر**\n#atlead', reply: 'قصّرته' };
     return { choices: [{ message: { content: JSON.stringify(json) } }] };
   });
@@ -63,7 +63,7 @@ test('new posts are generated with Nano Banana Pro, in 4:5, with the brand refer
   const p = await mk.createPlan({ customTopic: 'سرعة الرد' });
   assert.equal(p.images.length, 3);
   assert.ok(p.images.every(i => i.engine === 'Nano Banana Pro'));
-  assert.deepEqual(p.images.map(i => i.headline), ['عنوان 1', 'عنوان 2', 'عنوان 3']);
+  assert.deepEqual(p.images.map(i => i.headline), ['Headline 1', 'Headline 2', 'Never miss a customer again'], 'English posts never get an Arabic headline on the image');
   const gen = calls.filter(c => c.body?.modalities);
   assert.equal(gen[0].body.model, 'google/gemini-3-pro-image');
   assert.equal(gen[0].body.image_config.aspect_ratio, '4:5');

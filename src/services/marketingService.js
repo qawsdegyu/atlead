@@ -25,7 +25,7 @@ const KEEP_PLANS = 80;
 const LATE_LIMIT_MIN = 90; // a post that is this late (server was down) is not published blindly
 const esc = telegram.esc;
 
-const DEFAULTS = { enabled: true, morning_time: '09:00', language: 'ar', free_image_fallback: true, publish_facebook: true, publish_instagram: true, publish_telegram_channel: false };
+const DEFAULTS = { enabled: true, morning_time: '09:00', language: 'en', free_image_fallback: true, publish_facebook: true, publish_instagram: true, publish_telegram_channel: false };
 
 const FALLBACK_TOPICS = [
   { title: 'ليش العملاء بيروحوا لغيرك؟ سرعة الرد', angle: 'العميل اللي ما بينرد عليه بأول دقائق بيشتري من غيرك — كيف الرد الفوري بيرفع المبيعات.', why: 'مشكلة يومية عند أغلب الشركات', format: 'مشكلة وحل' },
@@ -122,6 +122,7 @@ class MarketingService {
 
   listPlans(){ return read().plans.map(p => this.view(p)); }
   getPlan(id) { return read().plans.find(p => p.id === id) || null; }
+  allPlans() { return read().plans; }
 
   savePlan(plan) {
     const data = read();
@@ -163,9 +164,18 @@ class MarketingService {
     return parts.join('\n') || 'شركة تقدم أنظمة مبيعات ذكية وأتمتة للشركات.';
   }
 
+  /** On-image headline in the post language (an English post never gets Arabic text on the image). */
+  headlineFor(headline, topic = {}) {
+    const h = String(headline || '').trim().slice(0, 80);
+    if (this.getConfig().language !== 'en') return h.slice(0, 80);
+    if (h && !/[\u0600-\u06FF]/.test(h)) return h;
+    const t = String(topic.title || '');
+    return t && !/[\u0600-\u06FF]/.test(t) ? t.slice(0, 60) : 'Never miss a customer again';
+  }
+
   langRule() {
     const l = this.getConfig().language;
-    if (l === 'en') return 'اكتب كل النصوص بالإنجليزية (احترافي وودود).';
+    if (l === 'en') return 'اللغة: اكتب كل النصوص بالإنجليزية فقط (احترافية وودودة) — العنوان والكابشن والدعوة للتفاعل والهاشتاغات. ممنوع أي كلمة عربية.';
     if (l === 'both') return 'اكتب النص بالعربية (لهجة أردنية بيضاء خفيفة) ثم تحته ترجمة إنجليزية مختصرة.';
     return 'اكتب بالعربية بلهجة أردنية بيضاء خفيفة ومفهومة لكل العرب، بدون تكلّف.';
   }
@@ -398,15 +408,15 @@ For each concept write:
 Return JSON only: {"concepts":[{"style":"اسم المفهوم بالعربي (كلمتين)","headline":"...","prompt":"..."}]}`, 0.85);
       const list = (out.concepts || out.prompts || []).filter(p => p && p.prompt).slice(0, 3).map(p => ({
         style: String(p.style || 'تصميم').slice(0, 40),
-        headline: String(p.headline || '').slice(0, 80),
-        prompt: `${String(p.prompt).slice(0, 1200)} BRAND: ${brand} ${fixed(String(p.headline || '').slice(0, 80))}`
+        headline: this.headlineFor(p.headline, topic),
+        prompt: `${String(p.prompt).slice(0, 1200)} BRAND: ${brand} ${fixed(this.headlineFor(p.headline, topic))}`
       }));
       if (list.length) return list;
     } catch (e) {
       console.error('[Marketing] image prompts failed:', e.response?.data?.error?.message || e.message);
     }
     const subject = `${topic.title}. ${topic.angle || ''}`.slice(0, 300);
-    const h = String(topic.title || '').slice(0, 60);
+    const h = this.headlineFor(topic.title, topic);
     return [
       { style: 'صورة واقعية', headline: h, prompt: `Photorealistic scene of a confident Arab business owner in a modern Amman office reviewing customer messages on a phone, concept: ${subject}. Natural window light, 50mm lens, shallow depth of field, headline on a solid brand-colour panel at the top. BRAND: ${brand} ${fixed(h)}` },
       { style: 'تصميم طباعي', headline: h, prompt: `Bold typographic post: the headline is the hero, centred, supported by one glossy 3D chat-bubble icon, clean background in the brand colours, generous margins. Concept: ${subject}. BRAND: ${brand} ${fixed(h)}` },
@@ -428,10 +438,10 @@ ${this.companyBrief()}`;
 
 قواعد:
 - أول سطر لازم يوقف التمرير (سؤال أو جملة صادمة بلطف).
-- آخر سطر دعوة واضحة للتفاعل: إما "اكتب (تفاصيل) بالتعليقات وبنبعتلك على الخاص" أو "راسلنا على الخاص" — (البوت عندنا بيرد على التعليقات تلقائياً ويحولها لمحادثة خاصة).
+- آخر سطر دعوة واضحة للتفاعل: ${this.getConfig().language === 'en' ? 'إما "Comment DETAILS and we will DM you" أو "Send us a message"' : 'إما "اكتب (تفاصيل) بالتعليقات وبنبعتلك على الخاص" أو "راسلنا على الخاص"'} — (البوت عندنا بيرد على التعليقات تلقائياً ويحولها لمحادثة خاصة).
 - إيموجي باعتدال، بدون مبالغة ولا وعود كاذبة ولا أسعار.
 - لا تستخدم Markdown (لا ** ولا #) داخل النص.
-- لكل كابشن 5-8 هاشتاغات مناسبة (عربي وإنجليزي) بحقل منفصل.
+- لكل كابشن 5-8 هاشتاغات مناسبة ${this.getConfig().language === 'en' ? '(بالإنجليزية فقط)' : '(عربي وإنجليزي)'} بحقل منفصل.
 ${this.langRule()}
 
 أعد JSON فقط: {"captions":[{"style":"قصير وجذاب","text":"...","hashtags":["#..."]}]}`;
@@ -446,6 +456,18 @@ ${this.langRule()}
       if (list.length) return list;
     } catch (e) {
       console.error('[Marketing] captions failed:', e.response?.data?.error?.message || e.message);
+    }
+    if (this.getConfig().language === 'en') {
+      const etags = ['#atlead', '#SalesAutomation', '#AI', '#Chatbot', '#CustomerExperience', '#Jordan', '#SmallBusiness'];
+      const hasAr = (t) => /[\u0600-\u06FF]/.test(t || '');
+      const title = hasAr(topic.title) ? 'Never lose a customer to a late reply' : topic.title;
+      const angle = hasAr(topic.angle) ? 'Customers buy from whoever answers first. An AI sales assistant replies in seconds, day and night.' : (topic.angle || '');
+      const ecta = 'Comment "DETAILS" and we will send you everything in a private message.';
+      return [
+        { style: 'Short hook', text: `${title}\n${angle}\n\n${ecta}`, hashtags: etags },
+        { style: 'Problem and solution', text: `Most businesses face this every single day.\n${angle || title}\n\nThe answer is not more staff. It is a system that works with you 24/7.\n\n${ecta}`, hashtags: etags },
+        { style: 'Educational', text: `${title}\n\n- Faster replies to every customer\n- No follow-up slips through\n- All customer data in one place\n\n${ecta}`, hashtags: etags }
+      ];
     }
     const tags = ['#atlead', '#مبيعات', '#أتمتة', '#ذكاء_اصطناعي', '#الأردن', '#AI', '#Sales'];
     const cta = 'اكتب "تفاصيل" بالتعليقات وبنبعتلك على الخاص 👇';

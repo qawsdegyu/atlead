@@ -416,6 +416,47 @@ class SupabaseService {
     }
   }
 
+  /** Remove a conversation, its messages and its customer records from the database. */
+  async deleteConversation(conv) {
+    const client = this.getClient();
+    if (!client || !conv) return { skipped: true };
+    try {
+      await client.from('messages').delete().eq('conversation_local_id', conv.id);
+      await client.from('leads').delete().eq('conversation_local_id', conv.id);
+      await client.from('conversations').delete().eq('local_id', conv.id);
+      // Older rows saved before local_id existed.
+      if (conv.channel && conv.external_user_id) {
+        await client.from('conversations').delete().eq('channel', conv.channel).eq('external_user_id', conv.external_user_id);
+      }
+      this._convUuidCache.delete(conv.id);
+      this._lastHash.conversation.delete(conv.id);
+      return { success: true };
+    } catch (err) {
+      console.error('Supabase deleteConversation error:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  async deleteLead(lead) {
+    const client = this.getClient();
+    if (!client || !lead) return { skipped: true };
+    try {
+      await client.from('leads').delete().eq('local_id', lead.id);
+      this._lastHash.lead.delete(lead.id);
+      return { success: true };
+    } catch (err) { return { success: false, error: err.message }; }
+  }
+
+  async deleteComment(commentId) {
+    const client = this.getClient();
+    if (!client || !commentId) return { skipped: true };
+    try {
+      await client.from('comments').delete().eq('comment_id', commentId);
+      this._lastHash.comment.delete(commentId);
+      return { success: true };
+    } catch (err) { return { success: false, error: err.message }; }
+  }
+
   async saveComment(comment) {
     if (!this.getClient() || !comment) return null;
     try {

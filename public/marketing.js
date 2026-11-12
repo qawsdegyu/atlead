@@ -593,7 +593,7 @@
     $('mk-keywords').value = (m.keywords || []).join('، ');
     $('mk-business').value = m.business_description || '';
     $('mk-morning-time').value = m.morning_time || '09:00';
-    $('mk-language').value = m.language || 'ar';
+    $('mk-language').value = m.language || 'en';
     $('mk-brand-style').value = m.brand_style || '';
     $('mk-image-model').value = m.image_model || '';
     $('mk-enabled').checked = m.enabled !== false;

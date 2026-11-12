@@ -316,6 +316,34 @@ class StorageService {
     return readJsonFile(COMMENTS_FILE, []);
   }
 
+  /** Delete a conversation (with its messages) and the customer record built from it. */
+  deleteConversation(id) {
+    const list = this.getConversations();
+    const conv = list.find(c => c.id === id);
+    if (!conv) return null;
+    writeJsonFile(CONVERSATIONS_FILE, list.filter(c => c.id !== id));
+    const leads = this.getLeads();
+    const removedLeads = leads.filter(l => l.conversation_id === id);
+    if (removedLeads.length) writeJsonFile(LEADS_FILE, leads.filter(l => l.conversation_id !== id));
+    return { conversation: conv, leads: removedLeads };
+  }
+
+  deleteLead(id) {
+    const leads = this.getLeads();
+    const lead = leads.find(l => l.id === id);
+    if (!lead) return null;
+    writeJsonFile(LEADS_FILE, leads.filter(l => l.id !== id));
+    return lead;
+  }
+
+  deleteComment(commentId) {
+    const list = this.getComments();
+    const c = list.find(x => x.comment_id === commentId);
+    if (!c) return null;
+    writeJsonFile(COMMENTS_FILE, list.filter(x => x.comment_id !== commentId));
+    return c;
+  }
+
   saveComment(commentData) {
     const list = this.getComments();
     const index = list.findIndex(c => c.comment_id === commentData.comment_id);

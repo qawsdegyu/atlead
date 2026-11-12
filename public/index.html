@@ -132,8 +132,11 @@
                 </div>
               </div>
 
-              <div id="active-chat-badge-area">
-                <!-- Bot status badge -->
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div id="active-chat-badge-area">
+                  <!-- Bot status badge -->
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm btn-danger-ghost" id="btn-delete-chat" title="حذف المحادثة" style="display: none;"><i class="fa-solid fa-trash"></i></button>
               </div>
             </div>
 
@@ -232,6 +235,10 @@
             <p class="page-lede">كل عميل، نسبة شرائه ومرحلته — متزامن مع Google Sheets.</p>
           </div>
           <div style="display: flex; gap: 10px;">
+            <button class="btn btn-secondary" data-export="leads">
+              <i class="fa-solid fa-file-excel"></i>
+              <span>تنزيل Excel</span>
+            </button>
             <button class="btn btn-secondary" id="btn-open-sheet-script-modal">
               <i class="fa-brands fa-google"></i>
               <span>طريقة ربط Google Sheet</span>
@@ -319,6 +326,10 @@
             <p class="page-lede">يرد البوت على التعليقات، ويرسل رسالة خاصة لكل مهتم.</p>
           </div>
           <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px;">
+            <button class="btn btn-secondary" data-export="comments">
+              <i class="fa-solid fa-file-excel"></i>
+              <span>تنزيل Excel</span>
+            </button>
             <button class="btn btn-primary" id="btn-simulate-comment-modal">
               <i class="fa-solid fa-wand-magic-sparkles"></i>
               <span>جرّب تعليقاً</span>
@@ -343,6 +354,7 @@
                   <th>الرد العام على التعليق</th>
                   <th>الرسالة الخاصة (DM المرسلة)</th>
                   <th>التاريخ</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="comments-table-body">
@@ -587,8 +599,8 @@
                 <div class="form-group">
                   <label class="form-label">لغة المنشورات</label>
                   <select id="mk-language" class="form-control">
-                    <option value="ar">عربي (لهجة محكية مبسطة)</option>
                     <option value="en">English</option>
+                    <option value="ar">عربي (لهجة محكية مبسطة)</option>
                     <option value="both">عربي + English</option>
                   </select>
                 </div>
@@ -673,6 +685,20 @@
         </div>
 
         <!-- System health check -->
+        <div class="glass-card" style="margin-bottom: 20px;">
+          <h4 style="font-size: 15px; margin-bottom: 12px;"><i class="fa-solid fa-file-excel" style="color: #34d399; margin-left: 8px;"></i> تنزيل البيانات (Excel)</h4>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <button type="button" class="btn btn-primary btn-sm" data-export="all"><i class="fa-solid fa-download"></i> كل البيانات</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-export="leads">العملاء</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-export="conversations">المحادثات</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-export="messages">كل الرسائل</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-export="comments">التعليقات</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-export="appointments">المواعيد</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-export="posts">المنشورات</button>
+          </div>
+          <p class="form-hint" style="margin-top: 8px;">«كل البيانات» ملف واحد بصفحة لكل نوع.</p>
+        </div>
+
         <div class="glass-card" style="margin-bottom: 20px;">
           <h4 style="font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
             <span><i class="fa-solid fa-stethoscope" style="color: #34d399; margin-left: 8px;"></i> فحص النظام</span>

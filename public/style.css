@@ -1374,3 +1374,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
 .st-ok { color: var(--accent-emerald); }
 .st-bad { color: var(--accent-rose, #f43f5e); }
 .st-warn { color: var(--accent-amber); }
+
+/* Delete buttons */
+.btn-danger-ghost:hover { color: var(--accent-rose, #f43f5e); border-color: rgba(244, 63, 94, .5); background: rgba(244, 63, 94, .08); }

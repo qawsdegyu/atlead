@@ -664,6 +664,21 @@
     "رابط الاجتماع": "Meeting link",
     "جاري فحص التقويم... (احفظ الإعدادات أولاً إذا عدّلتها)": "Checking the calendar... (save the settings first if you changed them)",
     "حساب الخدمة:": "Service account:",
+    "حذف المحادثة": "Delete conversation",
+    "حذف العميل": "Delete customer",
+    "حذف التعليق": "Delete comment",
+    "تنزيل Excel": "Download Excel",
+    "تنزيل البيانات (Excel)": "Download data (Excel)",
+    "كل البيانات": "All data",
+    "العملاء": "Customers",
+    "المحادثات": "Conversations",
+    "كل الرسائل": "All messages",
+    "التعليقات": "Comments",
+    "المواعيد": "Appointments",
+    "المنشورات": "Posts",
+    "«كل البيانات» ملف واحد بصفحة لكل نوع.": "\"All data\" is one file with a sheet for each type.",
+    "تم الحذف": "Deleted",
+    "فشل الحذف": "Delete failed",
     'لم تُحلَّل هوية تصميمك بعد. اضغط «تعلّم من صفحتي» لقراءة منشوراتك على إنستغرام واستخراج الألوان والخطوط وأسلوب التصميم، لتخرج كل صورة جديدة بالأسلوب نفسه.': "Your design identity has not been analyzed yet. Press \"Learn from my page\" to read your Instagram posts and extract colors, fonts and design style, so every new image follows the same look."
   };
 

@@ -251,6 +251,7 @@ class AiService {
 - مرحلة العميل السابقة: ${conversation.lead_stage || 'new'}
 - نسبة الشراء السابقة: ${Number(conversation.interest_score) || 0}%
 ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} يوم من آخر رسالة — كمّل معه من وين ما وقفتوا.` : ''}
+${conversation.handoff_at ? `- مهم: العميل تحوّل لموظف المبيعات${conversation.assigned_to_name ? ` (${conversation.assigned_to_name})` : ''} وبانتظار تواصله. لا تعيد رسالة التحويل ولا تعطِ موعداً جديداً. جاوب على سؤاله من المرجع فقط، وإذا سأل متى رح يتواصلوا معه قل إن الموظف سيتواصل معه قريباً.` : ''}
 
 قم بتحليل الرسالة، وتوليد الرد المناسب حسب قواعد atlead الدقيقة، وتحديد حالة العميل وتصنيفه، وما إذا وصل لمرحلة الديل/التحويل للبشري.
 إذا طلب العميل رابطاً أو مثالاً أو ملفاً أو تفاصيل عن مشروع سابق، ابحث في المرجع الرسمي عن الرابط/الملف المطابق وانسخه كما هو في الرد. لا تستبدل الرابط برد عام، ولا تذكر GitHub كمصدر؛ المصدر التشغيلي هو Supabase knowledge_docs.
@@ -262,6 +263,8 @@ ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} ي
 4. الفويس: الرسائل الصوتية بتوصلك مكتوبة (تفريغ للكلام)؛ رد عليها نصياً كأنها رسالة مكتوبة.
 5. ردك مختصر وواضح (2-5 جمل)، جاوب السؤال أولاً، وبعدين سؤال واحد بس لفهم احتياجه.
 6. التنسيق: الرد بيوصل على واتساب/إنستغرام/ماسنجر — لا تستخدم Markdown (لا [نص](رابط) ولا ** ولا #). اكتب الرابط كامل لحاله مثل https://agsco.shop
+7. لا تخمّن أبداً: جاوب فقط من المرجع الرسمي وبيانات العميل. إذا المعلومة مش موجودة بالمرجع، قل بوضوح إنها بدها تأكيد من الفريق واعرض إنهم يتواصلوا معه — لا تخترع.
+8. الأرقام: ممنوع تذكر أي رقم (سعر، تكلفة، نسبة، مدة تنفيذ، عدد عملاء، نتائج) إلا إذا كان مكتوب حرفياً بالمرجع. الأسعار تحديداً: لا سعر ولا رينج ولا "يبدأ من" — السعر بيتحدد بعد الاستشارة المجانية.
 أعد النتيجة بصيغة JSON حصراً.
 ${lang === 'en' ? `
 IMPORTANT: The customer's last message is in ENGLISH. Write "reply_text" entirely in English (professional, friendly). Do not use Arabic in reply_text.` : ''}
@@ -284,6 +287,28 @@ Your previous answer was in Arabic. The customer writes in English — return th
         } catch { /* keep the first answer */ }
       }
       result.reply_text = this.toPlainText(result.reply_text);
+      // Grounding check: no invented prices or numbers.
+      // Facts the bot may quote: the company files (no PDF page markers) + what the customer said.
+      const groundSrc = [knowledgeService.groundingText(), incomingMessage, ...history.map(h => h.text)].join('\n');
+      const check = this.ungroundedNumbers(result.reply_text, groundSrc);
+      if (check.price || check.numbers.length) {
+        console.warn(`[AI] Ungrounded ${check.price ? 'price' : 'numbers'} in reply (${check.numbers.join(', ')}) — rewriting.`);
+        let fixed = null;
+        if (!check.price) {
+          try {
+            const retry = await this.chatWithFailover(systemPrompt, history, `${userPrompt}
+
+ردك السابق ذكر هاي الأرقام وهي مش موجودة بالمرجع: ${check.numbers.join('، ')}. أعد نفس الـ JSON بدون أي رقم مش مكتوب بالمرجع.`, { json: true });
+            const r2 = this.cleanAndParseJson(retry.text);
+            r2.reply_text = this.toPlainText(r2.reply_text);
+            const c2 = this.ungroundedNumbers(r2.reply_text, groundSrc);
+            if (!c2.price && !c2.numbers.length) fixed = r2;
+          } catch { /* fall through to the safe answer */ }
+        }
+        if (fixed) result = fixed;
+        else result.reply_text = this.safeAnswer(check.price ? 'price' : 'unknown', lang, conversation);
+        result.grounding_fixed = true;
+      }
       return { ...result, source: 'ai' };
     } catch (err) {
       if (err.message !== 'NO_AI_KEY') console.error('[AI] All providers failed — using the knowledge-file fallback.');
@@ -291,6 +316,45 @@ Your previous answer was in Arabic. The customer writes in English — return th
 
     // Last resort (no working AI key): approved answers from the company files, never repeated.
     return { ...this.ruleBasedReply(conversation, incomingMessage), source: 'fallback' };
+  }
+
+  /**
+   * Numbers in a reply that are not backed by the company files or the conversation.
+   * price = a money amount (currency word/sign next to a number) that the files don't contain.
+   */
+  ungroundedNumbers(reply, source) {
+    const toLatin = (t) => String(t || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+    const text = toLatin(reply).replace(/https?:\/\/\S+/g, ' ');
+    const src = toLatin(source);
+    const known = new Set((src.match(/\d[\d,.]*/g) || []).map(n => n.replace(/[,.]+$/, '').replace(/,/g, '')));
+    const currency = /(دينار|دنانير|دولار|ريال|درهم|يورو|ليرة|JD|JOD|USD|SAR|AED|EUR|\$|€|£)/i;
+    const out = [];
+    let price = false;
+    const re = /(\$|€|£)?\s?(\d[\d,.]*)\s*(%|٪|ألف|الف|k|K|دينار|دنانير|دولار|ريال|درهم|يورو|ليرة|JD|JOD|USD|SAR|AED|EUR)?/g;
+    let m;
+    while ((m = re.exec(text))) {
+      const n = m[2].replace(/[,.]+$/, '').replace(/,/g, '');
+      const unit = (m[1] || '') + (m[3] || '');
+      const isPhone = n.replace(/\D/g, '').length >= 7;
+      if (isPhone || (n.length < 2 && !unit)) continue; // phone numbers and single digits ("سؤال واحد", "3 خطوات") are fine
+      if (known.has(n)) continue;
+      out.push(m[0].trim());
+      if (unit && currency.test(unit)) price = true;
+    }
+    // Words that announce a price next to any unknown number ("السعر 500", "بتكلف 300").
+    if (!price && out.length && /(سعر|أسعار|اسعار|تكلف|بتكلف|كلفة|باقة|اشتراك|price|cost|package|plan)/i.test(text)) price = true;
+    return { price, numbers: [...new Set(out)] };
+  }
+
+  /** Safe answers when the AI tried to invent something. */
+  safeAnswer(kind, lang = 'ar', conversation = {}) {
+    if (kind === 'price') {
+      if (lang === 'en') return 'Every system we build is tailored to your business, so we don\'t quote fixed prices in chat. The first step is a free 30-minute online consultation where we understand your needs and give you an exact plan and cost. What kind of business do you run?';
+      const faq = knowledgeService.findFaqAnswer('كم السعر');
+      return faq?.a || 'كل نظام بنبنيه بيكون مخصص حسب احتياج شغلك، لهيك ما بنعطي أسعار بالشات. أول خطوة جلسة استشارة مجانية (30 دقيقة أونلاين) بنفهم فيها احتياجك وبنعطيك خطة وتكلفة دقيقة. شو نوع شغلك؟';
+    }
+    if (lang === 'en') return 'I don\'t have that detail confirmed right now, and I\'d rather not guess. I can have our team get back to you with the exact information — would that work for you?';
+    return 'هاي المعلومة مش متوفرة عندي بدقة حالياً وما بدي أعطيك معلومة غير مؤكدة. بقدر أخلي الفريق يتواصل معك ويعطيك التفاصيل الدقيقة، بناسبك؟';
   }
 
   cleanAndParseJson(text) {

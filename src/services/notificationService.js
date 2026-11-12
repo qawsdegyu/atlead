@@ -208,7 +208,7 @@ class NotificationService {
     const html = `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:680px;margin:auto;">
       <div style="background:#0f172a;color:#fff;padding:16px 20px;border-radius:12px 12px 0 0;">
         <div style="font-size:18px;font-weight:bold;">🔥 وصلنا عميل جاهز — تواصل معه الآن</div>
-        <div style="font-size:13px;color:#cbd5e1;margin-top:4px;">البوت أوقف الرد على هذا العميل نهائياً. المحادثة صارت إلك.</div>
+        <div style="font-size:13px;color:#cbd5e1;margin-top:4px;">${conv.is_bot_active === false ? 'تم إيقاف الرد الآلي لهذا العميل، والمحادثة الآن بعهدتك.' : 'يواصل المساعد الآلي الإجابة عن أسئلة العميل إلى أن ترد عليه، ثم يتوقف تلقائياً.'}</div>
       </div>
       <div style="border:1px solid #e2e8f0;border-top:none;padding:16px 20px;border-radius:0 0 12px 12px;">
         ${links.length ? `<div style="margin-bottom:14px;">${links.map(l => `<a href="${esc(l.url)}" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:8px 14px;border-radius:8px;margin:0 0 6px 6px;font-size:13px;">${esc(l.label)}</a>`).join('')}</div>` : ''}
@@ -222,7 +222,7 @@ class NotificationService {
     require('./telegramService').notifyHandoff(conv, prob, links).catch(() => {});
 
     const text = [
-      'عميل جاهز للتواصل — البوت أوقف الرد عليه.',
+      conv.is_bot_active === false ? 'عميل جاهز للتواصل — تم إيقاف الرد الآلي له.' : 'عميل جاهز للتواصل — يواصل المساعد الآلي الإجابة إلى أن ترد عليه.',
       ...rows.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`),
       ...links.map(l => `${l.label}: ${l.url}`)
     ].join('\n');
@@ -242,7 +242,7 @@ class NotificationService {
     const links = this.contactLinks(conv);
     const subject = `💬 رسالة جديدة من ${conv.customer_name || 'عميل'} (${channel}) — بانتظار ردك`;
     const html = `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;max-width:640px;margin:auto;">
-      <p style="font-size:15px;">العميل <b>${esc(conv.customer_name)}</b> بعث رسالة جديدة. البوت ما رح يرد عليه لأنه محوّل لك.</p>
+      <p style="font-size:15px;">العميل <b>${esc(conv.customer_name)}</b> أرسل رسالة جديدة. ${conv.is_bot_active === false ? 'لن يرد عليه المساعد الآلي لأن المحادثة بعهدتك.' : 'يرد عليه المساعد الآلي مؤقتاً إلى أن تتواصل معه.'}</p>
       <div style="background:#f1f5f9;border-radius:8px;padding:10px;font-size:14px;white-space:pre-wrap;">${esc(messageText)}</div>
       <div style="margin-top:12px;">${links.map(l => `<a href="${esc(l.url)}" style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;padding:8px 14px;border-radius:8px;margin:0 0 6px 6px;font-size:13px;">${esc(l.label)}</a>`).join('')}</div>
     </div>`;

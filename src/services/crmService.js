@@ -5,9 +5,12 @@
  * Handoff rules:
  *  - Triggered when the AI says the customer agreed / asked for a human / is at the
  *    deal point, OR when the buying probability reaches the threshold (default 85%).
- *  - The bot sends the handoff message ("فلان رح يتواصل معك"), the sales team gets
- *    an email with the full customer details, and the bot is switched OFF for this
- *    customer permanently. Only a human can switch it back on from the dashboard.
+ *  - The bot sends the handoff message once, the sales team gets an email (+ Telegram)
+ *    with the full customer details, and the customer is marked "waiting for the rep".
+ *  - The bot KEEPS answering the customer's questions until a human rep actually
+ *    replies (dashboard, phone, Facebook/Instagram inbox) — then it stops for good.
+ *    Setting handoff.keep_bot_until_human = false brings back the old behaviour
+ *    (bot silent right after the handoff).
  */
 const storageService = require('./storageService');
 const supabaseService = require('./supabaseService');
@@ -28,10 +31,12 @@ function crmPhone(conv) {
 
 function handoffConfig() {
   const h = storageService.getSettings().handoff || {};
+  const keepBotUntilHuman = h.keep_bot_until_human !== false;
   const threshold = Number(h.closing_deal_threshold_percent);
   return {
     threshold: Number.isFinite(threshold) && threshold > 0 ? threshold : 85,
     repName: h.representative_name || 'فريق المبيعات',
+    keepBotUntilHuman,
     message: h.handoff_message || 'تمام، {rep} في شركة atlead رح يتواصل معك بأسرع وقت لمتابعة كافة التفاصيل وترتيب كل شيء معك. شكراً لاهتمامك وثقتك.'
   };
 }
@@ -104,6 +109,8 @@ class CrmService {
     return cfg.message.replace(/\{rep\}/g, repName);
   }
 
+  keepBotUntilHuman() { return handoffConfig().keepBotUntilHuman; }
+
   getHandoffMessage(convId = null) {
     return this.prepareHandoffMessage(convId);
   }
@@ -112,8 +119,8 @@ class CrmService {
     const msgs = conv.messages || [];
     const customerMsgs = msgs.filter(m => m.sender === 'customer');
     const lastCustomer = customerMsgs[customerMsgs.length - 1];
-    // "Waiting for the sales rep" only after a real handoff — not when staff merely replied.
-    const isHandoff = conv.is_bot_active === false && conv.pause_reason !== 'human_reply';
+    // "Waiting for the sales rep" after a real handoff (the bot may still be answering).
+    const isHandoff = !!conv.handoff_at || (conv.is_bot_active === false && conv.pause_reason !== 'human_reply');
     const purchase = conv.purchase_status || (isHandoff ? 'pending_human' : 'not_purchased');
     return {
       conversation_id: conv.id,
@@ -134,7 +141,7 @@ class CrmService {
       buying_probability: Number(conv.interest_score) || 0,
       purchase_status: purchase,
       deal_status: purchase === 'won' ? 'won' : purchase === 'lost' ? 'lost' : isHandoff ? 'handed_off' : 'in_progress',
-      bot_state: conv.is_bot_active !== false ? 'active' : (conv.pause_reason === 'human_reply' ? 'paused_staff' : 'handed_off'),
+      bot_state: conv.is_bot_active !== false ? (conv.handoff_at ? 'waiting_human' : 'active') : (conv.pause_reason === 'human_reply' ? 'paused_staff' : 'handed_off'),
       handed_off_at: conv.handoff_at || null,
       human_notified_at: conv.human_notified_at || null,
       assigned_to_name: conv.assigned_to_name || '',
@@ -177,18 +184,20 @@ class CrmService {
   }
 
   /**
-   * Hand the customer to a human: bot OFF for good, email the sales team, sync everywhere.
+   * Hand the customer to a human: email (+ Telegram) the sales team, sync everywhere.
+   * By default the bot keeps answering until a rep actually replies (see header).
    */
   async handoff(convId, reason) {
     let conv = storageService.getConversationById(convId);
     if (!conv) return null;
-    const alreadyHandedOff = conv.is_bot_active === false && conv.pause_reason !== 'human_reply' && !!conv.human_notified_at;
+    const alreadyHandedOff = !!conv.handoff_at && !!conv.human_notified_at;
+    const { keepBotUntilHuman } = handoffConfig();
 
     conv = storageService.saveConversation({
       id: conv.id,
-      is_bot_active: false,
-      pause_reason: 'handoff',  // permanent: never auto-resumes
-      bot_paused_until: null,
+      ...(keepBotUntilHuman
+        ? {}
+        : { is_bot_active: false, pause_reason: 'handoff', bot_paused_until: null }), // old behaviour: silent at once
       lead_stage: 'handed_off',
       purchase_status: ['won', 'lost'].includes(conv.purchase_status) ? conv.purchase_status : 'pending_human',
       handoff_at: conv.handoff_at || new Date().toISOString(),
@@ -211,7 +220,7 @@ class CrmService {
         }
       }).catch(err => console.error('[CRM] handoff email error:', err.message));
     }
-    console.log(`[CRM] Conversation ${conv.id} handed off to human (${reason}). Bot is now silent for this customer.`);
+    console.log(`[CRM] Conversation ${conv.id} handed off to human (${reason}). ${keepBotUntilHuman ? 'Bot keeps answering until a rep replies.' : 'Bot is now silent for this customer.'}`);
     return { conv, lead };
   }
 
@@ -226,7 +235,7 @@ class CrmService {
     await supabaseService.saveConversation(updated);
     const freshLead = await this.upsertLead(updated);
     let email = { success: false, skipped: true };
-    if (updated.is_bot_active === false) email = await notificationService.sendHandoffEmail(updated, freshLead);
+    if (updated.handoff_at || updated.is_bot_active === false) email = await notificationService.sendHandoffEmail(updated, freshLead);
     return { success: true, rep, email };
   }
 

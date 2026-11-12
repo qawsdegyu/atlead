@@ -268,6 +268,24 @@ class KnowledgeService {
     return best;
   }
 
+  /** The company facts the bot may quote (files + FAQ + extra info), without PDF page markers. */
+  groundingText() {
+    const kb = this.getKnowledgeBase();
+    const parts = [
+      JSON.stringify(kb || {}),
+      ...this.getRuntimeDocuments().map(d => d.text || d.content || ''),
+      ...this.getFaq().map(f => `${f.q} ${f.a}`),
+      this.getExtraKnowledge()
+    ];
+    // Page markers from the PDF extraction ("=== PORTFOLIO PAGE 40 ===", "--- صفحة 40 ---", "R E V E N U E 3 9")
+    // are not facts — drop them so they can't "confirm" an invented number.
+    return parts.join('\n')
+      .replace(/=== [A-Z ]*PAGE \d+ ===/g, ' ')
+      .replace(/PAGE \d+/gi, ' ')
+      .replace(/-{2,}\s*صفحة\s*\d+\s*-{2,}/g, ' ')
+      .replace(/(?:\b[A-Z] ){3,}[A-Z]?(?: \d){1,3}\b/g, ' ');
+  }
+
   getSystemPrompt() {
     const kb = this.getKnowledgeBase();
     if (!kb) {

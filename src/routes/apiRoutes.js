@@ -508,9 +508,9 @@ async function runSimulatorTurn(conv, text) {
   }
   const history = { ...conv, messages: conv.messages.slice(0, -1) };
   const aiResult = await aiService.generateReply(history, text);
-  const handoff = crmService.shouldHandoff(aiResult);
+  const handoff = crmService.shouldHandoff(aiResult) && !conv.handoff_at;
   const replyText = handoff ? crmService.prepareHandoffMessage(conv.id) : aiResult.reply_text;
-  if (handoff) storageService.saveConversation({ id: conv.id, is_bot_active: false });
+  if (handoff && !crmService.keepBotUntilHuman()) storageService.saveConversation({ id: conv.id, is_bot_active: false });
 
   const lastCustomer = conv.messages[conv.messages.length - 1];
   storageService.addMessage(conv.id, {

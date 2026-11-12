@@ -179,15 +179,21 @@ function selectConversation(id) {
   // Status Badge
   const isOff = conv.is_bot_active === false;
   const offLabel = botOffLabel(conv);
+  const waitingRep = !isOff && !!conv.handoff_at;
   activeChatBadgeArea.innerHTML = isOff
     ? `<span class="badge-pill ${conv.pause_reason === 'human_reply' ? 'warning' : 'danger'}"><i class="fa-solid ${conv.pause_reason === 'human_reply' ? 'fa-user-pen' : 'fa-lock'}"></i> ${escapeHtml(offLabel)}</span>`
-    : `<span class="badge-pill success"><i class="fa-solid fa-bolt"></i> الرد الآلي للبوت نشط</span>`;
+    : waitingRep
+      ? '<span class="badge-pill warning"><i class="fa-solid fa-user-clock"></i> بانتظار موظف المبيعات — الرد الآلي مستمر</span>'
+      : `<span class="badge-pill success"><i class="fa-solid fa-bolt"></i> الرد الآلي للبوت نشط</span>`;
 
   // Side Panel
   botStatusLabel.textContent = isOff ? offLabel : 'مفعل ويعمل';
   btnToggleBot.className = isOff ? 'btn btn-success btn-sm' : 'btn btn-danger btn-sm';
   btnToggleBot.innerHTML = isOff ? '<i class="fa-solid fa-play"></i> إعادة تفعيل البوت' : '<i class="fa-solid fa-pause"></i> إيقاف البوت';
-  handoffAlertBox.style.display = isOff ? 'block' : 'none';
+  handoffAlertBox.style.display = isOff || waitingRep ? 'block' : 'none';
+  if (waitingRep) {
+    handoffAlertBox.innerHTML = `<i class="fa-solid fa-user-clock"></i> العميل جاهز وتم تحويله إلى موظف المبيعات. يواصل الرد الآلي الإجابة عن أسئلته إلى أن يرد الموظف، ثم يتوقف تلقائياً.${conv.assigned_to_name ? '<br>الموظف المسؤول: <b>' + escapeHtml(conv.assigned_to_name) + '</b>' : ''}${conv.handoff_reason ? '<br>السبب: ' + escapeHtml(conv.handoff_reason) : ''}`;
+  }
   if (isOff) {
     handoffAlertBox.innerHTML = conv.pause_reason === 'human_reply'
       ? `<i class="fa-solid fa-user-pen"></i> موظف رد على هذا العميل${conv.pause_source ? ' (' + escapeHtml(conv.pause_source) + ')' : ''}، فتوقف البوت حتى ما يتدخل بالمحادثة.${conv.bot_paused_until ? ' بيرجع يرد بعد انتهاء المدة.' : ' اضغط "إعادة تفعيل البوت" لما تخلص.'}`

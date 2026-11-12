@@ -150,8 +150,13 @@ class ReplyEngine {
     }
 
     conv = this._resumeIfPauseExpired(storageService.getConversationById(conv.id));
+    // Handed off but no rep has replied yet: the bot keeps answering, and the rep is told
+    // the customer wrote again (throttled), so nobody waits.
+    if (conv.is_bot_active !== false && conv.handoff_at) {
+      notificationService.notifyNewMessageAfterHandoff(conv, customerMsg.content).catch(() => {});
+    }
     if (conv.is_bot_active === false) {
-      // Handed off / staff is talking to them: the bot does NOT answer. Alert the sales team instead.
+      // Staff is talking to them (or the old "silent after handoff" setting): the bot does NOT answer.
       console.log(`[ReplyEngine] ${conv.id} is with a human (${conv.pause_reason || 'handoff'}) — bot stays silent.`);
       crmService.upsertLead(conv).catch(() => {});
       notificationService.notifyNewMessageAfterHandoff(conv, customerMsg.content).catch(() => {});
@@ -235,11 +240,12 @@ class ReplyEngine {
       conv = storageService.getConversationById(convId);
       if (!conv || conv.is_bot_active === false) return;
 
-      // Deal point / ready to buy / asked for a human → handoff message, then bot OFF for good.
-      const handoff = crmService.shouldHandoff(aiResult);
+      // Deal point / ready to buy / asked for a human → the handoff message, once.
+      // After that the bot keeps answering normally until a rep replies.
+      const handoff = crmService.shouldHandoff(aiResult) && !conv.handoff_at;
       const replyText = handoff ? crmService.prepareHandoffMessage(conv.id) : aiResult.reply_text;
-      if (handoff) {
-        // Switch the bot off BEFORE sending so no parallel reply can slip through.
+      if (handoff && !crmService.keepBotUntilHuman()) {
+        // Old behaviour: switch the bot off BEFORE sending so no parallel reply can slip through.
         conv = storageService.saveConversation({ id: conv.id, is_bot_active: false });
       }
 
@@ -316,7 +322,7 @@ class ReplyEngine {
     if (aiResult.consultation_requested) patch.consultation_requested = true;
     if (aiResult.demo_requested) patch.demo_requested = true;
     // When the follow-up engine would next nudge this customer (shown in the CRM / Google Form).
-    patch.next_follow_up_at = handoff ? null : require('./followUpService').nextFollowUpAt({ ...conv, ...patch });
+    patch.next_follow_up_at = handoff || conv.handoff_at ? null : require('./followUpService').nextFollowUpAt({ ...conv, ...patch });
 
     const updated = storageService.saveConversation(patch);
     await supabaseService.saveConversation(updated);

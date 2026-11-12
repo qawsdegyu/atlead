@@ -44,8 +44,9 @@ test('the AI is only shown the real free times (busy blocks removed, inside the 
   const [, m, d] = tomorrow.split('-').map(Number);
   const line = block.split('\n').find(l => l.includes(`${d}/${m}`));
   assert.ok(line, 'tomorrow is listed');
-  assert.match(line, /09:00–10:00، 12:00–21:00/);
-  assert.doesNotMatch(block, /10:30|11:00–/);
+  assert.match(line, /09:00، 12:00، 14:00/, 'specific free start times');
+  assert.doesNotMatch(line, /1[01]:\d\d/, 'never a time inside the busy block');
+  assert.ok(block.split('\n').filter(l => /\(\d{4}-\d{2}-\d{2}\):/.test(l)).every(l => !l.includes('–')), 'no from–to ranges for the AI to merge');
 });
 
 test('a confirmed free time is booked with a Meet link, and the customer gets the exact confirmation', async () => {

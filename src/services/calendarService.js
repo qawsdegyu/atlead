@@ -202,18 +202,28 @@ class CalendarService {
     }
     const tz = cfg.timezone;
     const fmt = (min) => (min >= 1440 ? '24:00' : hhmm(min));
+    // Specific free start times (not ranges): the AI may only offer these, so it can never "merge" a busy hour in.
+    const slot = cfg.duration_minutes * 60000;
+    let total = 0;
     const lines = days.map(d => {
       const midnight = zoned(d.dateKey, 0, tz).getTime();
-      const ranges = d.ranges.map(r => `${fmt(Math.round((r.start - midnight) / 60000))}–${fmt(Math.round((r.end - midnight) / 60000))}`);
-      return `- ${DAY_NAMES[d.weekday]} ${d.d}/${d.mo} (${d.dateKey}): ${ranges.join('، ')}`;
-    });
+      const starts = [];
+      for (const r of d.ranges) {
+        for (let t = r.start.getTime(); t + slot <= r.end.getTime() && starts.length < 4; t += 2 * 3600000) starts.push(t);
+      }
+      if (!starts.length || total >= 14) return null;
+      total += starts.length;
+      return `- ${DAY_NAMES[d.weekday]} ${d.d}/${d.mo} (${d.dateKey}): ${starts.map(t => fmt(Math.round((t - midnight) / 60000))).join('، ')}`;
+    }).filter(Boolean);
+    void fmt;
     const booked = conv.appointment_at && new Date(conv.appointment_at).getTime() > Date.now()
       ? `\n- العميل عنده موعد محجوز: ${conv.appointment_label}${conv.appointment_link ? ` — رابط الاجتماع: ${conv.appointment_link}` : ''}. لا تحجز موعداً جديداً إلا إذا طلب تغيير الموعد.` : '';
     return `
-مواعيد الاستشارة المجانية (من تقويم ${cfg.engineer_name} مباشرة — هذه فقط الأوقات المتاحة فعلياً، بتوقيت عمّان، الاجتماع أونلاين ومدته ${cfg.duration_minutes} دقيقة):
+مواعيد الاستشارة المجانية (من تقويم ${cfg.engineer_name} مباشرة — أوقات بداية متاحة فعلياً، بتوقيت عمّان، الاجتماع أونلاين ومدته ${cfg.duration_minutes} دقيقة):
 ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خلال الأيام القادمة.'}${booked}
 قواعد المواعيد:
-- إذا العميل حابب يحجز استشارة أو اجتماع، أو سأل إذا في موعد فاضي: اقترح وقتين أو ثلاثة محددين من الأوقات المتاحة فوق (مثل "الأحد 16/11 الساعة 10:00")، ولا تقترح أي وقت خارجها أبداً.
+- إذا العميل حابب يحجز استشارة أو اجتماع، أو سأل إذا في موعد فاضي: اقترح وقتين أو ثلاثة من الأوقات فوق حرفياً، مع اليوم والتاريخ (مثل "الأحد 16/11 الساعة 10:00"). ممنوع تذكر فترات "من–إلى"، وممنوع تقترح أي وقت غير مكتوب فوق.
+- إذا طلب العميل وقتاً محدداً آخر: ضع "book_start" بوقته، والنظام يتحقق إذا كان متاحاً ويرد عليه.
 - إذا طلب وقتاً غير موجود ضمن المتاح: قل بوضوح إنه غير متاح، واقترح أقرب وقتين متاحين له.
 - خلال تبادل المواعيد ضع "scheduling": true في الـ JSON (بدون تحويل للموظف).
 - عندما يوافق العميل على وقت محدد: ضع فوراً "book_start": "YYYY-MM-DD HH:MM" ولا تطلب منه تأكيداً إضافياً ولا رقم هاتف قبل الحجز. النظام يحجز ويرسل التأكيد ورابط الاجتماع — لا تكتب رابطاً من عندك.
@@ -262,9 +272,38 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
    * Times the bot offered in a message: [{ key: 'YYYY-MM-DD HH:MM' }]. Understands "16/11 الساعة 10:00 أو 12:30",
    * "بكرا الساعة 10:00", "tomorrow at 10:00", and skips a time the bot just turned down.
    */
+  /** "Friday, November 13th at 12:00 PM" / "الجمعة الساعة 3 العصر" → "13/11 12:00" style the parsers read. */
+  normalizeTimes(text) {
+    const cfg = this.getConfig();
+    let t = String(text || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+    const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    const mon = (w) => MONTHS.indexOf(String(w).slice(0, 3).toLowerCase()) + 1;
+    t = t.replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/gi, (m, w, d) => `${+d}/${mon(w)}`);
+    t = t.replace(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b/gi, (m, d, w) => `${+d}/${mon(w)}`);
+    t = t.replace(/\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/gi, (m, h, mi, ap) => {
+      let H = +h % 12; if (/p/i.test(ap)) H += 12;
+      return `${pad(H)}:${mi || '00'}`;
+    });
+    // A weekday without a date next to it → the next date with that weekday.
+    const EN = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const today = localParts(new Date(), cfg.timezone);
+    const dateOf = (wd) => { const off = (wd - today.weekday + 7) % 7; const p = localParts(new Date(Date.now() + off * 86400000), cfg.timezone); return `${p.d}/${p.mo}`; };
+    t = t.replace(/\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b,?(?!\s*\d{1,2}\/)/gi, (m, w) => `${w} ${dateOf(EN.indexOf(w.toLowerCase()))}`);
+    t = t.replace(/(الأحد|الاحد|الاثنين|الإثنين|الثلاثاء|الأربعاء|الاربعاء|الخميس|الجمعة|السبت)(?!\s*\d{1,2}\/)/g, (m, w) => {
+      const i = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].indexOf(w.replace('الاحد', 'الأحد').replace('الإثنين', 'الاثنين').replace('الاربعاء', 'الأربعاء'));
+      return i < 0 ? m : `${m} ${dateOf(i)}`;
+    });
+    // "الساعة 3 العصر" / "at 3" → 15:00 / 03:00
+    t = t.replace(/(الساعة|at)\s*(\d{1,2})(?![:\d])(\s*(?:العصر|المسا|مساءً|بالليل|الظهر))?/gi, (m, w, h, pm) => {
+      let H = +h; if (pm && H < 12) H += 12;
+      return `${w} ${pad(H)}:00`;
+    });
+    return t;
+  }
+
   offeredIn(text) {
     const cfg = this.getConfig();
-    let t = String(text || '');
+    let t = this.normalizeTimes(text);
     const refusal = t.search(/مش متاح|غير متاح|ما بزبط|محجوز|خارج أوقات|not available|taken|outside the available/i);
     if (refusal >= 0) {
       const rest = t.slice(refusal);
@@ -296,7 +335,7 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
    * or an explicit date + time ("15/11 الساعة 10:00").
    */
   choiceFrom(customerText, lastBotText) {
-    const text = String(customerText || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+    const text = this.normalizeTimes(customerText);
     const offered = this.offeredIn(lastBotText);
     // Explicit date and time from the customer: use it (the calendar check decides if it is free).
     const explicit = this.offeredIn(text.replace(/(\d{1,2})\s*(?:ص|الصبح|صباحاً|am)\b/gi, '$1:00').replace(/الساعة\s*(\d{1,2})(?!:)/g, 'الساعة $1:00'));

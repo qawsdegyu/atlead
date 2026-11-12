@@ -15,8 +15,10 @@ test.beforeEach(() => {
   reset();
   storage.updateSettings({ ai: { openrouter_api_key: 'sk-or-x', provider: 'openrouter' }, calendar: { enabled: false }, ai_call: { enabled: false } }, { skipDbSync: true });
   fake('post', /openrouter\.ai/, (req) => {
-    const prompt = JSON.stringify(req.body.messages);
-    assert.match(prompt, /12:00–14:00/, 'the AI sees the simulated free times (busy 10–12 and 14–15 removed)');
+    const prompt = req.body.messages.map(m => m.content).join('\n');
+    const line = prompt.split('\n').find(l => l.includes(`(${tomorrow}):`)) || '';
+    assert.match(line, /12:00/, 'the AI sees the simulated free times');
+    assert.doesNotMatch(line, /1[01]:\d\d|14:\d\d/, 'busy 10–12 and 14–15 are not offered');
     return { choices: [{ message: { content: JSON.stringify(answers.shift() || { reply_text: 'تمام' }) } }] };
   });
 });

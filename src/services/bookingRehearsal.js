@@ -100,9 +100,15 @@ async function run(id, key) {
         text = '<pick>'; // the bot is still asking: answer with a time it offered
       }
       if (text.startsWith('<pick')) {
-        const t = pick(lastBot, text === '<pick2>' ? 1 : 0);
-        if (!t) text = sc.lang === 'en' ? 'Which times are available?' : 'شو الأوقات المتاحة؟';
-        else text = sc.lang === 'en' ? `${t} works for me.` : `تمام، ${t} بناسبني.`;
+        // Same reader the server uses: pick the 1st (or 2nd) time the bot offered.
+        const offered = cal.offeredIn(lastBot);
+        const k = offered[Math.min(text === '<pick2>' ? 1 : 0, offered.length - 1)];
+        if (!k) text = sc.lang === 'en' ? 'Which times are available?' : 'شو الأوقات المتاحة؟';
+        else {
+          const [, mo, d] = k.slice(0, 10).split('-').map(Number);
+          const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          text = sc.lang === 'en' ? `${MON[mo - 1]} ${d} at ${k.slice(11)} works for me.` : `تمام، ${d}/${mo} الساعة ${k.slice(11)} بناسبني.`;
+        }
         picks++;
       }
       transcript.push(`العميل: ${text}`);
@@ -112,15 +118,24 @@ async function run(id, key) {
       // Rule check on every time the bot mentioned.
       const now = Date.now();
       const tomorrow = tomorrowKey();
-      for (const o of offeredTimes(offerPart(r.reply))) {
-        const key2 = `${new Date().getFullYear()}-${String(o.mo).padStart(2, '0')}-${String(o.d).padStart(2, '0')}`;
-        const at = cal._zoned(key2, o.h * 60 + o.mi, 'Asia/Amman').getTime();
-        const minutes = o.h * 60 + o.mi;
-        const isTomorrow = key2 === tomorrow;
-        const inBusy = isTomorrow && ((minutes >= 600 && minutes < 720) || (minutes >= 840 && minutes < 900));
-        if (job.calendar === 'simulated' && inBusy) problems.push(`offered a busy time: ${o.raw}`);
-        if (minutes < 540 || minutes + 30 > 1260) problems.push(`outside booking hours: ${o.raw}`);
-        if (at < now) problems.push(`in the past: ${o.raw}`);
+      const isBusy = (dayKey, minutes) => dayKey === tomorrow && ((minutes >= 600 && minutes < 720) || (minutes >= 840 && minutes < 900));
+      for (const k of cal.offeredIn(r.reply)) {
+        const dayKey = k.slice(0, 10);
+        const minutes = +k.slice(11, 13) * 60 + +k.slice(14, 16);
+        const at = cal._zoned(dayKey, minutes, 'Asia/Amman').getTime();
+        if (job.calendar === 'simulated' && isBusy(dayKey, minutes)) problems.push(`offered a busy time: ${k}`);
+        if (minutes < 540 || minutes + 30 > 1260) problems.push(`outside booking hours: ${k}`);
+        if (at < now) problems.push(`in the past: ${k}`);
+      }
+      // "from 9:00 to 14:00" claims: the whole range must be free.
+      const norm = cal.normalizeTimes(r.reply);
+      const rangeRe = /(\d{1,2})\/(\d{1,2})[^\n.]{0,40}?(?:من|from)?\s*(\d{1,2}):(\d{2})\s*(?:إلى|الى|لـ|لل|to|until|-|–)\s*(\d{1,2}):(\d{2})/gi;
+      let rm;
+      while ((rm = rangeRe.exec(norm))) {
+        const dayKey = `${new Date().getFullYear()}-${String(+rm[2]).padStart(2, '0')}-${String(+rm[1]).padStart(2, '0')}`;
+        const a = +rm[3] * 60 + +rm[4];
+        const b = +rm[5] * 60 + +rm[6];
+        for (let m = a; m < b; m += 30) if (job.calendar === 'simulated' && isBusy(dayKey, m)) { problems.push(`range includes busy time: ${rm[0]}`); break; }
       }
       if (r.aiResult.appointment) bookings.push(r.aiResult.appointment.appointment_label);
       conv = storageService.getConversationById(conv.id);

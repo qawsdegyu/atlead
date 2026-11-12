@@ -18,6 +18,14 @@ function getAdapter(conv) {
   if (!conv) return null;
   if (conv.channel === 'whatsapp') return require('./whatsappService').getAdapter();
   if (conv.channel === 'instagram_dm' || conv.channel === 'facebook_messenger') return require('./metaService').getAdapter(conv.channel);
+  // Phone callers: written follow-ups (meeting link, summary) go to WhatsApp on the same number.
+  if (conv.channel === 'phone' && /^\d{8,15}$/.test(String(conv.external_user_id || ''))) {
+    const wa = require('./whatsappService').getAdapter();
+    return {
+      isReady: () => (wa.isReady ? wa.isReady() : true),
+      send: (c, text, opts) => wa.send({ ...c, wa_jid: null, external_user_id: c.external_user_id, customer_phone: c.external_user_id }, text, opts || {})
+    };
+  }
   return null;
 }
 

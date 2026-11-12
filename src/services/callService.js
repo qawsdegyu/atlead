@@ -91,9 +91,9 @@ class CallService {
   }
 
   /** A call link for this customer (re-uses an open one). */
-  createSession(conv) {
+  createSession(conv, { fresh = false } = {}) {
     const cfg = this.getConfig();
-    const open = this.forConversation(conv.id).find(s => !['completed', 'expired'].includes(s.status) && new Date(s.expires_at) > new Date());
+    const open = fresh ? null : this.forConversation(conv.id).find(s => !['completed', 'expired'].includes(s.status) && new Date(s.expires_at) > new Date());
     if (open) return open;
     const now = Date.now();
     return this.save({

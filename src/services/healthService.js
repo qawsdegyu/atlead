@@ -306,6 +306,17 @@ class HealthService {
     return r.success ? ok('calendar', label, r.message) : fail('calendar', label, r.message);
   }
 
+  checkPhone() {
+    const p = require('./phoneService');
+    const c = p.getConfig();
+    const label = 'الرد الآلي على الهاتف';
+    if (!c.enabled) return warn('phone', label, 'متوقف — المكالمات على رقمك لا يرد عليها المساعد.');
+    if (!c.twilio_account_sid || !c.twilio_auth_token || !c.twilio_number) return fail('phone', label, 'تنقص بيانات Twilio (Account SID، Auth Token، الرقم).');
+    if (!p.openaiKey()) return fail('phone', label, 'ينقص OpenAI API Key (بطاقة مكالمة الـ AI).');
+    if (!c.transfer_number) return warn('phone', label, 'لا يوجد رقم خدمة عملاء للتحويل — عند طلب موظف سيُبلَّغ الفريق ليعاود الاتصال.');
+    return ok('phone', label, `مفعّل على ${c.twilio_number}، والتحويل إلى ${c.transfer_number}.`);
+  }
+
   async runAll() {
     const safe = (label, key, p) => withTimeout(Promise.resolve().then(p), 25000, label).catch(err => fail(key, label, err.message));
     const results = await Promise.all([
@@ -317,7 +328,8 @@ class HealthService {
       safe('قاعدة المعرفة', 'knowledge', () => this.checkKnowledge()),
       safe('Gmail', 'email', () => this.checkEmail()),
       safe('التسويق الذكي وتليجرام', 'marketing', () => this.checkMarketing()),
-      safe('Google Calendar', 'calendar', () => this.checkCalendar())
+      safe('Google Calendar', 'calendar', () => this.checkCalendar()),
+      safe('الهاتف', 'phone', () => this.checkPhone())
     ]);
     const all = [...results.flat(), ...this.checkBotRules(), ...this.checkSecurity()];
     return {

@@ -120,7 +120,8 @@ function renderConversationList(filter = 'all') {
       whatsapp: 'fa-brands fa-whatsapp',
       instagram_dm: 'fa-brands fa-instagram',
       facebook_messenger: 'fa-brands fa-facebook-messenger',
-      simulator: 'fa-solid fa-flask'
+      simulator: 'fa-solid fa-flask',
+      phone: 'fa-solid fa-phone'
     }[c.channel] || 'fa-solid fa-comments';
 
     const lastMsg = escapeHtml(c.messages && c.messages.length > 0 ? c.messages[c.messages.length - 1].content : 'محادثة جديدة');
@@ -378,7 +379,7 @@ function renderLeadsTable(leads) {
     return;
   }
 
-  const channelLabel = { whatsapp: 'واتساب', instagram_dm: 'إنستغرام', facebook_messenger: 'ماسنجر', simulator: 'محاكي' };
+  const channelLabel = { whatsapp: 'واتساب', instagram_dm: 'إنستغرام', facebook_messenger: 'ماسنجر', simulator: 'محاكي', phone: 'هاتف' };
   const purchaseOptions = [
     ['not_purchased', 'لم يشترِ بعد'],
     ['pending_human', 'بانتظار الموظف'],
@@ -809,6 +810,15 @@ async function loadSettings() {
       // AI
       document.getElementById('openrouter-api-key').value = s.ai?.openrouter_api_key || '';
       document.getElementById('call-openai-key').value = s.ai?.openai_api_key || '';
+      const ph = s.phone_ai || {};
+      document.getElementById('phone-enabled').checked = !!ph.enabled;
+      document.getElementById('phone-sid').value = ph.twilio_account_sid || '';
+      document.getElementById('phone-token').value = ph.twilio_auth_token || '';
+      document.getElementById('phone-number').value = ph.twilio_number || '';
+      document.getElementById('phone-transfer').value = ph.transfer_number || '';
+      document.getElementById('phone-timeout').value = String(ph.transfer_timeout || 20);
+      document.getElementById('phone-voice').value = ph.voice || 'marin';
+      document.getElementById('phone-announce').checked = ph.announce_transcript !== false;
       const ac = s.ai_call || {};
       document.getElementById('call-enabled').checked = !!ac.enabled;
       document.getElementById('call-voice').value = ac.voice || 'marin';
@@ -858,6 +868,16 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
       end: document.getElementById('bh-end').value || '17:00',
       after_hours_message: document.getElementById('bh-after-msg').value.trim(),
       hold_emails_until_open: document.getElementById('bh-hold-emails').checked
+    },
+    phone_ai: {
+      enabled: document.getElementById('phone-enabled').checked,
+      twilio_account_sid: document.getElementById('phone-sid').value.trim(),
+      twilio_auth_token: document.getElementById('phone-token').value,
+      twilio_number: document.getElementById('phone-number').value.trim(),
+      transfer_number: document.getElementById('phone-transfer').value.trim(),
+      transfer_timeout: Number(document.getElementById('phone-timeout').value) || 20,
+      voice: document.getElementById('phone-voice').value,
+      announce_transcript: document.getElementById('phone-announce').checked
     },
     ai_call: {
       enabled: document.getElementById('call-enabled').checked,
@@ -1645,4 +1665,39 @@ document.getElementById('btn-call-link')?.addEventListener('click', async () => 
     try { await navigator.clipboard.writeText(r.url); showToast('تم نسخ رابط المكالمة', 'success'); }
     catch { prompt('رابط المكالمة:', r.url); }
   } catch { showToast('تعذّر إنشاء الرابط', 'error'); }
+});
+
+// AI phone line: save first, then check Twilio and show the carrier forwarding codes.
+document.getElementById('btn-phone-connect')?.addEventListener('click', async () => {
+  const box = document.getElementById('phone-result');
+  box.innerHTML = '<span style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> جاري الحفظ والربط...</span>';
+  try {
+    // Save just this card first (the token stays untouched if it is still the masked value).
+    await fetch('/api/settings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone_ai: {
+        enabled: document.getElementById('phone-enabled').checked,
+        twilio_account_sid: document.getElementById('phone-sid').value.trim(),
+        twilio_auth_token: document.getElementById('phone-token').value,
+        twilio_number: document.getElementById('phone-number').value.trim(),
+        transfer_number: document.getElementById('phone-transfer').value.trim(),
+        transfer_timeout: Number(document.getElementById('phone-timeout').value) || 20,
+        voice: document.getElementById('phone-voice').value,
+        announce_transcript: document.getElementById('phone-announce').checked
+      } })
+    });
+  } catch { /* the check below reports what is missing */ }
+  try {
+    const r = await (await fetch('/api/phone/connect', { method: 'POST' })).json();
+    const f = r.forwarding;
+    box.innerHTML = `${r.success ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} ${escapeHtml(r.message || '')}`
+      + (f ? `<div class="phone-codes"><p>اطلب أحد هذه الأكواد من هاتفك (الخط الأردني) لتفعيل التحويل:</p>
+        <div><span>تحويل كل المكالمات للمساعد</span><code dir="ltr">${escapeHtml(f.all)}</code></div>
+        <div><span>إذا لم أرد خلال 20 ثانية</span><code dir="ltr">${escapeHtml(f.no_answer)}</code></div>
+        <div><span>إذا كان الخط مشغولاً</span><code dir="ltr">${escapeHtml(f.busy)}</code></div>
+        <div><span>إذا كان الهاتف مغلقاً</span><code dir="ltr">${escapeHtml(f.unreachable)}</code></div>
+        <div><span>إلغاء كل التحويلات</span><code dir="ltr">${escapeHtml(f.cancel_all)}</code></div></div>` : '');
+  } catch (err) {
+    box.innerHTML = `<i class="fa-solid fa-circle-xmark st-bad"></i> ${escapeHtml(err.message)}`;
+  }
 });

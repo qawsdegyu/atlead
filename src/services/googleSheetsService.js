@@ -76,7 +76,8 @@ const CHANNEL_LABELS = {
   instagram_dm: 'إنستغرام',
   facebook_messenger: 'فيسبوك ماسنجر',
   simulator: 'محاكي تجريبي',
-  simulator_voice: 'محاكي تجريبي (فويس)'
+  simulator_voice: 'محاكي تجريبي (فويس)',
+  phone: 'مكالمة هاتفية'
 };
 
 const STAGE_LABELS = {

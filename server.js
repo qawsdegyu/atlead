@@ -72,6 +72,18 @@ const callRoutes = require('./src/routes/callRoutes');
 app.use('/call', callRoutes.page);
 app.use('/api/call', callRoutes.api);
 
+// AI phone line (Twilio). Public, but every request must carry a valid Twilio signature.
+const phoneService = require('./src/services/phoneService');
+const twiml = (res, body) => res.type('text/xml').send(body);
+app.post('/voice/incoming', (req, res) => {
+  if (!phoneService.validSignature(req)) return res.status(403).send('Forbidden');
+  twiml(res, phoneService.incoming(req.body));
+});
+app.post('/voice/after-dial', (req, res) => {
+  if (!phoneService.validSignature(req)) return res.status(403).send('Forbidden');
+  twiml(res, phoneService.afterDial(req.body, String(req.query.t || '')));
+});
+
 // Admin protection: set ADMIN_PASSWORD (and optionally ADMIN_USER) in the environment.
 // Two ways in: a login page (/login → signed session cookie) or HTTP Basic auth.
 const crypto = require('crypto');
@@ -366,7 +378,7 @@ bootstrap().catch(err => console.error('Bootstrap error:', err.message));
 // Vercel (serverless) imports the app instead of running a server.
 module.exports = app;
 
-if (!process.env.VERCEL) app.listen(PORT, () => {
+if (!process.env.VERCEL) phoneService.attach(app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 atlead Sales Chatbot & Omnichannel CRM is Running!`);
   console.log(`🌐 Dashboard URL: http://localhost:${PORT}`);
@@ -374,4 +386,4 @@ if (!process.env.VERCEL) app.listen(PORT, () => {
   console.log(`📡 Meta Webhook:  http://localhost:${PORT}/webhook/meta`);
   console.log(`💬 WhatsApp Webhook: http://localhost:${PORT}/webhook/whatsapp`);
   console.log(`====================================================`);
-});
+}));

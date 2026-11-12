@@ -36,7 +36,8 @@ const SECRET_FIELDS = {
   ai: ['openrouter_api_key', 'gemini_api_key', 'openai_api_key', 'anthropic_api_key'],
   google_sheets: ['service_account_json', 'private_key'],
   notifications: ['gmail_app_password'],
-  telegram: ['bot_token']
+  telegram: ['bot_token'],
+  phone_ai: ['twilio_auth_token']
 };
 const MASK = '••••••••';
 const isMasked = (v) => typeof v === 'string' && v.startsWith(MASK);
@@ -406,6 +407,11 @@ router.post('/conversations/:id/reply', async (req, res) => {
 });
 
 // --- LEADS & CRM ROUTES ---
+// --- AI phone line: check Twilio and point the number at this server
+router.post('/phone/connect', async (req, res) => {
+  try { res.json(await require('../services/phoneService').connect()); } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
 // --- AI voice call (admin side)
 router.get('/calls/:token', (req, res) => {
   const s = require('../services/callService').get(req.params.token);

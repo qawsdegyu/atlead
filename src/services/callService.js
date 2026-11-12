@@ -148,6 +148,7 @@ class CallService {
       conv.customer_phone ? `الهاتف: ${conv.customer_phone}` : '',
       conv.customer_email ? `البريد: ${conv.customer_email}` : ''
     ].filter(Boolean).join('\n');
+    const pricing = String(knowledge.findFaqAnswer('كم السعر')?.a || 'كل نظام بيكون مخصص حسب احتياج الشغل، والسعر بيتحدد بالاجتماع مع المهندس بعد ما نفهم احتياجك.').replace(/"/g, "'").slice(0, 600);
     const calendarOn = !!session.mock_calendar || require('./calendarService').isActive();
     return `أنت مستشار مبيعات صوتي لشركة atlead (أنظمة مبيعات ذكية وأتمتة للشركات) في مكالمة صوتية أونلاين مع عميل محتمل.
 هدف المكالمة (حوالي ${Math.min(cfg.max_minutes, 10)} دقائق): تفهم شغل العميل واحتياجه، وتتأكد هل هو جاد ومستعد يشتري، وإذا كان جاهز تحجزله اجتماع أونلاين مع المهندس.
@@ -169,6 +170,7 @@ ${cfg.extra_questions ? `أسئلة إضافية من الإدارة:\n${cfg.ext
 قواعد إلزامية:
 - جاوب فقط من معلومات الشركة تحت. إذا ما بتعرف شي قل إن المهندس رح يوضحه بالاجتماع. لا تخترع.
 - ممنوع تذكر أي سعر أو رقم أو مدة تنفيذ مش مكتوبة حرفياً بالمعلومات. الأسعار بتتحدد مع المهندس.
+- إذا سأل عن السعر، جاوب بمعنى جواب الأسعار المعتمد هذا (بلغة العميل)، ثم كمّل أسئلتك: "${pricing}"
 - لا تضغط على العميل. إذا مش مهتم أو مش مناسب، اشكره بلطف وأنهِ المكالمة.
 ${calendarOn ? `- حجز اجتماع المهندس، بالترتيب ولا تتجاوز أي خطوة: (1) اسأل العميل إذا حابب يحجز اجتماع أونلاين مع المهندس واستنى جوابه. (2) إذا وافق، استخدم get_free_times. (3) اقترح وقتين أو ثلاثة من النتيجة فقط واستنى يختار. (4) فقط لما يوافق صراحة على وقت محدد استخدم book_engineer_meeting بنفس الوقت. ممنوع تخترع تاريخ أو وقت، وممنوع تحجز بدون موافقته. (5) بعد الحجز أكّد له الموعد وقل إن رابط الاجتماع رح يوصله بالمحادثة.` : '- إذا العميل مهتم وجاهز: قل إن المهندس رح يتواصل معه لتحديد موعد الاجتماع. لا تذكر أي تاريخ أو وقت.'}
 - بالآخر لخّص له الخطوة الجاية بجملة، اشكره، وبعدين استخدم end_call.
@@ -330,7 +332,8 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
       if (!session.free_times_checked_at) return { booked: false, note: 'Not booked. First call get_free_times, offer two or three of those times, and wait until the customer clearly agrees to one.' };
       const start = String(args.start || '').trim();
       if (!slots.includes(start)) return { booked: false, message: `${start} is not one of the free times. Offer: ${slots.join(', ')}` };
-      const appointment = { appointment_at: new Date().toISOString(), appointment_label: `بكرا الساعة ${start.slice(11)} (تجريبي)`, appointment_link: 'https://meet.google.com/rehearsal-only', appointment_event_id: 'rehearsal' };
+      const at = require('./calendarService')._zoned(start.slice(0, 10), Number(start.slice(11, 13)) * 60 + Number(start.slice(14, 16)), 'Asia/Amman');
+      const appointment = { appointment_at: at.toISOString(), appointment_label: `بكرا الساعة ${start.slice(11)} (تجريبي)`, appointment_link: 'https://meet.google.com/rehearsal-only', appointment_event_id: 'rehearsal' };
       storageService.saveConversation({ id: conv.id, ...appointment, consultation_booked: true });
       session.appointment = appointment;
       this.save(session);
@@ -466,8 +469,9 @@ customer_name, company_name, job_title, location, business_type, team_size, mont
   async sendSummary(conv, s, a) {
     const adapter = require('./schedulerService').getAdapter(conv);
     const en = require('./aiService').detectLanguage((s.transcript.find(l => l.role === 'customer') || {}).text || '') === 'en';
+    const whenEn = s.appointment?.appointment_at ? require('./calendarService').label(new Date(s.appointment.appointment_at), 'en') : '';
     const lines = en
-      ? ['Thank you for the call.', conv.appointment_label && s.appointment ? `Your meeting with our engineer: ${s.appointment.appointment_label}${s.appointment.appointment_link ? `\nMeeting link: ${s.appointment.appointment_link}` : ''}` : (a?.qualified ? 'Our team will contact you shortly to arrange the next step.' : 'If you have any other question, just write here.')]
+      ? ['Thank you for the call.', conv.appointment_label && s.appointment ? `Your meeting with our engineer: ${whenEn || s.appointment.appointment_label}${s.appointment.appointment_link ? `\nMeeting link: ${s.appointment.appointment_link}` : ''}` : (a?.qualified ? 'Our team will contact you shortly to arrange the next step.' : 'If you have any other question, just write here.')]
       : ['شكراً على وقتك بالمكالمة.', s.appointment ? `موعدك مع المهندس: ${s.appointment.appointment_label}${s.appointment.appointment_link ? `\nرابط الاجتماع: ${s.appointment.appointment_link}` : ''}` : (a?.qualified ? 'فريقنا رح يتواصل معك قريباً لترتيب الخطوة الجاية.' : 'إذا عندك أي سؤال ثاني، اكتبلي هون.')];
     const text = lines.join('\n');
     let res = { ok: false, simulated: !adapter };

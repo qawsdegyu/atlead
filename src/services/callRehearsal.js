@@ -84,7 +84,7 @@ async function run(jobId, personaKey, maxTurns) {
       customerHistory.push({ role: 'model', text: customerLine });
       const lastAssistant = [...lines].reverse().find(l => l.role === 'assistant')?.text || '';
       customerHistory.push({ role: 'user', text: lastAssistant });
-      const next = await ai.chatWithFailover(customerSystem(p), customerHistory.slice(0, -1), `Sales assistant: ${lastAssistant}`, { temperature: 0.7, timeout: 40000 });
+      const next = await ai.chatWithFailover(customerSystem(p), customerHistory.slice(0, -1), `Sales assistant: ${lastAssistant}`, { json: false, temperature: 0.7, timeout: 40000 });
       customerLine = String(next.text || '').replace(/^["']|["']$/g, '').trim() || (p.lang === 'en' ? 'Okay.' : 'تمام.');
     }
 

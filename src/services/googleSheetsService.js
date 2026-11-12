@@ -48,7 +48,27 @@ const HEADERS = [
   'آخر رسالة من العميل',
   'ملاحظات',
   'الموظف المسؤول',
-  'رسائل متابعة'
+  'رسائل متابعة',
+  'الشركة',
+  'المسمى الوظيفي',
+  'المدينة / الدولة',
+  'حجم الفريق',
+  'حجم الرسائل أو العملاء شهرياً',
+  'القنوات المستخدمة',
+  'الأدوات الحالية',
+  'الأهداف',
+  'الميزانية',
+  'الإطار الزمني',
+  'صاحب القرار',
+  'مكالمة الـ AI — الحالة',
+  'مكالمة الـ AI — مؤهل للشراء',
+  'مكالمة الـ AI — الملخص',
+  'مكالمة الـ AI — الخطوة التالية',
+  'مكالمة الـ AI — التاريخ',
+  'مكالمة الـ AI — المدة (دقائق)',
+  'نص مكالمة الـ AI',
+  'اجتماع المهندس',
+  'رابط اجتماع المهندس'
 ];
 
 const CHANNEL_LABELS = {
@@ -240,8 +260,29 @@ class GoogleSheetsService {
       lead.last_customer_message || '',
       lead.notes || '',
       lead.assigned_to_name || '',
-      lead.follow_up_count || 0
+      lead.follow_up_count || 0,
+      ...this.callColumns(conv)
     ].map(safe);
+  }
+
+  callColumns(conv) {
+    const c = conv || {};
+    const status = { offered: 'أُرسل الرابط', in_progress: 'جارية', completed: 'تمت' }[c.ai_call_status] || '';
+    let transcript = '';
+    if (c.ai_call_token) {
+      const s = require('./callService').get(c.ai_call_token);
+      if (s?.transcript?.length) transcript = s.transcript.map(l => `${l.role === 'assistant' ? 'المساعد' : 'العميل'}: ${l.text}`).join('\n').slice(0, 45000);
+    }
+    return [
+      c.company_name, c.job_title, c.location, c.team_size, c.monthly_volume, c.channels_used, c.current_tools, c.goals,
+      c.budget, c.timeline, c.decision_maker,
+      status,
+      c.ai_call_qualified === true ? 'نعم' : c.ai_call_qualified === false ? 'لا' : '',
+      c.ai_call_summary, c.ai_call_next_step, fmtDate(c.ai_call_at),
+      c.ai_call_duration_sec ? Math.round(c.ai_call_duration_sec / 60) : '',
+      transcript,
+      c.appointment_label, c.appointment_link
+    ].map(v => (v === null || v === undefined ? '' : v));
   }
 
   async upsertRowApi(apiCfg, lead) {

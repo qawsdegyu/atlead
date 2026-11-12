@@ -406,6 +406,23 @@ router.post('/conversations/:id/reply', async (req, res) => {
 });
 
 // --- LEADS & CRM ROUTES ---
+// --- AI voice call (admin side)
+router.get('/calls/:token', (req, res) => {
+  const s = require('../services/callService').get(req.params.token);
+  if (!s) return res.status(404).json({ success: false, message: 'المكالمة غير موجودة' });
+  res.json({ success: true, call: s });
+});
+
+router.post('/conversations/:id/call-link', (req, res) => {
+  const callService = require('../services/callService');
+  const conv = storageService.getConversationById(req.params.id);
+  if (!conv) return res.status(404).json({ success: false, message: 'المحادثة غير موجودة' });
+  if (!callService.isActive()) return res.status(400).json({ success: false, message: 'فعّل مكالمة الـ AI وأضف OpenAI API Key من الإعدادات أولاً.' });
+  const s = callService.createSession(conv);
+  if (!conv.ai_call_status) storageService.saveConversation({ id: conv.id, ai_call_status: 'offered' });
+  res.json({ success: true, url: callService.publicUrl(s.token) });
+});
+
 // --- DELETE (dashboard trash buttons). Removes the data locally and from Supabase.
 router.delete('/conversations/:id', async (req, res) => {
   const out = storageService.deleteConversation(req.params.id);

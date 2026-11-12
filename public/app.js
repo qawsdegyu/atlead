@@ -217,6 +217,7 @@ function selectConversation(id, { open = false } = {}) {
   document.getElementById('side-score-bar').style.width = `${conv.interest_score || 20}%`;
   document.getElementById('side-lead-problem').textContent = conv.identified_problem || 'لم تحدد بعد';
   document.getElementById('side-lead-solution').textContent = conv.proposed_solution || 'لم يحدد بعد';
+  renderAiCall(conv);
   const apptBox = document.getElementById('side-lead-appointment-box');
   if (apptBox) {
     apptBox.style.display = conv.appointment_at ? '' : 'none';
@@ -807,6 +808,14 @@ async function loadSettings() {
 
       // AI
       document.getElementById('openrouter-api-key').value = s.ai?.openrouter_api_key || '';
+      document.getElementById('call-openai-key').value = s.ai?.openai_api_key || '';
+      const ac = s.ai_call || {};
+      document.getElementById('call-enabled').checked = !!ac.enabled;
+      document.getElementById('call-voice').value = ac.voice || 'marin';
+      document.getElementById('call-max').value = String(ac.max_minutes || 15);
+      document.getElementById('call-days').value = String(ac.link_days || 7);
+      document.getElementById('call-questions').value = ac.extra_questions || '';
+      document.getElementById('call-model').value = ac.model || 'gpt-realtime-2.1';
       document.getElementById('openrouter-model').value = s.ai?.openrouter_model || 'openai/gpt-4o-mini';
       document.getElementById('voice-transcription-enabled').checked = s.ai?.voice_transcription_enabled !== false;
 
@@ -849,6 +858,14 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
       end: document.getElementById('bh-end').value || '17:00',
       after_hours_message: document.getElementById('bh-after-msg').value.trim(),
       hold_emails_until_open: document.getElementById('bh-hold-emails').checked
+    },
+    ai_call: {
+      enabled: document.getElementById('call-enabled').checked,
+      voice: document.getElementById('call-voice').value,
+      max_minutes: Number(document.getElementById('call-max').value) || 15,
+      link_days: Number(document.getElementById('call-days').value) || 7,
+      extra_questions: document.getElementById('call-questions').value.trim(),
+      model: document.getElementById('call-model').value.trim() || 'gpt-realtime-2.1'
     },
     calendar: {
       enabled: document.getElementById('cal-enabled').checked,
@@ -918,6 +935,7 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
     ai: {
       provider: 'openrouter',
       openrouter_api_key: document.getElementById('openrouter-api-key').value,
+      openai_api_key: document.getElementById('call-openai-key').value,
       openrouter_model: document.getElementById('openrouter-model').value.trim() || 'openai/gpt-4o-mini',
       voice_transcription_enabled: document.getElementById('voice-transcription-enabled').checked,
       image_understanding_enabled: document.getElementById('image-understanding-enabled').checked
@@ -1588,3 +1606,43 @@ document.querySelectorAll('table.data-table').forEach(table => {
 window.matchMedia('(max-width: 900px)').addEventListener('change', () => switchTab(currentTab));
 document.body.dataset.tab = currentTab;
 if (isPhone()) switchTab(currentTab);
+
+// ---------------- AI voice call: result on the customer, link for staff
+function renderAiCall(conv) {
+  const box = document.getElementById('side-ai-call-box');
+  if (!box) return;
+  box.style.display = conv.ai_call_status ? '' : 'none';
+  if (!conv.ai_call_status) return;
+  const status = { offered: 'أُرسل الرابط للعميل', in_progress: 'المكالمة جارية', completed: 'تمت المكالمة' }[conv.ai_call_status] || conv.ai_call_status;
+  const facts = [
+    ['الشركة', conv.company_name], ['المسمى', conv.job_title], ['المدينة', conv.location], ['حجم الفريق', conv.team_size],
+    ['الحجم الشهري', conv.monthly_volume], ['القنوات', conv.channels_used], ['الأدوات الحالية', conv.current_tools], ['الأهداف', conv.goals],
+    ['الميزانية', conv.budget], ['الإطار الزمني', conv.timeline], ['صاحب القرار', conv.decision_maker]
+  ].filter(([, v]) => v);
+  document.getElementById('side-ai-call').innerHTML = `
+    <div class="ai-call-head"><strong>${escapeHtml(status)}</strong>${conv.ai_call_qualified === true ? '<span class="badge-pill success">مؤهل للشراء</span>' : conv.ai_call_qualified === false ? '<span class="badge-pill warning">غير مؤهل حالياً</span>' : ''}</div>
+    ${conv.ai_call_summary ? `<p>${escapeHtml(conv.ai_call_summary)}</p>` : ''}
+    ${conv.ai_call_next_step ? `<p><span class="muted">الخطوة التالية:</span> ${escapeHtml(conv.ai_call_next_step)}</p>` : ''}
+    ${facts.length ? `<dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>` : ''}
+    ${conv.ai_call_token && conv.ai_call_status === 'completed' ? `<details data-call="${escapeHtml(conv.ai_call_token)}"><summary>نص المكالمة</summary><div class="ai-call-transcript">جاري التحميل...</div></details>` : ''}`;
+  document.querySelector('#side-ai-call details')?.addEventListener('toggle', async (e) => {
+    const d = e.target;
+    if (!d.open || d.dataset.loaded) return;
+    d.dataset.loaded = '1';
+    try {
+      const r = await (await fetch(`/api/calls/${encodeURIComponent(d.dataset.call)}`)).json();
+      d.querySelector('.ai-call-transcript').innerHTML = (r.call?.transcript || []).map(l =>
+        `<p><b>${l.role === 'assistant' ? 'المساعد' : 'العميل'}:</b> ${escapeHtml(l.text)}</p>`).join('') || 'لا يوجد نص.';
+    } catch { d.querySelector('.ai-call-transcript').textContent = 'تعذّر تحميل النص.'; }
+  });
+}
+
+document.getElementById('btn-call-link')?.addEventListener('click', async () => {
+  if (!activeConvId) return;
+  try {
+    const r = await (await fetch(`/api/conversations/${encodeURIComponent(activeConvId)}/call-link`, { method: 'POST' })).json();
+    if (!r.success) return showToast(r.message || 'تعذّر إنشاء الرابط', 'error');
+    try { await navigator.clipboard.writeText(r.url); showToast('تم نسخ رابط المكالمة', 'success'); }
+    catch { prompt('رابط المكالمة:', r.url); }
+  } catch { showToast('تعذّر إنشاء الرابط', 'error'); }
+});

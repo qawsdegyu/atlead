@@ -56,6 +56,7 @@ class SchedulerService {
     await step('marketing db sync', () => require('./marketingService').syncDb());
     await step('scheduled posts',() => require('./marketingService').publishDue());
     await step('morning brief', () => require('./marketingService').maybeSendMorningBrief());
+    await step('ai calls', () => require('./callService').sweep());
     this.running = false;
   }
 

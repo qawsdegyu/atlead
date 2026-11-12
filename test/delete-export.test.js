@@ -66,7 +66,7 @@ test('Excel export: one sheet per kind of data, with the real rows', async () =>
   assert.match(res.headers.get('content-disposition'), /atlead-all-.*\.xlsx/);
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(Buffer.from(await res.arrayBuffer()));
-  assert.deepEqual(wb.worksheets.map(w => w.name), ['العملاء', 'المحادثات', 'الرسائل', 'التعليقات', 'المواعيد', 'المنشورات']);
+  assert.deepEqual(wb.worksheets.map(w => w.name), ['العملاء', 'المحادثات', 'مكالمات الـ AI', 'الرسائل', 'التعليقات', 'المواعيد', 'المنشورات']);
   const text = (name) => wb.getWorksheet(name).getSheetValues().flat().map(String).join(' | ');
   assert.match(text('الرسائل'), /مرحبا أنا تصدير/);
   assert.match(text('التعليقات'), /كم السعر؟/);

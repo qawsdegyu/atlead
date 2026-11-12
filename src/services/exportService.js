@@ -7,13 +7,13 @@ const storageService = require('./storageService');
 
 const T = {
   ar: {
-    leads: 'العملاء', conversations: 'المحادثات', messages: 'الرسائل', comments: 'التعليقات', appointments: 'المواعيد', posts: 'المنشورات',
+    leads: 'العملاء', conversations: 'المحادثات', messages: 'الرسائل', comments: 'التعليقات', appointments: 'المواعيد', posts: 'المنشورات', calls: 'مكالمات الـ AI',
     yes: 'نعم', no: 'لا',
     sender: { customer: 'العميل', bot: 'البوت', agent: 'الموظف' },
     purchase: { won: 'اشترى', lost: 'لم يشترِ', pending_human: 'بانتظار الموظف', not_purchased: 'لم يشترِ بعد' }
   },
   en: {
-    leads: 'Customers', conversations: 'Conversations', messages: 'Messages', comments: 'Comments', appointments: 'Appointments', posts: 'Posts',
+    leads: 'Customers', conversations: 'Conversations', messages: 'Messages', comments: 'Comments', appointments: 'Appointments', posts: 'Posts', calls: 'AI calls',
     yes: 'Yes', no: 'No',
     sender: { customer: 'Customer', bot: 'Bot', agent: 'Staff' },
     purchase: { won: 'Purchased', lost: 'Did not buy', pending_human: 'Waiting for staff', not_purchased: 'Not purchased yet' }
@@ -37,7 +37,18 @@ const COLUMNS = {
     ['interest_score', 'نسبة الشراء %', 'Buying probability %', 12], ['bot', 'البوت مفعّل', 'Bot active', 10], ['handoff_at', 'وقت التحويل', 'Handed off at', 18],
     ['handoff_reason', 'سبب التحويل', 'Handoff reason', 30], ['assigned_to_name', 'الموظف', 'Assigned to', 16], ['appointment', 'موعد الاستشارة', 'Consultation', 22],
     ['appointment_link', 'رابط الاجتماع', 'Meeting link', 30], ['message_count', 'عدد الرسائل', 'Messages', 10], ['customer_summary', 'الملخص', 'Summary', 50],
-    ['created_at', 'بداية المحادثة', 'Started', 18], ['last_message_at', 'آخر رسالة', 'Last message', 18]
+    ['created_at', 'بداية المحادثة', 'Started', 18], ['last_message_at', 'آخر رسالة', 'Last message', 18],
+    ['company_name', 'الشركة', 'Company', 18], ['job_title', 'المسمى الوظيفي', 'Job title', 16], ['location', 'المدينة / الدولة', 'Location', 16],
+    ['team_size', 'حجم الفريق', 'Team size', 12], ['monthly_volume', 'الحجم الشهري', 'Monthly volume', 16], ['channels_used', 'القنوات', 'Channels', 18],
+    ['current_tools', 'الأدوات الحالية', 'Current tools', 20], ['goals', 'الأهداف', 'Goals', 30], ['budget', 'الميزانية', 'Budget', 14],
+    ['timeline', 'الإطار الزمني', 'Timeline', 14], ['decision_maker', 'صاحب القرار', 'Decision maker', 16],
+    ['ai_call_qualified_label', 'مؤهل (مكالمة الـ AI)', 'Qualified (AI call)', 14], ['ai_call_summary', 'ملخص مكالمة الـ AI', 'AI call summary', 50]
+  ],
+  calls: [
+    ['customer_name', 'العميل', 'Customer', 22], ['channel', 'القناة', 'Channel', 12], ['status', 'الحالة', 'Status', 12],
+    ['started_at', 'البداية', 'Started', 18], ['duration', 'المدة (دقائق)', 'Minutes', 10], ['qualified', 'مؤهل للشراء', 'Qualified', 12],
+    ['buying_probability', 'نسبة الشراء %', 'Buying probability %', 12], ['summary', 'الملخص', 'Summary', 60], ['next_step', 'الخطوة التالية', 'Next step', 30],
+    ['meeting', 'اجتماع المهندس', 'Engineer meeting', 22], ['transcript', 'نص المكالمة', 'Transcript', 100]
   ],
   messages: [
     ['customer_name', 'العميل', 'Customer', 22], ['channel', 'القناة', 'Channel', 12], ['sender', 'المرسل', 'Sender', 10],
@@ -78,6 +89,7 @@ function rows(kind, t) {
     case 'conversations':
       return convs.map(c => ({
         ...c, bot: c.is_bot_active === false ? t.no : t.yes, appointment: apptOf(c),
+        ai_call_qualified_label: c.ai_call_qualified === true ? t.yes : c.ai_call_qualified === false ? t.no : '',
         message_count: (c.messages || []).length,
         handoff_at: dt(c.handoff_at), created_at: dt(c.created_at), last_message_at: dt(c.last_message_at || c.updated_at)
       }));
@@ -92,6 +104,14 @@ function rows(kind, t) {
     case 'appointments':
       return convs.filter(c => c.appointment_at).sort((a, b) => a.appointment_at.localeCompare(b.appointment_at))
         .map(c => ({ ...c, appointment_at: dt(c.appointment_at) }));
+    case 'calls':
+      return require('./callService').all().filter(s => s.transcript?.length).map(s => ({
+        customer_name: s.customer_name, channel: s.channel, status: s.status,
+        started_at: dt(s.started_at || s.created_at), duration: s.duration_sec ? Math.round(s.duration_sec / 60) : '',
+        qualified: s.analysis ? (s.analysis.qualified ? t.yes : t.no) : '', buying_probability: s.analysis?.buying_probability ?? '',
+        summary: s.analysis?.summary || '', next_step: s.analysis?.next_step || '', meeting: s.appointment?.appointment_label || '',
+        transcript: s.transcript.map(l => `${l.role === 'assistant' ? (t === T.en ? 'Assistant' : 'المساعد') : (t === T.en ? 'Customer' : 'العميل')}: ${l.text}`).join('\n').slice(0, 32000)
+      }));
     case 'posts': {
       const plans = require('./marketingService').allPlans();
       return plans.map(p => ({

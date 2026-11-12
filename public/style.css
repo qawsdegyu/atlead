@@ -1600,3 +1600,13 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
 @media (max-width: 330px) {
   .data-table tbody tr { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* AI call result in the customer panel */
+.ai-call-box { background: rgba(0, 0, 0, .25); border-radius: 8px; padding: 10px; font-size: 12.5px; line-height: 1.6; display: flex; flex-direction: column; gap: 6px; }
+.ai-call-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.ai-call-box .muted { color: var(--text-muted); }
+.ai-call-box dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 2px 0 0; }
+.ai-call-box dt { color: var(--text-muted); }
+.ai-call-box dd { margin: 0; }
+.ai-call-box summary { cursor: pointer; color: var(--primary-ink); }
+.ai-call-transcript { max-height: 280px; overflow-y: auto; margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }

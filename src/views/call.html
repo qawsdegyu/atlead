@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0b">
+<meta name="robots" content="noindex">
+<title>atlead — مكالمة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #0a0a0b; --ink: #f4f4f5; --muted: #8b8b94; --line: #26262a; --orange: #ff6f20; --red: #ef3b2d; --grad: linear-gradient(90deg, #ef3b2d 0%, #ff6f20 55%, #ffa04d 100%); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--ink); font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+  body { display: flex; flex-direction: column; min-height: 100dvh; padding: env(safe-area-inset-top) 20px calc(env(safe-area-inset-bottom) + 20px); overflow: hidden; }
+  header { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .mark { font-size: 26px; font-weight: 700; letter-spacing: -.8px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; direction: ltr; }
+  .timer { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; direction: ltr; min-width: 48px; text-align: end; }
+  main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 28px; }
+  h1 { font-size: 26px; font-weight: 700; line-height: 1.35; max-width: 340px; }
+  .sub { color: var(--muted); font-size: 15px; line-height: 1.7; max-width: 340px; }
+
+  /* The orb: breathes when idle, follows the AI's voice when it speaks */
+  .orb-wrap { position: relative; width: 220px; height: 220px; display: grid; place-items: center; }
+  .orb { width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffb37f 0%, #ff6f20 38%, #c2410c 70%, #3a1405 100%);
+    box-shadow: 0 0 60px rgba(255, 111, 32, .35), inset 0 -10px 30px rgba(0, 0, 0, .35); transform: scale(var(--level, 1)); transition: transform .08s linear; }
+  .ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(255, 111, 32, .25); transform: scale(var(--ring, 1)); transition: transform .12s linear, opacity .3s; }
+  .ring.r2 { inset: -18px; border-color: rgba(255, 111, 32, .12); }
+  body.idle .orb { animation: breathe 3.2s ease-in-out infinite; }
+  body.listening .orb { filter: saturate(.75) brightness(.9); }
+  @keyframes breathe { 50% { transform: scale(1.05); } }
+  .state { font-size: 15px; color: var(--muted); min-height: 24px; }
+  .state b { color: var(--ink); font-weight: 600; }
+
+  .controls { display: flex; align-items: center; justify-content: center; gap: 22px; }
+  .btn { border: 0; cursor: pointer; font: inherit; color: var(--ink); }
+  .call { min-width: 240px; height: 60px; border-radius: 30px; background: var(--orange); color: #160a03; font-size: 18px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(255, 111, 32, .3); }
+  .call:active { transform: scale(.97); }
+  .call[disabled] { opacity: .6; }
+  .round { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: #1b1b1e; border: 1px solid var(--line); }
+  .round.end { background: var(--red); border-color: var(--red); width: 72px; height: 72px; }
+  .round.on { background: var(--ink); color: var(--bg); }
+  .round svg, .call svg { width: 26px; height: 26px; }
+  .label { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .ctl { display: flex; flex-direction: column; align-items: center; }
+  .note { font-size: 12.5px; color: var(--muted); line-height: 1.6; max-width: 320px; }
+  .hidden { display: none !important; }
+  .err { color: #ffb37f; }
+  footer { text-align: center; font-size: 11.5px; color: #5c5c64; }
+</style>
+</head>
+<body class="idle">
+  <header>
+    <span class="mark">atlead.</span>
+    <span class="timer" id="timer"></span>
+  </header>
+
+  <main>
+    <div class="orb-wrap" id="orb-wrap"><div class="ring r2" id="ring2"></div><div class="ring" id="ring1"></div><div class="orb" id="orb"></div></div>
+
+    <div id="intro">
+      <h1 id="title">مكالمة قصيرة مع مساعد atlead</h1>
+      <p class="sub" id="subtitle">نتعرّف على شغلك واحتياجك بصوتك، وإذا كل شي مناسب نحجزلك اجتماع مع المهندس.</p>
+    </div>
+    <p class="state hidden" id="state"></p>
+
+    <div class="controls" id="start-controls">
+      <button class="btn call" id="btn-start" disabled>
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>
+        <span id="start-label">ابدأ المكالمة</span>
+      </button>
+    </div>
+
+    <div class="controls hidden" id="live-controls">
+      <div class="ctl">
+        <button class="btn round" id="btn-mute" aria-label="كتم">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg>
+        </button>
+        <span class="label" id="mute-label">كتم</span>
+      </div>
+      <div class="ctl">
+        <button class="btn round end" id="btn-end" aria-label="إنهاء">
+          <svg viewBox="0 0 24 24" fill="currentColor" style="transform: rotate(135deg)"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>
+        </button>
+        <span class="label" id="end-label">إنهاء</span>
+      </div>
+    </div>
+
+    <p class="note" id="note">تحتاج إذن الميكروفون. المكالمة مسجّلة نصياً لخدمتك بشكل أفضل.</p>
+  </main>
+  <footer>atlead · From Leads to Revenue</footer>
+  <audio id="remote" autoplay playsinline></audio>
+
+<script>
+(() => {
+  const token = location.pathname.split('/').filter(Boolean).pop();
+  // The page speaks the customer's chat language (sent by the server before anything shows).
+  let en = false;
+  const PACK = (isEn) => isEn ? {
+    title: 'A short call with the atlead assistant', sub: 'Tell us about your business by voice. If it is a good fit, we book your meeting with our engineer.',
+    start: 'Start the call', connecting: 'Connecting…', speaking: '<b>Assistant</b> is speaking', listening: 'Listening…', muted: 'Your microphone is muted',
+    mute: 'Mute', unmute: 'Unmute', end: 'End', note: 'Microphone access is needed. The call is transcribed to serve you better.',
+    endedT: 'Thank you!', endedS: 'We have everything we need. You will get a summary in the chat.',
+    errors: { not_found: 'This call link is not valid.', expired: 'This call link has expired. Ask us in the chat for a new one.', completed: 'This call has already taken place. Thank you!', disabled: 'Calls are not available right now. Please write to us in the chat.', mic: 'Microphone access was blocked. Allow it in your browser settings and try again.', too_many: 'This link has been used too many times. Ask us in the chat for a new one.', failed: 'The call could not start. Please try again.' },
+    retry: 'Try again', dir: 'ltr'
+  } : {
+    title: 'مكالمة قصيرة مع مساعد atlead', sub: 'نتعرّف على شغلك واحتياجك بصوتك، وإذا كل شي مناسب نحجزلك اجتماع مع المهندس.',
+    start: 'ابدأ المكالمة', connecting: 'جاري الاتصال…', speaking: '<b>المساعد</b> يتحدث', listening: 'أنا أسمعك…', muted: 'الميكروفون مكتوم',
+    mute: 'كتم', unmute: 'إلغاء الكتم', end: 'إنهاء', note: 'تحتاج إذن الميكروفون. المكالمة مسجّلة نصياً لخدمتك بشكل أفضل.',
+    endedT: 'شكراً لك!', endedS: 'وصلتنا كل التفاصيل، ورح يوصلك ملخص بالمحادثة.',
+    errors: { not_found: 'رابط المكالمة غير صالح.', expired: 'انتهت صلاحية رابط المكالمة. اطلب رابطاً جديداً بالمحادثة.', completed: 'تمت هذه المكالمة سابقاً. شكراً لك!', disabled: 'المكالمات غير متاحة حالياً. اكتب لنا بالمحادثة.', mic: 'تم منع الميكروفون. اسمح به من إعدادات المتصفح وحاول مرة أخرى.', too_many: 'تم استخدام هذا الرابط عدة مرات. اطلب رابطاً جديداً بالمحادثة.', failed: 'تعذّر بدء المكالمة. حاول مرة أخرى.' },
+    retry: 'حاول مرة أخرى', dir: 'rtl'
+  };
+  let T = PACK(false);
+  const $ = (id) => document.getElementById(id);
+  const applyLang = (isEn) => {
+    en = isEn; T = PACK(isEn);
+    document.documentElement.lang = en ? 'en' : 'ar';
+    document.documentElement.dir = T.dir;
+    $('title').textContent = T.title; $('subtitle').textContent = T.sub; $('start-label').textContent = T.start;
+    $('mute-label').textContent = T.mute; $('end-label').textContent = T.end; $('note').textContent = T.note;
+  };
+  applyLang(false);
+
+  let pc, dc, mic, ctx, raf, started = 0, tick, maxMin = 15, ended = false, muted = false;
+  const pending = []; // transcript lines not yet saved
+
+  const setState = (html) => { $('state').classList.remove('hidden'); $('state').innerHTML = html; };
+  const mode = (m) => { document.body.className = m; };
+  const fail = (code) => {
+    $('intro').classList.remove('hidden');
+    $('title').textContent = T.errors[code] || T.errors.failed;
+    $('subtitle').textContent = '';
+    $('state').classList.add('hidden');
+    $('live-controls').classList.add('hidden');
+    const retry = ['mic', 'failed'].includes(code);
+    $('start-controls').classList.toggle('hidden', !retry);
+    $('start-label').textContent = T.retry;
+    $('btn-start').disabled = !retry;
+    $('note').classList.toggle('hidden', !retry);
+    mode('idle');
+  };
+
+  const api = (p, body) => fetch(`/api/call/${token}${p}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}), keepalive: true }).then(r => r.json());
+  const flush = () => { if (pending.length) api('/transcript', { lines: pending.splice(0) }).catch(() => {}); };
+
+  fetch(`/api/call/${token}`).then(r => r.json()).then(info => {
+    applyLang(info.lang === 'en');
+    if (!info.ok) return fail(info.error || 'failed');
+    maxMin = info.max_minutes || 15;
+    if (info.name) $('title').textContent = en ? `Hi ${info.name}, ${T.title.toLowerCase()}` : `أهلاً ${info.name}، ${T.title}`;
+    $('btn-start').disabled = false;
+  }).catch(() => fail('failed'));
+
+  // Orb follows the assistant's voice.
+  function visualise(stream) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const an = ctx.createAnalyser(); an.fftSize = 256;
+    ctx.createMediaStreamSource(stream).connect(an);
+    const data = new Uint8Array(an.frequencyBinCount);
+    const loop = () => {
+      an.getByteFrequencyData(data);
+      const level = data.reduce((a, b) => a + b, 0) / data.length / 255;
+      const s = 1 + Math.min(level * 1.6, .35);
+      $('orb').style.setProperty('--level', s.toFixed(3));
+      $('ring1').style.setProperty('--ring', (1 + level * .9).toFixed(3));
+      $('ring2').style.setProperty('--ring', (1 + level * .5).toFixed(3));
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+  }
+
+  async function start() {
+    $('btn-start').disabled = true;
+    $('intro').classList.add('hidden');
+    $('note').classList.add('hidden');
+    setState(T.connecting);
+    try {
+      mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    } catch { return fail('mic'); }
+    let s;
+    try {
+      const r = await fetch(`/api/call/${token}/start`, { method: 'POST' });
+      s = await r.json();
+      if (!s.ok) { mic.getTracks().forEach(t => t.stop()); return fail(s.error || 'failed'); }
+    } catch { mic.getTracks().forEach(t => t.stop()); return fail('failed'); }
+    maxMin = s.max_minutes || maxMin;
+
+    pc = new RTCPeerConnection();
+    pc.ontrack = (e) => { $('remote').srcObject = e.streams[0]; visualise(e.streams[0]); };
+    pc.addTrack(mic.getTracks()[0]);
+    dc = pc.createDataChannel('oai-events');
+    dc.onopen = () => dc.send(JSON.stringify({ type: 'response.create' })); // the assistant greets first
+    dc.onmessage = (e) => onEvent(JSON.parse(e.data));
+    pc.onconnectionstatechange = () => { if (['failed', 'disconnected'].includes(pc.connectionState) && !ended) hangup('network'); };
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const ans = await fetch('https://api.openai.com/v1/realtime/calls', {
+        method: 'POST', body: offer.sdp, headers: { Authorization: `Bearer ${s.key}`, 'Content-Type': 'application/sdp' }
+      });
+      if (!ans.ok) throw new Error(await ans.text());
+      await pc.setRemoteDescription({ type: 'answer', sdp: await ans.text() });
+    } catch (err) {
+      console.error(err);
+      cleanup();
+      return fail('failed');
+    }
+
+    $('start-controls').classList.add('hidden');
+    $('live-controls').classList.remove('hidden');
+    started = Date.now();
+    tick = setInterval(() => {
+      const sec = Math.floor((Date.now() - started) / 1000);
+      $('timer').textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+      if (sec >= maxMin * 60) hangup('time_limit');
+    }, 1000);
+    setInterval(flush, 4000);
+  }
+
+  async function onEvent(ev) {
+    switch (ev.type) {
+      case 'input_audio_buffer.speech_started': mode('listening'); setState(muted ? T.muted : T.listening); break;
+      case 'response.created': mode('speaking'); setState(T.speaking); break;
+      case 'response.done': mode('listening'); setState(muted ? T.muted : T.listening); break;
+      case 'conversation.item.input_audio_transcription.completed':
+        if (ev.transcript && ev.transcript.trim()) pending.push({ id: ev.item_id, role: 'customer', text: ev.transcript }); break;
+      case 'response.output_audio_transcript.done':
+        if (ev.transcript && ev.transcript.trim()) pending.push({ id: ev.item_id, role: 'assistant', text: ev.transcript }); break;
+      case 'response.function_call_arguments.done': {
+        let args = {};
+        try { args = JSON.parse(ev.arguments || '{}'); } catch { /* empty */ }
+        flush();
+        const r = await api('/tool', { name: ev.name, args }).catch(() => ({ result: { error: 'network' } }));
+        dc.send(JSON.stringify({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: ev.call_id, output: JSON.stringify(r.result || {}) } }));
+        if (ev.name === 'end_call') setTimeout(() => hangup('assistant'), 2500); // let the goodbye finish
+        else dc.send(JSON.stringify({ type: 'response.create' }));
+        break;
+      }
+      case 'error': console.warn('realtime error', ev.error); break;
+    }
+  }
+
+  function cleanup() {
+    clearInterval(tick); cancelAnimationFrame(raf);
+    try { dc && dc.close(); } catch (e) {}
+    try { pc && pc.close(); } catch (e) {}
+    try { mic && mic.getTracks().forEach(t => t.stop()); } catch (e) {}
+    try { ctx && ctx.close(); } catch (e) {}
+  }
+
+  function hangup(reason) {
+    if (ended) return;
+    ended = true;
+    cleanup();
+    api('/end', { lines: pending.splice(0), reason }).catch(() => {});
+    $('live-controls').classList.add('hidden');
+    $('state').classList.add('hidden');
+    $('intro').classList.remove('hidden');
+    $('title').textContent = T.endedT;
+    $('subtitle').textContent = T.endedS;
+    mode('idle');
+  }
+
+  $('btn-start').addEventListener('click', start);
+  $('btn-end').addEventListener('click', () => hangup('customer'));
+  $('btn-mute').addEventListener('click', () => {
+    muted = !muted;
+    mic && mic.getTracks().forEach(t => { t.enabled = !muted; });
+    $('btn-mute').classList.toggle('on', muted);
+    $('mute-label').textContent = muted ? T.unmute : T.mute;
+    setState(muted ? T.muted : T.listening);
+  });
+  window.addEventListener('pagehide', () => {
+    if (started && !ended) navigator.sendBeacon(`/api/call/${token}/end`, JSON.stringify({ lines: pending.splice(0), reason: 'closed' }));
+  });
+})();
+</script>
+</body>
+</html>

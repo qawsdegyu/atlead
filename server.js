@@ -67,6 +67,11 @@ app.get('/media/:name', async (req, res) => {
 // Webhooks must stay public (Meta calls them). Everything else = admin dashboard.
 app.use('/webhook', webhookRoutes);
 
+// The customer's AI voice call page (public; access = the private link token).
+const callRoutes = require('./src/routes/callRoutes');
+app.use('/call', callRoutes.page);
+app.use('/api/call', callRoutes.api);
+
 // Admin protection: set ADMIN_PASSWORD (and optionally ADMIN_USER) in the environment.
 // Two ways in: a login page (/login → signed session cookie) or HTTP Basic auth.
 const crypto = require('crypto');

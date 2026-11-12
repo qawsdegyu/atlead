@@ -238,6 +238,18 @@ class AiService {
     const lang = this.detectLanguage(incomingMessage);
     // Free consultation times straight from the engineer's Google Calendar (only when connected).
     const calendarBlock = await calendarService.promptBlock(conversation).catch(() => '');
+    // AI voice call: the qualification stage before the engineer.
+    const callService = require('./callService');
+    const callOn = !!(conversation.id && callService.isActive());
+    const callDone = conversation.ai_call_status === 'completed';
+    const callBlock = !callOn ? '' : callDone
+      ? `\nمكالمة الـ AI الصوتية: العميل أجرى المكالمة. ملخصها: ${conversation.ai_call_summary || '-'}. لا تعرض مكالمة جديدة إلا إذا طلبها.\n`
+      : `
+مكالمة صوتية مع مساعد atlead (المرحلة الأولى قبل اجتماع المهندس):
+- لما يبين العميل اهتمام حقيقي (سأل عن التفاصيل أو الأسعار أو طريقة العمل، أو بده استشارة أو اجتماع): اعرض عليه مكالمة صوتية قصيرة (حوالي 10 دقائق) مع مساعد atlead الذكي، يقدر يدخلها هلق أو بأي وقت يناسبه من رابط، بنفهم فيها شغله واحتياجه وبعدها بنحجزله اجتماع مع المهندس.
+- لما تعرض المكالمة ضع "offer_ai_call": true — النظام يضيف رابط المكالمة لآخر ردك تلقائياً. لا تكتب أي رابط بنفسك.
+- إذا رفض المكالمة وبده المهندس مباشرة، كمّل بحجز موعد المهندس كالعادة.
+${conversation.ai_call_status === 'offered' ? '- العميل وصله رابط المكالمة سابقاً؛ إذا طلبه مرة ثانية ضع "offer_ai_call": true.\n' : ''}`;
     const userPrompt = `
 الرسالة الجديدة من العميل: "${incomingMessage}"
 
@@ -268,7 +280,7 @@ ${conversation.handoff_at ? `- مهم: العميل تحوّل لموظف الم
 6. التنسيق: الرد بيوصل على واتساب/إنستغرام/ماسنجر — لا تستخدم Markdown (لا [نص](رابط) ولا ** ولا #). اكتب الرابط كامل لحاله مثل https://agsco.shop
 7. لا تخمّن أبداً: جاوب فقط من المرجع الرسمي وبيانات العميل. إذا المعلومة مش موجودة بالمرجع، قل بوضوح إنها بدها تأكيد من الفريق واعرض إنهم يتواصلوا معه — لا تخترع.
 8. الأرقام: ممنوع تذكر أي رقم (سعر، تكلفة، نسبة، مدة تنفيذ، عدد عملاء، نتائج) إلا إذا كان مكتوب حرفياً بالمرجع. الأسعار تحديداً: لا سعر ولا رينج ولا "يبدأ من" — السعر بيتحدد بعد الاستشارة المجانية.
-${calendarBlock}
+${callBlock}${calendarBlock}
 أعد النتيجة بصيغة JSON حصراً.
 ${lang === 'en' ? `
 IMPORTANT: The customer's last message is in ENGLISH. Write "reply_text" entirely in English (professional, friendly). Do not use Arabic in reply_text.` : ''}
@@ -312,6 +324,13 @@ Your previous answer was in Arabic. The customer writes in English — return th
         if (fixed) result = fixed;
         else result.reply_text = this.safeAnswer(check.price ? 'price' : 'unknown', lang, conversation);
         result.grounding_fixed = true;
+      }
+      // The voice call link (a private page on this site).
+      if (callOn && !callDone && result.offer_ai_call) {
+        const session = callService.createSession(conversation);
+        result.reply_text = `${result.reply_text}\n\n${lang === 'en' ? 'Call link' : 'رابط المكالمة'}: ${callService.publicUrl(session.token)}`;
+        result.ai_call_offered = true;
+        result.scheduling = true; // not a handoff yet: the call comes first
       }
       // The customer confirmed a time: book it for real (re-checked against the calendar).
       if (calendarBlock && result.book_start) {
@@ -408,6 +427,7 @@ Your previous answer was in Arabic. The customer writes in English — return th
         consultation_requested: parsed.consultation_requested === true,
         demo_requested: parsed.demo_requested === true,
         scheduling: parsed.scheduling === true,
+        offer_ai_call: parsed.offer_ai_call === true,
         book_start: typeof parsed.book_start === 'string' && parsed.book_start.trim() ? parsed.book_start.trim() : null
       };
     } catch (e) {

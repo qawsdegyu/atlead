@@ -321,6 +321,7 @@ class ReplyEngine {
     // Once asked for, a consultation/demo stays requested.
     if (aiResult.consultation_requested) patch.consultation_requested = true;
     if (aiResult.demo_requested) patch.demo_requested = true;
+    if (aiResult.ai_call_offered && !conv.ai_call_status) patch.ai_call_status = 'offered';
     // Consultation booked in Google Calendar.
     if (aiResult.appointment) Object.assign(patch, aiResult.appointment, { consultation_booked: true, consultation_requested: true });
     // When the follow-up engine would next nudge this customer (shown in the CRM / Google Form).

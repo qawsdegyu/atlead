@@ -239,6 +239,9 @@ class SupabaseService {
         metadata: {
           local_id: conv.id,
           // Consultation booked in Google Calendar (kept in metadata: no schema change needed)
+          profile: Object.fromEntries(['company_name', 'job_title', 'location', 'team_size', 'monthly_volume', 'channels_used', 'current_tools', 'goals', 'budget', 'timeline', 'decision_maker']
+            .filter(k => conv[k]).map(k => [k, conv[k]])),
+          ...(conv.ai_call_status ? { ai_call: { status: conv.ai_call_status, at: conv.ai_call_at || null, duration_sec: conv.ai_call_duration_sec || null, qualified: conv.ai_call_qualified ?? null, summary: conv.ai_call_summary || '', next_step: conv.ai_call_next_step || '', sentiment: conv.ai_call_sentiment || '', token: conv.ai_call_token || null } } : {}),
           ...(conv.appointment_at ? { appointment: { at: conv.appointment_at, end: conv.appointment_end || null, label: conv.appointment_label || null, link: conv.appointment_link || null, event_id: conv.appointment_event_id || null, html_link: conv.appointment_html_link || null } } : {})
         },
         // profile / memory
@@ -543,6 +546,8 @@ class SupabaseService {
         wa_transport: row.wa_transport || null,
         source: row.source || null,
         pause_reason: row.pause_reason || null,
+        ...(row.metadata?.profile || {}),
+        ...(row.metadata?.ai_call ? { ai_call_status: row.metadata.ai_call.status, ai_call_at: row.metadata.ai_call.at, ai_call_duration_sec: row.metadata.ai_call.duration_sec, ai_call_qualified: row.metadata.ai_call.qualified, ai_call_summary: row.metadata.ai_call.summary, ai_call_next_step: row.metadata.ai_call.next_step, ai_call_sentiment: row.metadata.ai_call.sentiment, ai_call_token: row.metadata.ai_call.token } : {}),
         ...(row.metadata?.appointment ? { appointment_at: row.metadata.appointment.at, appointment_end: row.metadata.appointment.end, appointment_label: row.metadata.appointment.label, appointment_link: row.metadata.appointment.link, appointment_event_id: row.metadata.appointment.event_id, appointment_html_link: row.metadata.appointment.html_link, consultation_booked: true } : {}),
         pause_source: row.pause_source || null,
         paused_at: row.paused_at || null,

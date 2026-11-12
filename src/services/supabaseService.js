@@ -236,7 +236,11 @@ class SupabaseService {
         handoff_at: conv.handoff_at || null,
         handoff_reason: conv.handoff_reason || null,
         last_message_at: conv.last_message_at || conv.updated_at || conv.created_at || null,
-        metadata: { local_id: conv.id },
+        metadata: {
+          local_id: conv.id,
+          // Consultation booked in Google Calendar (kept in metadata: no schema change needed)
+          ...(conv.appointment_at ? { appointment: { at: conv.appointment_at, end: conv.appointment_end || null, label: conv.appointment_label || null, link: conv.appointment_link || null, event_id: conv.appointment_event_id || null, html_link: conv.appointment_html_link || null } } : {})
+        },
         // profile / memory
         local_id: conv.id,
         business_type: conv.business_type || null,
@@ -498,6 +502,7 @@ class SupabaseService {
         wa_transport: row.wa_transport || null,
         source: row.source || null,
         pause_reason: row.pause_reason || null,
+        ...(row.metadata?.appointment ? { appointment_at: row.metadata.appointment.at, appointment_end: row.metadata.appointment.end, appointment_label: row.metadata.appointment.label, appointment_link: row.metadata.appointment.link, appointment_event_id: row.metadata.appointment.event_id, appointment_html_link: row.metadata.appointment.html_link, consultation_booked: true } : {}),
         pause_source: row.pause_source || null,
         paused_at: row.paused_at || null,
         bot_paused_until: row.bot_paused_until || null,

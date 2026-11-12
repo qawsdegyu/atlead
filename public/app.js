@@ -211,6 +211,14 @@ function selectConversation(id, { open = false } = {}) {
   document.getElementById('side-score-bar').style.width = `${conv.interest_score || 20}%`;
   document.getElementById('side-lead-problem').textContent = conv.identified_problem || 'لم تحدد بعد';
   document.getElementById('side-lead-solution').textContent = conv.proposed_solution || 'لم يحدد بعد';
+  const apptBox = document.getElementById('side-lead-appointment-box');
+  if (apptBox) {
+    apptBox.style.display = conv.appointment_at ? '' : 'none';
+    if (conv.appointment_at) {
+      document.getElementById('side-lead-appointment').innerHTML = escapeHtml(conv.appointment_label || new Date(conv.appointment_at).toLocaleString('ar'))
+        + (conv.appointment_link ? ` — <a href="${escapeHtml(conv.appointment_link)}" target="_blank" rel="noopener">رابط الاجتماع</a>` : '');
+    }
+  }
 
   // Render Messages
   renderMessages(conv.messages || []);
@@ -889,6 +897,20 @@ async function loadSettings() {
       document.getElementById('bh-end').value = bh.end || '17:00';
       document.getElementById('bh-after-msg').value = bh.after_hours_message || 'تمام 🙏 دوامنا خلص هلق، بس {rep} رح يتواصل معك {time} لمتابعة كل التفاصيل وترتيب كل شيء معك. شكراً لاهتمامك وثقتك.';
       document.getElementById('bh-hold-emails').checked = !!bh.hold_emails_until_open;
+      const cal = s.calendar || {};
+      document.getElementById('cal-enabled').checked = !!cal.enabled;
+      document.getElementById('cal-id').value = cal.calendar_id || '';
+      const calDays = Array.isArray(cal.days) ? cal.days.map(Number) : [0, 1, 2, 3, 4, 5, 6];
+      document.querySelectorAll('.cal-day').forEach(cb => { cb.checked = calDays.includes(Number(cb.value)); });
+      document.getElementById('cal-all-day').checked = !!cal.all_day;
+      document.getElementById('cal-start').value = cal.start || '09:00';
+      document.getElementById('cal-end').value = cal.end || '21:00';
+      document.getElementById('cal-duration').value = String(cal.duration_minutes || 30);
+      document.getElementById('cal-notice').value = String(cal.min_notice_hours ?? 2);
+      document.getElementById('cal-ahead').value = String(cal.days_ahead || 7);
+      document.getElementById('cal-engineer').value = cal.engineer_name || '';
+      document.getElementById('cal-link').value = cal.meeting_link || '';
+      document.getElementById('cal-hours').style.display = cal.all_day ? 'none' : '';
       const fu = s.follow_up || {};
       document.getElementById('fu-enabled').checked = fu.enabled !== false;
       document.getElementById('fu-after-hours').value = String(fu.after_hours ?? 20);
@@ -948,6 +970,19 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
       end: document.getElementById('bh-end').value || '17:00',
       after_hours_message: document.getElementById('bh-after-msg').value.trim(),
       hold_emails_until_open: document.getElementById('bh-hold-emails').checked
+    },
+    calendar: {
+      enabled: document.getElementById('cal-enabled').checked,
+      calendar_id: document.getElementById('cal-id').value.trim(),
+      days: [...document.querySelectorAll('.cal-day')].filter(cb => cb.checked).map(cb => Number(cb.value)),
+      all_day: document.getElementById('cal-all-day').checked,
+      start: document.getElementById('cal-start').value || '09:00',
+      end: document.getElementById('cal-end').value || '21:00',
+      duration_minutes: Number(document.getElementById('cal-duration').value) || 30,
+      min_notice_hours: Number(document.getElementById('cal-notice').value),
+      days_ahead: Number(document.getElementById('cal-ahead').value) || 7,
+      engineer_name: document.getElementById('cal-engineer').value.trim() || 'المهندس',
+      meeting_link: document.getElementById('cal-link').value.trim()
     },
     follow_up: {
       enabled: document.getElementById('fu-enabled').checked,
@@ -1583,3 +1618,19 @@ document.getElementById('nav-toggle')?.addEventListener('click', () => document.
 document.getElementById('nav-backdrop')?.addEventListener('click', () => document.body.classList.remove('nav-open'));
 document.getElementById('chat-back')?.addEventListener('click', () => document.querySelector('.inbox-layout')?.classList.remove('chat-open'));
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.body.classList.remove('nav-open'); });
+
+// Appointments: 24-hour toggle and calendar check (uses the saved settings).
+document.getElementById('cal-all-day')?.addEventListener('change', (e) => {
+  document.getElementById('cal-hours').style.display = e.target.checked ? 'none' : '';
+});
+document.getElementById('btn-calendar-test')?.addEventListener('click', async () => {
+  const box = document.getElementById('calendar-test-result');
+  box.innerHTML = '<span style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> جاري فحص التقويم... (احفظ الإعدادات أولاً إذا عدّلتها)</span>';
+  try {
+    const r = await (await fetch('/api/calendar/test', { method: 'POST' })).json();
+    box.innerHTML = `${r.success ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} ${escapeHtml(r.message || '')}`
+      + (r.service_account_email ? `<div class="form-hint" style="margin-top: 6px;">حساب الخدمة: <code dir="ltr">${escapeHtml(r.service_account_email)}</code></div>` : '');
+  } catch (err) {
+    box.innerHTML = `<i class="fa-solid fa-circle-xmark st-bad"></i> ${escapeHtml(err.message)}`;
+  }
+});

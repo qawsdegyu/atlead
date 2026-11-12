@@ -243,7 +243,7 @@ class ReplyEngine {
       // Deal point / ready to buy / asked for a human → the handoff message, once.
       // After that the bot keeps answering normally until a rep replies.
       const handoff = crmService.shouldHandoff(aiResult) && !conv.handoff_at;
-      const replyText = handoff ? crmService.prepareHandoffMessage(conv.id) : aiResult.reply_text;
+      const replyText = crmService.replyForTurn(conv.id, aiResult, handoff);
       if (handoff && !crmService.keepBotUntilHuman()) {
         // Old behaviour: switch the bot off BEFORE sending so no parallel reply can slip through.
         conv = storageService.saveConversation({ id: conv.id, is_bot_active: false });
@@ -321,8 +321,10 @@ class ReplyEngine {
     // Once asked for, a consultation/demo stays requested.
     if (aiResult.consultation_requested) patch.consultation_requested = true;
     if (aiResult.demo_requested) patch.demo_requested = true;
+    // Consultation booked in Google Calendar.
+    if (aiResult.appointment) Object.assign(patch, aiResult.appointment, { consultation_booked: true, consultation_requested: true });
     // When the follow-up engine would next nudge this customer (shown in the CRM / Google Form).
-    patch.next_follow_up_at = handoff || conv.handoff_at ? null : require('./followUpService').nextFollowUpAt({ ...conv, ...patch });
+    patch.next_follow_up_at = handoff || conv.handoff_at || patch.appointment_at ? null : require('./followUpService').nextFollowUpAt({ ...conv, ...patch });
 
     const updated = storageService.saveConversation(patch);
     await supabaseService.saveConversation(updated);

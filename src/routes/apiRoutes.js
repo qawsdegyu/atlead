@@ -69,6 +69,11 @@ router.get('/settings', (req, res) => {
   res.json({ success: true, settings: maskSettings(storageService.getSettings()) });
 });
 
+// Google Calendar: check access and show the nearest free times.
+router.post('/calendar/test', async (req, res) => {
+  try { res.json(await require('../services/calendarService').test()); } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+
 router.post('/settings', (req, res) => {
   const body = stripMasked(req.body);
 
@@ -509,7 +514,7 @@ async function runSimulatorTurn(conv, text) {
   const history = { ...conv, messages: conv.messages.slice(0, -1) };
   const aiResult = await aiService.generateReply(history, text);
   const handoff = crmService.shouldHandoff(aiResult) && !conv.handoff_at;
-  const replyText = handoff ? crmService.prepareHandoffMessage(conv.id) : aiResult.reply_text;
+  const replyText = crmService.replyForTurn(conv.id, aiResult, handoff);
   if (handoff && !crmService.keepBotUntilHuman()) storageService.saveConversation({ id: conv.id, is_bot_active: false });
 
   const lastCustomer = conv.messages[conv.messages.length - 1];

@@ -207,6 +207,11 @@
                 <p id="side-lead-solution" style="font-size: 12.5px; color: #38bdf8; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">-</p>
               </div>
 
+              <div style="margin-top: 10px; display: none;" id="side-lead-appointment-box">
+                <span style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">موعد الاستشارة:</span>
+                <p id="side-lead-appointment" style="font-size: 12.5px; background: var(--primary-light); color: var(--primary-ink); padding: 8px; border-radius: 6px;">-</p>
+              </div>
+
               <div style="margin-top: 16px; display: flex; gap: 8px;">
                 <button class="btn btn-secondary" style="flex: 1; font-size: 12px;" id="btn-sync-current-lead">
                   <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -1072,6 +1077,50 @@
                 <span class="form-hint">{rep} = اسم الموظف، {time} = موعد التواصل (مثلاً "غداً الساعة 09:00").</span>
               </div>
               <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="bh-hold-emails" ><span>أرسل بريد الموظفين في بداية الدوام بدلاً من الليل</span></label>
+            </div>
+
+            <!-- Appointments (Google Calendar) -->
+            <div class="glass-card" id="calendar-card">
+              <h4 style="font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa-solid fa-calendar-check" style="color: var(--primary); margin-left: 8px;"></i> حجز المواعيد (Google Calendar)</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-calendar-test">فحص التقويم</button>
+              </h4>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="cal-enabled"><span><strong>يحجز البوت الاستشارات الأونلاين في تقويم المهندس</strong></span></label>
+              <span class="form-hint" style="display: block; margin-top: 6px;">يقترح البوت الأوقات المتاحة فقط، ويتحقق من التقويم قبل الحجز، ويرسل للعميل رابط الاجتماع.</span>
+              <div class="form-group" style="margin-top: 12px;">
+                <label class="form-label">تقويم المهندس (بريده على Google)</label>
+                <input type="text" id="cal-id" class="form-control" placeholder="name@gmail.com" dir="ltr">
+              </div>
+              <div class="form-hint" id="cal-share-hint" style="margin-bottom: 10px;">شارك التقويم مع حساب الخدمة الموجود في بطاقة Google Sheets: Google Calendar ← إعدادات التقويم ← المشاركة مع أشخاص محددين ← صلاحية «إجراء تغييرات على الأحداث».</div>
+              <label class="form-label">أيام الحجز</label>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 12px;">
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="cal-day" value="0" checked> الأحد</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="cal-day" value="1" checked> الاثنين</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="cal-day" value="2" checked> الثلاثاء</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="cal-day" value="3" checked> الأربعاء</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="cal-day" value="4" checked> الخميس</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="cal-day" value="5" checked> الجمعة</label>
+                <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="cal-day" value="6" checked> السبت</label>
+              </div>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; margin-bottom: 10px;"><input type="checkbox" id="cal-all-day"><span>متاح على مدار 24 ساعة</span></label>
+              <div class="grid-2" id="cal-hours">
+                <div class="form-group"><label class="form-label">من</label><input type="time" id="cal-start" class="form-control" value="09:00"></div>
+                <div class="form-group"><label class="form-label">إلى</label><input type="time" id="cal-end" class="form-control" value="21:00"></div>
+              </div>
+              <div class="grid-3">
+                <div class="form-group"><label class="form-label">مدة الاجتماع</label>
+                  <select id="cal-duration" class="form-control"><option value="30">30 دقيقة</option><option value="45">45 دقيقة</option><option value="60">ساعة</option></select></div>
+                <div class="form-group"><label class="form-label">أقل مهلة قبل الموعد</label>
+                  <select id="cal-notice" class="form-control"><option value="0">بدون</option><option value="1">ساعة</option><option value="2">ساعتان</option><option value="4">4 ساعات</option><option value="24">يوم</option></select></div>
+                <div class="form-group"><label class="form-label">الحجز خلال</label>
+                  <select id="cal-ahead" class="form-control"><option value="3">3 أيام</option><option value="7">أسبوع</option><option value="14">أسبوعين</option><option value="30">شهر</option></select></div>
+              </div>
+              <div class="grid-2">
+                <div class="form-group"><label class="form-label">اسم المهندس</label><input type="text" id="cal-engineer" class="form-control" placeholder="المهندس"></div>
+                <div class="form-group"><label class="form-label">رابط اجتماع ثابت (اختياري)</label><input type="text" id="cal-link" class="form-control" placeholder="https://meet.google.com/..." dir="ltr"></div>
+              </div>
+              <span class="form-hint">يُنشأ رابط Google Meet لكل موعد تلقائياً. إذا لم يتوفر، يُرسل الرابط الثابت.</span>
+              <div id="calendar-test-result" style="margin-top: 10px; font-size: 12.5px;"></div>
             </div>
 
             <!-- Follow-ups -->

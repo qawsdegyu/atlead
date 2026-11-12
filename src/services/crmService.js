@@ -53,6 +53,9 @@ function getTeam() {
 
 class CrmService {
   shouldHandoff(aiResult) {
+    // While the bot is agreeing a meeting time with the customer, it stays with them.
+    if (aiResult?.scheduling && !aiResult?.appointment) return false;
+    if (aiResult?.appointment) return true;
     const { threshold } = handoffConfig();
     const prob = Number(aiResult?.buying_probability) || 0;
     return !!aiResult?.handoff_triggered
@@ -61,6 +64,7 @@ class CrmService {
   }
 
   handoffReason(aiResult) {
+    if (aiResult?.appointment) return `حجز استشارة أونلاين: ${aiResult.appointment.appointment_label}`;
     const { threshold } = handoffConfig();
     if (aiResult?.handoff_triggered) return 'العميل وافق / طلب التواصل مع موظف';
     if (HANDOFF_STAGES.includes(aiResult?.lead_stage)) return 'العميل وصل لمرحلة ما قبل الشراء (Deal Closing)';
@@ -110,6 +114,12 @@ class CrmService {
   }
 
   keepBotUntilHuman() { return handoffConfig().keepBotUntilHuman; }
+
+  /** The text the customer gets this turn: a booking confirmation wins over the generic handoff message. */
+  replyForTurn(convId, aiResult, handoff) {
+    if (handoff && aiResult?.appointment) { this.assignRep(convId); return aiResult.reply_text; }
+    return handoff ? this.prepareHandoffMessage(convId) : aiResult.reply_text;
+  }
 
   getHandoffMessage(convId = null) {
     return this.prepareHandoffMessage(convId);

@@ -2,6 +2,7 @@ const axios = require('axios');
 const fs = require('fs');
 const knowledgeService = require('./knowledgeService');
 const storageService = require('./storageService');
+const calendarService = require('./calendarService');
 
 function normalizeArabic(text) {
   if (!text) return '';
@@ -235,6 +236,8 @@ class AiService {
     const daysSince = lastMsgAt ? Math.floor((Date.now() - new Date(lastMsgAt).getTime()) / 86400000) : 0;
 
     const lang = this.detectLanguage(incomingMessage);
+    // Free consultation times straight from the engineer's Google Calendar (only when connected).
+    const calendarBlock = await calendarService.promptBlock(conversation).catch(() => '');
     const userPrompt = `
 الرسالة الجديدة من العميل: "${incomingMessage}"
 
@@ -251,7 +254,7 @@ class AiService {
 - مرحلة العميل السابقة: ${conversation.lead_stage || 'new'}
 - نسبة الشراء السابقة: ${Number(conversation.interest_score) || 0}%
 ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} يوم من آخر رسالة — كمّل معه من وين ما وقفتوا.` : ''}
-${conversation.handoff_at ? `- مهم: العميل تحوّل لموظف المبيعات${conversation.assigned_to_name ? ` (${conversation.assigned_to_name})` : ''} وبانتظار تواصله. لا تعيد رسالة التحويل ولا تعطِ موعداً جديداً. جاوب على سؤاله من المرجع فقط، وإذا سأل متى رح يتواصلوا معه قل إن الموظف سيتواصل معه قريباً.` : ''}
+${conversation.handoff_at ? `- مهم: العميل تحوّل لموظف المبيعات${conversation.assigned_to_name ? ` (${conversation.assigned_to_name})` : ''} وبانتظار تواصله. لا تعيد رسالة التحويل${calendarBlock ? '' : ' ولا تعطِ موعداً جديداً'}. جاوب على سؤاله من المرجع فقط، وإذا سأل متى رح يتواصلوا معه قل إن الموظف سيتواصل معه قريباً.` : ''}
 
 قم بتحليل الرسالة، وتوليد الرد المناسب حسب قواعد atlead الدقيقة، وتحديد حالة العميل وتصنيفه، وما إذا وصل لمرحلة الديل/التحويل للبشري.
 إذا طلب العميل رابطاً أو مثالاً أو ملفاً أو تفاصيل عن مشروع سابق، ابحث في المرجع الرسمي عن الرابط/الملف المطابق وانسخه كما هو في الرد. لا تستبدل الرابط برد عام، ولا تذكر GitHub كمصدر؛ المصدر التشغيلي هو Supabase knowledge_docs.
@@ -265,6 +268,7 @@ ${conversation.handoff_at ? `- مهم: العميل تحوّل لموظف الم
 6. التنسيق: الرد بيوصل على واتساب/إنستغرام/ماسنجر — لا تستخدم Markdown (لا [نص](رابط) ولا ** ولا #). اكتب الرابط كامل لحاله مثل https://agsco.shop
 7. لا تخمّن أبداً: جاوب فقط من المرجع الرسمي وبيانات العميل. إذا المعلومة مش موجودة بالمرجع، قل بوضوح إنها بدها تأكيد من الفريق واعرض إنهم يتواصلوا معه — لا تخترع.
 8. الأرقام: ممنوع تذكر أي رقم (سعر، تكلفة، نسبة، مدة تنفيذ، عدد عملاء، نتائج) إلا إذا كان مكتوب حرفياً بالمرجع. الأسعار تحديداً: لا سعر ولا رينج ولا "يبدأ من" — السعر بيتحدد بعد الاستشارة المجانية.
+${calendarBlock}
 أعد النتيجة بصيغة JSON حصراً.
 ${lang === 'en' ? `
 IMPORTANT: The customer's last message is in ENGLISH. Write "reply_text" entirely in English (professional, friendly). Do not use Arabic in reply_text.` : ''}
@@ -309,6 +313,18 @@ Your previous answer was in Arabic. The customer writes in English — return th
         else result.reply_text = this.safeAnswer(check.price ? 'price' : 'unknown', lang, conversation);
         result.grounding_fixed = true;
       }
+      // The customer confirmed a time: book it for real (re-checked against the calendar).
+      if (calendarBlock && result.book_start) {
+        const booking = await calendarService.book({ start: result.book_start, conv: conversation, lang });
+        result.reply_text = booking.reply;
+        if (booking.ok) {
+          result.appointment = booking.appointment;
+          result.consultation_requested = true;
+          result.scheduling = false;
+        } else {
+          result.scheduling = true;
+        }
+      }
       return { ...result, source: 'ai' };
     } catch (err) {
       if (err.message !== 'NO_AI_KEY') console.error('[AI] All providers failed — using the knowledge-file fallback.');
@@ -324,7 +340,10 @@ Your previous answer was in Arabic. The customer writes in English — return th
    */
   ungroundedNumbers(reply, source) {
     const toLatin = (t) => String(t || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
-    const text = toLatin(reply).replace(/https?:\/\/\S+/g, ' ');
+    const text = toLatin(reply).replace(/https?:\/\/\S+/g, ' ')
+      .replace(/\b\d{1,2}:\d{2}\b/g, ' ') // clock times
+      .replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, ' ') // dates like 16/11
+      .replace(/\b\d{4}-\d{1,2}-\d{1,2}\b/g, ' ');
     const src = toLatin(source);
     const known = new Set((src.match(/\d[\d,.]*/g) || []).map(n => n.replace(/[,.]+$/, '').replace(/,/g, '')));
     const currency = /(دينار|دنانير|دولار|ريال|درهم|يورو|ليرة|JD|JOD|USD|SAR|AED|EUR|\$|€|£)/i;
@@ -387,7 +406,9 @@ Your previous answer was in Arabic. The customer writes in English — return th
         company_name: parsed.company_name || null,
         customer_email: parsed.customer_email || null,
         consultation_requested: parsed.consultation_requested === true,
-        demo_requested: parsed.demo_requested === true
+        demo_requested: parsed.demo_requested === true,
+        scheduling: parsed.scheduling === true,
+        book_start: typeof parsed.book_start === 'string' && parsed.book_start.trim() ? parsed.book_start.trim() : null
       };
     } catch (e) {
       console.warn('Failed to parse AI JSON, using fallback parser:', e.message);

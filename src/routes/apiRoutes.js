@@ -221,7 +221,7 @@ router.get('/team', (req, res) => {
 router.patch('/leads/:id/assign', async (req, res) => {
   const result = await crmService.reassign(req.params.id, req.body.rep_id);
   if (!result.success) return res.status(400).json({ success: false, message: result.error });
-  res.json({ success: true, message: `تم إسناد العميل إلى ${result.rep.name}${result.email.success ? ' وإرسال التفاصيل له بالإيميل ✅' : ''}` });
+  res.json({ success: true, message: `تم إسناد العميل إلى ${result.rep.name}${result.email.success ? ' وإرسال التفاصيل له بالإيميل' : ''}` });
 });
 
 // --- EMAIL NOTIFICATIONS ---
@@ -295,7 +295,7 @@ router.get('/meta/oauth/callback', async (req, res) => {
     const r = await metaService.oauthCallback(req.query);
     const msg = `تم ربط صفحة ${r.page}${r.instagram ? ` + إنستغرام @${r.instagram}` : ''}`
       + `${r.longLived ? ' برمز دائم' : ''}${r.subscribed ? '، والصفحة مشتركة بالرسائل والتعليقات' : ''}.`
-      + (r.missing.length ? ` ⚠️ صلاحيات ما انعطت: ${r.missing.join('، ')}` : ' ✅ كل الصلاحيات موجودة.');
+      + (r.missing.length ? ` صلاحيات لم تُمنح: ${r.missing.join('، ')}` : ' كل الصلاحيات موجودة.');
     res.redirect(`/?tab=settings&meta_oauth=${r.missing.length ? 'partial' : 'ok'}&msg=${encodeURIComponent(msg)}`);
   } catch (err) {
     const m = err.response?.data?.error?.message || err.message;
@@ -434,7 +434,7 @@ router.patch('/leads/:id', async (req, res) => {
   }
   const result = await crmService.setPurchaseStatus(req.params.id, purchase_status, notes);
   if (!result) return res.status(404).json({ success: false, message: 'العميل غير موجود' });
-  res.json({ success: true, message: 'تم تحديث حالة العميل' + (result.sync.success ? ' ومزامنتها مع الشيت ✅' : ''), lead: result.lead });
+  res.json({ success: true, message: 'تم تحديث حالة العميل' + (result.sync.success ? ' ومزامنتها مع الشيت' : ''), lead: result.lead });
 });
 
 // --- COMMENTS ROUTES ---
@@ -534,7 +534,7 @@ router.post('/simulator/chat', async (req, res) => {
   storageService.addMessage(conv.id, { sender: 'customer', content: String(message), media_type: 'text' });
   const result = await runSimulatorTurn(conv, String(message));
   if (!result.bot_active && !result.reply) {
-    result.reply = 'المحادثة محولة لموظف بشري — البوت ما بيرد على هذا العميل نهائياً. (تقدر تعيد تفعيله يدوياً من صندوق المحادثات)';
+    result.reply = 'المحادثة محوّلة إلى موظف — البوت متوقف مع هذا العميل. (يمكن إعادة تفعيله يدوياً من صندوق المحادثات)';
   }
   res.json({ success: true, ...result });
 });
@@ -575,7 +575,7 @@ router.post('/simulator/voice', upload.single('audio'), async (req, res) => {
 
   const result = await runSimulatorTurn(conv, messageText);
   if (!result.bot_active && !result.reply) {
-    result.reply = 'تم استلام الفويس. المحادثة محولة لموظف بشري — البوت ما بيرد.';
+    result.reply = 'تم استلام التسجيل الصوتي. المحادثة محوّلة إلى موظف — البوت متوقف.';
   }
   res.json({ success: true, transcript, transcription_failed: !transcript, ...result });
 });
@@ -596,7 +596,7 @@ router.get('/knowledge', async (req, res) => {
           ...d,
           content,
           is_faq: isFaq,
-          hint: isFaq ? 'كل سؤال بسطرين: «س: السؤال» ثم «ج: الجواب»، وسطر اختياري «كلمات: سعر، بكم» للكلمات اللي بتدل عليه. اترك سطر فاضي بين الأسئلة.' : '',
+          hint: isFaq ? 'كل سؤال بسطرين: «س: السؤال» ثم «ج: الجواب»، وسطر اختياري «كلمات: سعر، بكم» للكلمات الدالة عليه. اترك سطراً فارغاً بين الأسئلة.' : '',
           chars: String(content || '').length
         };
       }),
@@ -612,7 +612,7 @@ router.get('/knowledge', async (req, res) => {
 router.post('/knowledge/docs', async (req, res) => {
   try {
     const doc = await knowledgeService.createDocument(req.body || {});
-    res.json({ success: true, document: doc, message: 'تمت إضافة الوثيقة — البوت صار يجاوب منها ✅' });
+    res.json({ success: true, document: doc, message: 'تمت إضافة الوثيقة، وأصبح البوت يجيب منها' });
   } catch (err) {
     res.status(400).json({ success: false, message: `تعذر إضافة الوثيقة: ${err.message}` });
   }
@@ -622,7 +622,7 @@ router.put('/knowledge/:id', async (req, res) => {
   try {
     const doc = await knowledgeService.updateDocument(req.params.id, req.body || {});
     if (!doc) return res.status(404).json({ success: false, message: 'الوثيقة غير موجودة' });
-    res.json({ success: true, document: { ...doc, chars: String(doc.content || '').length }, message: 'تم حفظ الوثيقة وتحديث مصدر البوت ✅' });
+    res.json({ success: true, document: { ...doc, chars: String(doc.content || '').length }, message: 'تم حفظ الوثيقة وتحديث مصدر البوت' });
   } catch (err) {
     res.status(400).json({ success: false, message: `تعذر حفظ الوثيقة: ${err.message}` });
   }
@@ -631,7 +631,7 @@ router.put('/knowledge/:id', async (req, res) => {
 router.post('/knowledge', (req, res) => {
   const extra = String(req.body?.extra_text ?? '').slice(0, 20000);
   storageService.updateSettings({ knowledge: { extra_text: extra } });
-  res.json({ success: true, message: 'تم حفظ المعلومات الإضافية — البوت صار يستخدمها بالردود ✅' });
+  res.json({ success: true, message: 'تم حفظ المعلومات الإضافية، وأصبح البوت يستخدمها في الردود' });
 });
 
 module.exports = router;

@@ -165,7 +165,7 @@ class MetaService {
       return { converted: false }; // not a user token (page tokens can't list accounts)
     }
     if (!Array.isArray(accounts)) return { converted: false };
-    if (!accounts.length) return { converted: true, error: 'رمز المستخدم ما عنده صلاحية على أي صفحة — عند "Generate Access Token" اختار صفحة Atlead - AI ووافق.' };
+    if (!accounts.length) return { converted: true, error: 'رمز المستخدم لا يملك صلاحية على أي صفحة — عند "Generate Access Token" اختر الصفحة ووافق.' };
 
     const cfg = metaConfig();
     let userToken = token;
@@ -193,7 +193,7 @@ class MetaService {
 
     const page = accounts.find(p => p.id === cfg.page_id) || (accounts.length === 1 ? accounts[0] : null);
     if (!page) {
-      return { converted: true, error: `رمز المستخدم بيدير ${accounts.length} صفحات (${accounts.map(p => p.name).join('، ')}). اكتب Page ID تبع الصفحة المطلوبة بالخانة وجرب مرة ثانية.` };
+      return { converted: true, error: `رمز المستخدم يدير ${accounts.length} صفحات (${accounts.map(p => p.name).join('، ')}). اكتب Page ID للصفحة المطلوبة في الخانة وحاول مرة أخرى.` };
     }
     const ig = page.instagram_business_account;
     storageService.updateSettings({ meta: {
@@ -219,8 +219,8 @@ class MetaService {
       token = conv.pageToken;
       tokenOverride = null; // the Page token is now saved
       convertNote = conv.longLived
-        ? ' — 🔁 حوّلت رمز المستخدم لرمز الصفحة الدائم (ما بينتهي) ✅'
-        : ' — 🔁 حوّلت رمز المستخدم لرمز الصفحة. ⚠️ الرمز مؤقت (ساعة تقريباً): حط App Secret بالخانة واضغط فحص الاتصال مرة ثانية عشان يصير دائم.';
+        ? ' — تم تحويل رمز المستخدم إلى رمز صفحة دائم'
+        : ' — تم تحويل رمز المستخدم إلى رمز صفحة. الرمز مؤقت (ساعة تقريباً): أضف App Secret واضغط فحص الاتصال مرة أخرى ليصبح دائماً.';
     }
 
     try {
@@ -237,12 +237,12 @@ class MetaService {
       let subNote = '';
       {
         const sub = await this.subscribePage(tokenOverride);
-        subNote = sub.success ? ' — تم اشتراك الصفحة بالرسائل والتعليقات ✅' : ` — ⚠️ تعذر اشتراك الصفحة بالويب هوك: ${sub.message}`;
+        subNote = sub.success ? ' — تم اشتراك الصفحة في الرسائل والتعليقات' : ` — تعذر اشتراك الصفحة بالويب هوك: ${sub.message}`;
       }
 
       return {
         success: true,
-        message: `تم الاتصال بنجاح بصفحة: ${response.data.name || 'الصفحة'} (ID: ${response.data.id})${ig ? ` + إنستغرام @${ig.username}` : identity.igError ? ' — (ما قدرنا نقرأ حساب الإنستغرام: الرمز ناقصه صلاحية pages_read_engagement / instagram_basic — الماسنجر شغال عادي)' : ' — لا يوجد حساب إنستغرام أعمال مربوط بالصفحة'}${subNote}${convertNote}`,
+        message: `تم الاتصال بنجاح بصفحة: ${response.data.name || 'الصفحة'} (ID: ${response.data.id})${ig ? ` + إنستغرام @${ig.username}` : identity.igError ? ' — (تعذّرت قراءة حساب إنستغرام: الرمز تنقصه صلاحية pages_read_engagement / instagram_basic — الماسنجر شغال عادي)' : ' — لا يوجد حساب إنستغرام أعمال مربوط بالصفحة'}${subNote}${convertNote}`,
         data: response.data
       };
     } catch (err) {
@@ -258,13 +258,13 @@ class MetaService {
           storageService.updateSettings({ meta: { _ids_checked: true } });
           return {
             success: true,
-            message: `✅ الماسنجر مربوط${convertNote}: الصفحة ${cfg.page_id} مشتركة بالرسائل والبوت بيقدر يرد. ⚠️ الرمز ناقصه صلاحية pages_read_engagement، فقراءة التعليقات وربط الإنستغرام ما رح يشتغلوا لحد ما تعمل رمز جديد فيه هاي الصلاحية.`
+            message: `الماسنجر مربوط${convertNote}: الصفحة ${cfg.page_id} مشتركة بالرسائل ويستطيع البوت الرد. الرمز تنقصه صلاحية pages_read_engagement، فلن تعمل قراءة التعليقات وربط إنستغرام حتى تُنشئ رمزاً جديداً بهذه الصلاحية.`
           };
         }
-        return { success: false, message: `فشل الاتصال بـ Meta: ${msg} — ومحاولة اشتراك الصفحة فشلت كمان: ${sub.message}` };
+        return { success: false, message: `فشل الاتصال بـ Meta: ${msg} — وفشلت محاولة اشتراك الصفحة أيضاً: ${sub.message}` };
       }
       if (code === 190) return { success: false, message: `الرمز غير صالح أو منتهي — أنشئ رمز جديد. (${msg})` };
-      return { success: false, message: `فشل الاتصال بـ Meta Graph API: ${msg}${cfg.page_id ? '' : ' — اكتب Page ID بالخانة واضغط فحص الاتصال مرة ثانية.'}` };
+      return { success: false, message: `فشل الاتصال بـ Meta Graph API: ${msg}${cfg.page_id ? '' : ' — اكتب Page ID في الخانة واضغط فحص الاتصال مرة أخرى.'}` };
     }
   }
 
@@ -407,7 +407,7 @@ class MetaService {
         const ig = fieldsOf('instagram');
         add('app_page_webhook', 'ويب هوك الصفحة (فيسبوك)', page.includes('messages') && page.includes('feed'),
           page.length ? `مشترك بـ: ${page.join(', ')}` : 'مش مشترك',
-          !page.includes('feed') ? 'فعّل حقل feed لكائن Page بإعدادات Webhooks بالتطبيق (هذا اللي بيجيب تعليقات الفيس).' : '');
+          !page.includes('feed') ? 'فعّل حقل feed لكائن Page في إعدادات Webhooks بالتطبيق (هو ما يجلب تعليقات فيسبوك).' : '');
         add('app_ig_webhook', 'ويب هوك الإنستا', ig.includes('messages') && ig.includes('comments'),
           ig.length ? `مشترك بـ: ${ig.join(', ')}` : 'مش مشترك',
           !(ig.includes('messages') && ig.includes('comments')) ? 'فعّل messages و comments لكائن Instagram بإعدادات Webhooks بالتطبيق.' : '');
@@ -436,7 +436,7 @@ class MetaService {
       }
       try {
         const conv = await get(`${cfg.page_id}/conversations`, { platform: 'instagram', limit: 3, fields: 'id,updated_time' });
-        add('ig_dm', 'رسائل الإنستا (DM)', true, `الوصول شغال — ${conv.data?.length || 0} محادثة ظاهرة.`);
+        add('ig_dm', 'رسائل الإنستا (DM)', true, `الوصول يعمل — ${conv.data?.length || 0} محادثة ظاهرة.`);
       } catch (e) {
         const m = errMsg(e);
         add('ig_dm', 'رسائل الإنستا (DM)', false, m,
@@ -451,7 +451,7 @@ class MetaService {
           await get(`${withComments.id}/comments`, { limit: 1 });
           add('ig_comments', 'تعليقات الإنستا', true, 'القراءة شغالة.');
         } else {
-          add('ig_comments', 'تعليقات الإنستا', true, `${(media.data || []).length} منشور — ما في تعليقات لنفحصها.`);
+          add('ig_comments', 'تعليقات الإنستا', true, `${(media.data || []).length} منشور — لا توجد تعليقات لفحصها.`);
         }
       } catch (e) {
         add('ig_comments', 'تعليقات الإنستا', false, errMsg(e), 'لازم صلاحية instagram_manage_comments بالرمز.');
@@ -470,7 +470,7 @@ class MetaService {
     if (appId) {
       try {
         const app = (await axios.get(`${GRAPH}/${appId}`, { params: { fields: 'name', access_token: `${appId}|${cfg.app_secret}` }, timeout: 10000 })).data;
-        add('app', 'التطبيق', true, `${app.name} — منشور. ملاحظة: بدون App Review البوت بيرد بس على حسابات إلها دور بالتطبيق (أدمن/مختبر).`);
+        add('app', 'التطبيق', true, `${app.name} — منشور. ملاحظة: بدون App Review يرد البوت فقط على الحسابات التي لها دور في التطبيق (مشرف/مختبر).`);
       } catch { /* optional */ }
     }
 

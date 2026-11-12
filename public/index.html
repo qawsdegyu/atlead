@@ -41,7 +41,7 @@
         </li>
         <li class="nav-item" data-tab="marketing">
           <i class="fa-solid fa-bullhorn"></i>
-          <span>التسويق الذكي وجدولة البوستات</span>
+          <span>التسويق الذكي وجدولة المنشورات</span>
         </li>
         <li class="nav-item" data-tab="knowledge">
           <i class="fa-solid fa-book-open"></i>
@@ -61,12 +61,15 @@
       </div>
     </aside>
 
+    <div class="nav-backdrop" id="nav-backdrop"></div>
+
     <!-- MAIN CONTENT -->
     <main class="main-content">
 
       <!-- TOP NAVBAR -->
       <header class="top-navbar">
         <div class="top-navbar-title">
+          <button type="button" class="nav-toggle" id="nav-toggle" aria-label="القائمة"><i class="fa-solid fa-bars"></i></button>
           <h2 id="current-tab-title">صندوق المحادثات الموحد</h2>
         </div>
 
@@ -106,7 +109,7 @@
                 <span class="filter-chip" data-filter="whatsapp">واتساب</span>
                 <span class="filter-chip" data-filter="instagram_dm">إنستغرام</span>
                 <span class="filter-chip" data-filter="facebook_messenger">ماسنجر</span>
-                <span class="filter-chip" data-filter="deal_closing">جاهز للديل 🎯</span>
+                <span class="filter-chip" data-filter="deal_closing">جاهز للصفقة</span>
               </div>
             </div>
 
@@ -119,6 +122,7 @@
           <div class="chat-main-pane">
             <div class="chat-header">
               <div class="chat-user-info">
+                <button type="button" class="chat-back" id="chat-back" aria-label="رجوع للمحادثات"><i class="fa-solid fa-arrow-right"></i></button>
                 <div class="channel-avatar whatsapp" id="active-chat-avatar">
                   <i class="fa-brands fa-whatsapp"></i>
                 </div>
@@ -165,7 +169,7 @@
                 </button>
               </div>
               <div id="handoff-alert-box" style="display: none; font-size: 11.5px; color: #fbbf24; background: rgba(245, 158, 11, 0.1); padding: 8px 10px; border-radius: 6px;">
-                <i class="fa-solid fa-bell"></i> العميل وصل لمرحلة الديل وتم إيقاف البوت تلقائياً حتى يستلم الموظف البشري.
+                <i class="fa-solid fa-bell"></i> وصل العميل إلى مرحلة الصفقة، وتم إيقاف البوت تلقائياً حتى يتسلّمه موظف المبيعات.
               </div>
             </div>
 
@@ -307,12 +311,12 @@
       <section class="view-panel" id="view-comments">
         <div class="grid-2" style="margin-bottom: 24px;">
           <div>
-            <p class="page-lede">البوت بيرد على التعليقات، وبيبعت رسالة خاصة لكل مهتم.</p>
+            <p class="page-lede">يرد البوت على التعليقات، ويرسل رسالة خاصة لكل مهتم.</p>
           </div>
           <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px;">
             <button class="btn btn-primary" id="btn-simulate-comment-modal">
               <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <span>جرّب تعليق</span>
+              <span>جرّب تعليقاً</span>
             </button>
           </div>
         </div>
@@ -353,7 +357,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
               <div>
                 <h3 class="card-title">جرّب البوت</h3>
-                <p class="card-sub">اكتب، ابعت صورة أو فويس، وشوف كيف بيرد.</p>
+                <p class="card-sub">اكتب رسالة أو أرسل صورة أو تسجيلاً صوتياً، وشاهد كيف يرد البوت.</p>
               </div>
               <button class="btn btn-secondary btn-sm" id="btn-reset-simulator">
                 <i class="fa-solid fa-rotate-right"></i> إعادة تعيين
@@ -371,7 +375,7 @@
               <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;">
                 <button class="btn btn-secondary btn-sm sim-quick-btn" data-text="مرحبا، شو الأسعار عندكم؟">اسأل عن الأسعار</button>
                 <button class="btn btn-secondary btn-sm sim-quick-btn" data-text="شو المشاريع والأعمال اللي اشتغلتوها قبل هيك؟">اسأل عن سوابق الأعمال</button>
-                <button class="btn btn-secondary btn-sm sim-quick-btn" data-text="تمام ممتاز، أنا موافق وبدي أحجز موعد استشارة معكم لنتفق ونبدأ الشغل">جرب مرحلة الديل والإغلاق (Handoff)</button>
+                <button class="btn btn-secondary btn-sm sim-quick-btn" data-text="تمام ممتاز، أنا موافق وبدي أحجز موعد استشارة معكم لنتفق ونبدأ الشغل">جرّب مرحلة الصفقة والإغلاق (Handoff)</button>
               </div>
 
               <!-- Input row -->
@@ -387,7 +391,7 @@
                   <input type="file" id="sim-image-upload" accept="image/*" style="display: none;">
                 </label>
                 <!-- Voice Note simulation button -->
-                <label class="btn btn-success" style="cursor: pointer;" title="رفع تسجيل صوتي (فويس) لاختباره">
+                <label class="btn btn-success" style="cursor: pointer;" title="رفع تسجيل صوتي لاختباره">
                   <i class="fa-solid fa-microphone"></i>
                   <input type="file" id="sim-voice-upload" accept="audio/*" style="display: none;">
                 </label>
@@ -397,7 +401,7 @@
 
           <!-- Right: AI Live Reasoning & Deal Inspector -->
           <div class="glass-card" style="height: 750px; overflow-y: auto;">
-            <h3 class="card-title">شو فهم البوت</h3>
+            <h3 class="card-title">ما فهمه البوت</h3>
             <p class="card-sub">تصنيف العميل ونسبة الشراء بعد كل رد.</p>
 
             <div class="lead-metric">
@@ -421,7 +425,7 @@
 
             <div class="lead-metric">
               <span class="lead-metric-title">حالة تشغيل البوت (Bot Active):</span>
-              <span class="lead-metric-value" id="sim-inspect-active" style="color: #34d399;">مفعل 🟢</span>
+              <span class="lead-metric-value" id="sim-inspect-active" style="color: #34d399;">مفعل</span>
             </div>
 
             <div class="lead-metric">
@@ -444,7 +448,7 @@
               <h4 style="color: #fbbf24; font-size: 14px; margin-bottom: 6px;">
                 <i class="fa-solid fa-circle-check"></i> العميل جاهز وتحوّل للموظف
               </h4>
-              <p style="font-size: 12.5px; color: #fef08a;">البوت وقف مع هذا العميل، وبيانات العميل انحفظت ووصلت للفريق.</p>
+              <p style="font-size: 12.5px; color: #fef08a;">توقف البوت مع هذا العميل، وحُفظت بياناته وأُرسلت إلى الفريق.</p>
             </div>
 
           </div>
@@ -456,21 +460,21 @@
       <section class="view-panel" id="view-marketing">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap;">
           <div>
-            <p class="page-lede">موضوع ← صورة ← كابشن ← ساعة، والبوست بينزل لحاله.</p>
+            <p class="page-lede">موضوع ← صورة ← نص ← موعد، ثم يُنشر المنشور تلقائياً.</p>
           </div>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="btn btn-secondary" id="mk-btn-send-brief"><i class="fa-brands fa-telegram"></i> <span>ابعت اقتراحات اليوم على تليجرام</span></button>
-            <button class="btn btn-primary" id="mk-btn-new-plan"><i class="fa-solid fa-wand-magic-sparkles"></i> <span>بوست جديد</span></button>
+            <button class="btn btn-secondary" id="mk-btn-send-brief"><i class="fa-brands fa-telegram"></i> <span>أرسل اقتراحات اليوم على تليجرام</span></button>
+            <button class="btn btn-primary" id="mk-btn-new-plan"><i class="fa-solid fa-wand-magic-sparkles"></i> <span>منشور جديد</span></button>
           </div>
         </div>
 
         <div id="mk-status-strip" class="mk-strip"></div>
 
         <div class="mk-subtabs">
-          <button class="mk-subtab active" data-mk="wizard"><i class="fa-solid fa-list-check"></i> <span>صناعة البوست</span></button>
+          <button class="mk-subtab active" data-mk="wizard"><i class="fa-solid fa-list-check"></i> <span>إنشاء منشور</span></button>
           <button class="mk-subtab" data-mk="kit"><i class="fa-solid fa-swatchbook"></i> <span>اختبار الهوية</span></button>
           <button class="mk-subtab" data-mk="research"><i class="fa-solid fa-magnifying-glass-chart"></i> <span>دراسة السوق والمنافسين</span></button>
-          <button class="mk-subtab" data-mk="history"><i class="fa-solid fa-calendar-days"></i> <span>البوستات المجدولة والسابقة</span></button>
+          <button class="mk-subtab" data-mk="history"><i class="fa-solid fa-calendar-days"></i> <span>المنشورات المجدولة والسابقة</span></button>
           <button class="mk-subtab" data-mk="setup"><i class="fa-solid fa-gear"></i> <span>الإعدادات والربط</span></button>
         </div>
 
@@ -480,7 +484,7 @@
           <div class="glass-card" id="mk-wizard-body">
             <div class="mk-empty">
               <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <p>ما في بوست قيد التحضير. اضغط <b>بوست جديد</b> وبندرس السوق ونقترحلك 3 مواضيع.</p>
+              <p>لا يوجد منشور قيد التحضير. اضغط <b>منشور جديد</b> وسندرس السوق ونقترح عليك 3 مواضيع.</p>
             </div>
           </div>
         </div>
@@ -519,8 +523,8 @@
             <div class="glass-card">
               <h4 class="mk-card-title"><i class="fa-brands fa-telegram" style="color: #29a9eb;"></i> بوت تليجرام (رسالة الصباح والتنبيهات)</h4>
               <ol class="mk-howto">
-                <li>افتح <b>@BotFather</b> بتليجرام ← <code>/newbot</code> ← انسخ التوكن والصقه هون.</li>
-                <li>افتح البوت تبعك وابعثله <code>/start</code>.</li>
+                <li>افتح <b>@BotFather</b> بتليجرام ← <code>/newbot</code> ← انسخ الرمز (Token) والصقه هنا.</li>
+                <li>افتح البوت الخاص بك وأرسل له <code>/start</code>.</li>
                 <li>اضغط <b>اكتشف رقم المحادثة</b> ثم <b>حفظ</b>.</li>
               </ol>
               <div class="form-group">
@@ -538,9 +542,9 @@
               <div class="form-group">
                 <label class="form-label">قناة تليجرام للنشر (اختياري)</label>
                 <input type="text" id="mk-tg-channel" class="form-control" placeholder="@my_channel">
-                <span class="form-hint">إذا بدك البوست ينزل كمان على قناتك: أضف البوت كأدمن بالقناة.</span>
+                <span class="form-hint">لنشر المنشورات على قناتك أيضاً: أضف البوت مشرفاً في القناة.</span>
               </div>
-              <label class="mk-check"><input type="checkbox" id="mk-tg-handoffs" checked> <span>ابعتلي على تليجرام كمان لما يكون في عميل جاهز للتواصل 🔥</span></label>
+              <label class="mk-check"><input type="checkbox" id="mk-tg-handoffs" checked> <span>أرسل لي على تليجرام أيضاً عند وجود عميل جاهز للتواصل</span></label>
               <div style="display: flex; gap: 8px; margin-top: 14px;">
                 <button type="button" class="btn btn-secondary btn-sm" id="mk-btn-tg-test">رسالة تجريبية</button>
               </div>
@@ -556,15 +560,15 @@
               <div class="form-group">
                 <label class="form-label">حسابات المنافسين على إنستغرام (حتى 8)</label>
                 <textarea id="mk-competitors" class="form-control" rows="3" placeholder="@competitor1&#10;@competitor2"></textarea>
-                <span class="form-hint">حسابات أعمال أو صانع محتوى بس.</span>
+                <span class="form-hint">حسابات الأعمال أو صنّاع المحتوى فقط.</span>
               </div>
               <div class="form-group">
                 <label class="form-label">كلمات مجالك (للأخبار والترندات)</label>
                 <input type="text" id="mk-keywords" class="form-control" placeholder="أتمتة المبيعات، الذكاء الاصطناعي للشركات">
               </div>
               <div class="form-group">
-                <label class="form-label">وصف شركتك وجمهورك (اختياري — غير هيك بنستخدم قاعدة المعرفة)</label>
-                <textarea id="mk-business" class="form-control" rows="3" placeholder="مين إحنا، شو بنقدم، ومين عملاءنا المثاليين"></textarea>
+                <label class="form-label">وصف شركتك وجمهورك (اختياري — وإلا ستُستخدم قاعدة المعرفة)</label>
+                <textarea id="mk-business" class="form-control" rows="3" placeholder="من نحن، وماذا نقدّم، ومن هم عملاؤنا المثاليون"></textarea>
               </div>
             </div>
 
@@ -576,28 +580,28 @@
                   <input type="time" id="mk-morning-time" class="form-control" value="09:00">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">لغة البوستات</label>
+                  <label class="form-label">لغة المنشورات</label>
                   <select id="mk-language" class="form-control">
-                    <option value="ar">عربي (لهجة بيضاء)</option>
+                    <option value="ar">عربي (لهجة محكية مبسطة)</option>
                     <option value="en">English</option>
                     <option value="both">عربي + English</option>
                   </select>
                 </div>
               </div>
               <div class="form-group">
-                <label class="form-label">ستايل الصور (اختياري، بالإنجليزي أفضل)</label>
+                <label class="form-label">نمط الصور (اختياري، ويُفضّل بالإنجليزية)</label>
                 <input type="text" id="mk-brand-style" class="form-control" placeholder="modern tech brand, navy and sky-blue, soft glow">
               </div>
               <div class="form-group">
                 <label class="form-label">موديل توليد الصور (اختياري)</label>
                 <input type="text" id="mk-image-model" class="form-control" placeholder="تلقائي: Nano Banana Pro (google/gemini-3-pro-image)">
               </div>
-              <label class="mk-check"><input type="checkbox" id="mk-enabled" checked> <span>ابعتلي اقتراحات كل صباح</span></label>
-              <label class="mk-check"><input type="checkbox" id="mk-free-images" checked> <span>إذا مفتاح الـ AI ما بيدعم الصور، استخدم مولّد مجاني (Pollinations)</span></label>
+              <label class="mk-check"><input type="checkbox" id="mk-enabled" checked> <span>أرسل لي الاقتراحات كل صباح</span></label>
+              <label class="mk-check"><input type="checkbox" id="mk-free-images" checked> <span>إذا كان مفتاح الذكاء الاصطناعي لا يدعم الصور، استخدم مولّداً مجانياً (Pollinations)</span></label>
             </div>
 
             <div class="glass-card">
-              <h4 class="mk-card-title"><i class="fa-solid fa-share-nodes" style="color: #0084FF;"></i> وين ينزل البوست</h4>
+              <h4 class="mk-card-title"><i class="fa-solid fa-share-nodes" style="color: #0084FF;"></i> أماكن النشر</h4>
               <div id="mk-channels-status" style="margin-bottom: 12px;"></div>
               <label class="mk-check"><input type="checkbox" id="mk-pub-fb" checked> <span>فيسبوك (صفحتك)</span></label>
               <label class="mk-check"><input type="checkbox" id="mk-pub-ig" checked> <span>إنستغرام</span></label>
@@ -605,7 +609,7 @@
               <div class="form-group" style="margin-top: 12px;">
                 <label class="form-label">الرابط العام للسيرفر (للإنستغرام)</label>
                 <input type="text" id="mk-public-url" class="form-control" placeholder="https://your-app.up.railway.app">
-                <span class="form-hint">على Railway بيتعبّى لحاله.</span>
+                <span class="form-hint">يُعبّأ تلقائياً على Railway.</span>
               </div>
             </div>
           </div>
@@ -618,7 +622,7 @@
       <!-- 5. KNOWLEDGE BASE & PORTFOLIO TAB -->
       <section class="view-panel" id="view-knowledge">
         <div style="margin-bottom: 24px;">
-          <p class="page-lede">البوت بيجاوب من هاي الملفات بس — أي تعديل بيصير فوري.</p>
+          <p class="page-lede">يجيب البوت من هذه الملفات فقط، وأي تعديل يُطبّق فوراً.</p>
         </div>
 
         <!-- Extra knowledge (editable) -->
@@ -632,10 +636,10 @@
           <details class="glass-card" style="padding: 14px; margin-bottom: 16px;">
             <summary style="cursor: pointer; font-size: 13.5px; font-weight: 600;"><i class="fa-solid fa-plus" style="margin-left: 6px;"></i> إضافة وثيقة جديدة</summary>
             <input type="text" id="kb-new-doc-title" class="form-control" placeholder="عنوان الوثيقة" style="margin: 12px 0 8px;">
-            <textarea id="kb-new-doc-content" class="form-control" rows="6" placeholder="الصق نص الوثيقة هون — البوت بيجاوب منها فوراً بعد الحفظ."></textarea>
+            <textarea id="kb-new-doc-content" class="form-control" rows="6" placeholder="الصق نص الوثيقة هنا، وسيجيب البوت منها فور الحفظ."></textarea>
             <button type="button" class="btn btn-primary" id="kb-new-doc-save" style="margin-top: 8px;"><i class="fa-solid fa-floppy-disk"></i> إضافة الوثيقة</button>
           </details>
-          <textarea class="form-control" id="kb-extra-text" rows="6" placeholder="مثال: عنا عرض هالشهر... / ساعات الدوام... / خدمة جديدة... — أي معلومة بتكتبها هون البوت بجاوب منها فوراً."></textarea>
+          <textarea class="form-control" id="kb-extra-text" rows="6" placeholder="مثال: لدينا عرض هذا الشهر... / ساعات الدوام... / خدمة جديدة... — يجيب البوت فوراً من أي معلومة تكتبها هنا."></textarea>
           <button class="btn btn-primary" id="kb-extra-save" style="margin-top: 10px;">
             <i class="fa-solid fa-floppy-disk"></i> حفظ المعلومات
           </button>
@@ -645,7 +649,7 @@
         <div class="glass-card" style="margin-top: 10px;">
           <h4 style="font-size: 14px; margin-bottom: 10px;">
             <i class="fa-solid fa-code" style="color: var(--accent-indigo); margin-left: 8px;"></i>
-            التعليمات الكاملة اللي بيشوفها البوت
+            التعليمات الكاملة التي يراها البوت
           </h4>
           <textarea class="form-control" id="kb-system-prompt-preview" rows="8" readonly style="font-family: monospace; font-size: 12px; line-height: 1.6;"></textarea>
         </div>
@@ -655,7 +659,7 @@
       <section class="view-panel" id="view-settings">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
           <div>
-            <p class="page-lede">الحسابات المربوطة وسلوك البوت. عدّل واضغط حفظ.</p>
+            <p class="page-lede">الحسابات المربوطة وسلوك البوت. عدّل الإعدادات ثم اضغط حفظ.</p>
           </div>
           <button class="btn btn-primary" id="btn-save-all-settings">
             <i class="fa-solid fa-floppy-disk"></i>
@@ -669,7 +673,7 @@
             <span><i class="fa-solid fa-stethoscope" style="color: #34d399; margin-left: 8px;"></i> فحص النظام</span>
             <button type="button" class="btn btn-primary btn-sm" id="btn-run-health"><i class="fa-solid fa-play"></i> افحص كل شيء</button>
           </h4>
-          <p class="form-hint" style="margin-bottom: 10px;">بيفحص كل ربط على حساباتك الحقيقية وبيحكيلك شو ناقص.</p>
+          <p class="form-hint" style="margin-bottom: 10px;">يفحص كل ربط على حساباتك الفعلية ويبيّن ما ينقص.</p>
           <div id="health-results"></div>
         </div>
 
@@ -692,7 +696,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
                   <div>
                     <strong><i class="fa-solid fa-plug-circle-bolt"></i> ربط الحساب</strong>
-                    <div class="form-hint" style="margin-top: 2px;">موافقة وحدة بفيسبوك بتربط الصفحة والإنستغرام بكل الصلاحيات.</div>
+                    <div class="form-hint" style="margin-top: 2px;">موافقة واحدة على فيسبوك تربط الصفحة وإنستغرام بجميع الصلاحيات.</div>
                   </div>
                   <a class="btn btn-primary btn-sm" id="btn-meta-oauth" href="/api/meta/oauth/start"><i class="fa-brands fa-facebook"></i> سجّل دخول بفيسبوك وإنستغرام</a>
                 </div>
@@ -717,20 +721,20 @@
                 <details class="form-hint meta-dev-only">
                   <summary style="cursor: pointer;">خطوات أول مرة (5 دقائق) والصلاحيات المطلوبة</summary>
                   <ol style="padding-inline-start: 18px; line-height: 1.9; margin-top: 6px;">
-                    <li>developers.facebook.com ← تطبيقك ← <b>App settings ← Basic</b>: انسخ App ID و App Secret لهون واضغط <b>حفظ</b>.</li>
-                    <li>من <b>Add product</b> ضيف <b>Facebook Login</b> (أو Facebook Login for Business) ← Settings ← الصق <b>رابط الرجوع</b> بخانة Valid OAuth Redirect URIs ← Save.</li>
-                    <li>اضغط <b>سجّل دخول بفيسبوك وإنستغرام</b>، اختار صفحتك وحساب الإنستغرام، ووافق على كل الصلاحيات.</li>
-                    <li>بعدين اضغط <b>فحص الإنستا والتعليقات</b> — لازم كل الأسطر تكون ✅.</li>
+                    <li>developers.facebook.com ← تطبيقك ← <b>App settings ← Basic</b>: انسخ App ID و App Secret إلى هنا واضغط <b>حفظ</b>.</li>
+                    <li>من <b>Add product</b> أضف <b>Facebook Login</b> (أو Facebook Login for Business) ← Settings ← الصق <b>رابط الرجوع</b> بخانة Valid OAuth Redirect URIs ← Save.</li>
+                    <li>اضغط <b>سجّل دخول بفيسبوك وإنستغرام</b>، اختر صفحتك وحساب إنستغرام، ووافق على جميع الصلاحيات.</li>
+                    <li>ثم اضغط <b>فحص الإنستا والتعليقات</b> — يجب أن تظهر كل الأسطر بعلامة صح.</li>
                   </ol>
                   <div id="meta-scopes-list" style="margin-top: 6px;"></div>
-                  <div style="margin-top: 6px;">ملاحظة: ما دام التطبيق بوضع Development، كل الصلاحيات بتشتغل لحساباتك (الأدمن). عشان البوت يرد على أي حد، لازم App Review لصلاحيات الرسائل والتعليقات من Meta.</div>
+                  <div style="margin-top: 6px;">ملاحظة: ما دام التطبيق في وضع Development، تعمل الصلاحيات لحسابات المشرفين فقط. ليرد البوت على الجميع، يلزم App Review من Meta لصلاحيات الرسائل والتعليقات.</div>
                 </details>
               </div>
 
               <div class="form-group">
                 <label class="form-label">Page Access Token (رمز وصول الصفحة)</label>
                 <input type="password" id="meta-access-token" class="form-control" placeholder="EAA...">
-                <span class="form-hint">بيتعبّى لحاله بعد تسجيل الدخول بفيسبوك.</span>
+                <span class="form-hint">يُعبّأ تلقائياً بعد تسجيل الدخول بفيسبوك.</span>
               </div>
 
               <div class="grid-2">
@@ -781,7 +785,7 @@
               <div class="form-group">
                 <label class="form-label">الرسالة الخاصة الاحتياطية</label>
                 <textarea id="meta-auto-dm-template" class="form-control" rows="2"></textarea>
-                <span class="form-hint">بتنبعت بس إذا الـ AI مش متوفر.</span>
+                <span class="form-hint">تُرسل فقط عند تعذّر الذكاء الاصطناعي.</span>
               </div>
             </div>
 
@@ -855,7 +859,7 @@
               <div class="form-group">
                 <label class="form-label">مدة الانتظار قبل الرد (بالثواني)</label>
                 <input type="number" id="bot-reply-delay" class="form-control" min="0" max="120" value="10">
-                <span class="form-hint">بعد آخر رسالة من العميل. الرسائل المتتالية بتنرد عليها مرة وحدة.</span>
+                <span class="form-hint">بعد آخر رسالة من العميل. يُرد على الرسائل المتتالية مرة واحدة.</span>
               </div>
               <div style="display:flex; flex-direction:column; gap:10px;">
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
@@ -871,20 +875,20 @@
               <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color);">
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
                   <input type="checkbox" id="bot-pause-on-human" checked>
-                  <span><strong>إيقاف البوت تلقائياً لما يرد موظف على العميل</strong></span>
+                  <span><strong>إيقاف البوت تلقائياً عندما يرد موظف على العميل</strong></span>
                 </label>
                 <span class="form-hint" style="display:block; margin: 6px 0 10px;">من لوحة التحكم، الجوال، أو صندوق رسائل فيسبوك وإنستغرام.</span>
                 <div class="form-group" style="margin-bottom: 0;">
                   <label class="form-label">مدة الإيقاف</label>
                   <select id="bot-human-pause-hours" class="form-control">
-                    <option value="0">لحد ما أرجّعه يدوياً (موصى به)</option>
-                    <option value="1">ساعة وحدة</option>
+                    <option value="0">حتى إعادة تشغيله يدوياً (موصى به)</option>
+                    <option value="1">ساعة واحدة</option>
                     <option value="4">4 ساعات</option>
                     <option value="12">12 ساعة</option>
                     <option value="24">24 ساعة</option>
                     <option value="72">3 أيام</option>
                   </select>
-                  <span class="form-hint">العملاء المحوّلين للموظف ما بيرجعلهم البوت إلا يدوياً.</span>
+                  <span class="form-hint">لا يعود البوت للعملاء المحوّلين إلى الموظف إلا يدوياً.</span>
                 </div>
               </div>
             </div>
@@ -940,17 +944,17 @@
               <div class="form-group">
                 <label class="form-label">اسم الورقة (Tab)</label>
                 <input type="text" id="sheet-name" class="form-control" value="Leads">
-                <span class="form-hint">بتنعمل لحالها إذا مش موجودة.</span>
+                <span class="form-hint">تُنشأ تلقائياً إن لم تكن موجودة.</span>
               </div>
 
               <div class="form-group">
                 <label class="form-label">ملف Service Account (JSON)</label>
                 <textarea id="sheet-sa-json" class="form-control" rows="4" style="font-family: monospace; font-size: 11px; direction: ltr;" placeholder='{"type": "service_account", "client_email": "...", "private_key": "..."}'></textarea>
-                <span class="form-hint">Google Cloud ← فعّل Google Sheets API ← Service Accounts ← Keys ← Add key ← JSON، والصق محتوى الملف هون.</span>
+                <span class="form-hint">Google Cloud ← فعّل Google Sheets API ← Service Accounts ← Keys ← Add key ← JSON، ثم الصق محتوى الملف هنا.</span>
               </div>
 
               <div class="form-group" id="sheet-sa-email-box" style="display:none; background: rgba(16,185,129,0.1); padding: 10px; border-radius: 8px;">
-                <label class="form-label" style="font-size: 12px;">اعمل Share للشيت مع هذا الإيميل كـ <b>Editor</b>:</label>
+                <label class="form-label" style="font-size: 12px;">شارك الجدول مع هذا البريد بصلاحية <b>Editor</b>:</label>
                 <div style="display: flex; gap: 8px;">
                   <input type="text" id="sheet-sa-email" class="form-control" style="font-size: 12px; direction: ltr;" readonly>
                   <button type="button" class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('sheet-sa-email').value); showToast('تم نسخ الإيميل!', 'info');">نسخ</button>
@@ -961,14 +965,14 @@
                 <summary style="cursor: pointer; font-size: 12.5px; color: var(--text-muted);">طريقة بديلة: Google Apps Script Webhook</summary>
                 <div class="form-group" style="margin-top: 10px;">
                   <input type="text" id="sheet-webhook-url" class="form-control" placeholder="https://script.google.com/macros/s/.../exec">
-                  <span class="form-hint">تُستخدم فقط إذا ما في Service Account.</span>
+                  <span class="form-hint">تُستخدم فقط عند عدم وجود Service Account.</span>
                 </div>
               </details>
 
               <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: 12px;">
                 <label class="form-label">رابط Google Form لاستقبال بيانات العملاء</label>
                 <input type="text" id="google-form-url" class="form-control" dir="ltr" placeholder="https://docs.google.com/forms/d/e/.../viewform">
-                <span class="form-hint">استخدم رابط المجيب العام (مش رابط التعديل).</span>
+                <span class="form-hint">استخدم رابط المجيب العام (وليس رابط التعديل).</span>
               </div>
               <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; margin-bottom: 10px;">
                 <input type="checkbox" id="google-form-auto-sync" checked>
@@ -1007,7 +1011,7 @@
                   <input type="password" id="gmail-app-password" class="form-control" placeholder="xxxx xxxx xxxx xxxx" style="direction: ltr;">
                 </div>
               </div>
-              <span class="form-hint" style="display:block; margin: -6px 0 12px;">من حساب Google ← Security ← App passwords (مش كلمة سر الإيميل).</span>
+              <span class="form-hint" style="display:block; margin: -6px 0 12px;">من حساب Google ← Security ← App passwords (وليس كلمة مرور البريد).</span>
 
               <div class="form-group">
                 <label class="form-label">رابط لوحة التحكم (اختياري)</label>
@@ -1021,7 +1025,7 @@
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
                   <input type="checkbox" id="notify-new-messages" checked>
-                  <span>بلّغني إذا العميل المحوّل كتب من جديد</span>
+                  <span>أبلغني إذا كتب العميل المحوّل من جديد</span>
                 </label>
               </div>
 
@@ -1034,7 +1038,7 @@
             <!-- Sales team -->
             <div class="glass-card">
               <h4 style="font-size: 15px; margin-bottom: 12px;"><i class="fa-solid fa-users" style="color: #a78bfa; margin-left: 8px;"></i> فريق المبيعات (توزيع العملاء)</h4>
-              <p class="form-hint" style="margin-bottom: 10px;">كل عميل جاهز بينسند لموظف بالدور، وبيوصله إيميل بتفاصيله.</p>
+              <p class="form-hint" style="margin-bottom: 10px;">يُسند كل عميل جاهز إلى موظف بالتناوب، ويصله بريد بتفاصيل العميل.</p>
               <div id="team-list"></div>
               <div class="grid-2" style="margin-top: 10px;">
                 <input type="text" id="team-new-name" class="form-control" placeholder="اسم الموظف (مثلاً: م. مهند)">
@@ -1065,40 +1069,40 @@
               <div class="form-group">
                 <label class="form-label">رسالة التحويل خارج الدوام</label>
                 <textarea id="bh-after-msg" class="form-control" rows="3"></textarea>
-                <span class="form-hint">{rep} = اسم الموظف، {time} = إمتى رح يتواصل (مثلاً "بكرا الساعة 09:00").</span>
+                <span class="form-hint">{rep} = اسم الموظف، {time} = موعد التواصل (مثلاً "غداً الساعة 09:00").</span>
               </div>
-              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="bh-hold-emails" ><span>خلّي إيميلات الموظفين تنبعت أول الدوام بدل ما توصل بالليل</span></label>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="bh-hold-emails" ><span>أرسل بريد الموظفين في بداية الدوام بدلاً من الليل</span></label>
             </div>
 
             <!-- Follow-ups -->
             <div class="glass-card">
               <h4 style="font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-                <span><i class="fa-solid fa-paper-plane" style="color: #f59e0b; margin-left: 8px;"></i> متابعة العملاء اللي سكتوا</span>
-                <button type="button" class="btn btn-secondary btn-sm" id="btn-followup-preview">مين رح تنبعتله؟</button>
+                <span><i class="fa-solid fa-paper-plane" style="color: #f59e0b; margin-left: 8px;"></i> متابعة العملاء المنقطعين</span>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-followup-preview">من سيستلم المتابعة؟</button>
               </h4>
-              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="fu-enabled" checked><span><strong>إرسال رسالة متابعة تلقائية للعميل المهتم اللي ما رد</strong></span></label>
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="fu-enabled" checked><span><strong>إرسال رسالة متابعة تلقائية للعميل المهتم الذي لم يرد</strong></span></label>
               <div class="grid-2" style="margin-top: 12px;">
                 <div class="form-group">
-                  <label class="form-label">بعد سكوت العميل بـ</label>
+                  <label class="form-label">بعد انقطاع العميل لمدة</label>
                   <select id="fu-after-hours" class="form-control">
                     <option value="2">ساعتين</option><option value="6">6 ساعات</option><option value="12">12 ساعة</option>
                     <option value="20">20 ساعة (موصى به)</option><option value="23">23 ساعة</option>
                   </select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">لما تكون نسبة الشراء على الأقل (%)</label>
+                  <label class="form-label">عندما تكون نسبة الشراء على الأقل (%)</label>
                   <input type="number" id="fu-min-prob" class="form-control" min="0" max="84" value="50">
                 </div>
               </div>
               <div class="form-group">
                 <label class="form-label">أقصى عدد رسائل متابعة لكل عميل</label>
-                <select id="fu-max" class="form-control"><option value="1">رسالة وحدة</option><option value="2">رسالتين</option></select>
+                <select id="fu-max" class="form-control"><option value="1">رسالة واحدة</option><option value="2">رسالتين</option></select>
               </div>
               <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="fu-use-ai" checked><span>البوت يكتب رسالة المتابعة حسب محادثة كل عميل (يحتاج مفتاح AI)</span></label>
               <div class="form-group" style="margin-top: 10px;">
                 <label class="form-label">نص المتابعة الاحتياطي</label>
                 <textarea id="fu-template" class="form-control" rows="2"></textarea>
-                <span class="form-hint">{name} = اسم العميل، {topic} = الشي اللي سأل عنه. الرسائل بتنبعت بس بأوقات الدوام، رسالة وحدة كل دقيقة كحد أقصى، وقبل ما تخلص الـ 24 ساعة اللي بتسمح فيها واتساب وميتا بالرد.</span>
+                <span class="form-hint">{name} = اسم العميل، {topic} = ما سأل عنه العميل. تُرسل الرسائل في أوقات الدوام فقط، بحد أقصى رسالة واحدة كل دقيقة، وقبل انتهاء مهلة الـ 24 ساعة التي تسمح بها واتساب وMeta للرد.</span>
               </div>
               <div id="fu-preview" style="font-size: 12px;"></div>
             </div>
@@ -1110,7 +1114,7 @@
               <div class="grid-2" style="margin-top: 10px;">
                 <div class="form-group"><label class="form-label">وقت التقرير</label><input type="time" id="rep-time" class="form-control" value="20:00"></div>
                 <div class="form-group" style="display: flex; align-items: flex-end; gap: 8px;">
-                  <button type="button" class="btn btn-secondary btn-sm" id="btn-report-now">ابعته هلق</button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-report-now">أرسله الآن</button>
                   <a class="btn btn-secondary btn-sm" href="/api/reports/daily/preview" target="_blank">معاينة</a>
                 </div>
               </div>
@@ -1122,7 +1126,7 @@
                     <select id="bk-keep" class="form-control"><option value="7">7 أيام</option><option value="14">14 يوم</option><option value="30">30 يوم</option><option value="90">90 يوم</option></select>
                   </div>
                   <div class="form-group" style="display: flex; align-items: flex-end;">
-                    <button type="button" class="btn btn-secondary btn-sm" id="btn-backup-now">نسخة احتياطية هلق</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-backup-now">نسخة احتياطية الآن</button>
                   </div>
                 </div>
                 <div id="bk-last" class="form-hint"></div>
@@ -1148,7 +1152,7 @@
                 <datalist id="openrouter-models">
                   <option value="openai/gpt-4o-mini">سريع ورخيص (الافتراضي)</option>
                   <option value="openai/gpt-4o">أذكى، أغلى</option>
-                  <option value="google/gemini-2.5-flash">سريع، بيفهم الفويس والصور</option>
+                  <option value="google/gemini-2.5-flash">سريع، ويفهم التسجيلات الصوتية والصور</option>
                   <option value="anthropic/claude-sonnet-5-5">ردود طبيعية جداً، أغلى</option>
                 </datalist>
               </div>
@@ -1156,11 +1160,11 @@
               <div style="display: flex; gap: 16px;">
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
                   <input type="checkbox" id="voice-transcription-enabled" checked>
-                  <span>تفعيل الرد على الرسائل الصوتية (الفويسّات)</span>
+                  <span>تفعيل الرد على الرسائل الصوتية</span>
                 </label>
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;">
                   <input type="checkbox" id="image-understanding-enabled" checked>
-                  <span>فهم الصور اللي بيبعتها العميل (سكرين شوت، منتج، ورقة...)</span>
+                  <span>فهم الصور التي يرسلها العميل (لقطة شاشة، منتج، مستند...)</span>
                 </label>
               </div>
             </div>
@@ -1180,18 +1184,18 @@
               <div class="form-group">
                 <label class="form-label">رسالة التحويل</label>
                 <textarea id="handoff-message-text" class="form-control" rows="3">تمام، {rep} في شركة atlead رح يتواصل معك بأسرع وقت لمتابعة كافة التفاصيل وترتيب كل شيء معك. شكراً لاهتمامك وثقتك.</textarea>
-                <span class="form-hint">{rep} = اسم الموظف المسؤول عن العميل (أو الاسم اللي فوق إذا ما في فريق).</span>
+                <span class="form-hint">{rep} = اسم الموظف المسؤول عن العميل (أو الاسم أعلاه إذا لم يوجد فريق).</span>
               </div>
 
               <div class="form-group">
                 <label class="form-label">التحويل للموظف عند وصول نسبة الشراء إلى (%)</label>
                 <input type="number" id="handoff-threshold" class="form-control" min="1" max="100" value="85">
-                <span class="form-hint">أو إذا وافق على استشارة أو طلب يحكي مع موظف.</span>
+                <span class="form-hint">أو إذا وافق على استشارة أو طلب التحدث مع موظف.</span>
               </div>
 
               <div style="font-size: 12.5px; background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.3); padding: 10px; border-radius: 8px;">
                 <i class="fa-solid fa-lock"></i>
-                بعد التحويل البوت بيسكت مع العميل، والموظف بيوصله إيميل بكل التفاصيل.
+                بعد التحويل يواصل البوت الرد حتى يرد الموظف، ويصل الموظفَ بريدٌ بكل التفاصيل.
               </div>
             </div>
 

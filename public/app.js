@@ -42,6 +42,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 function switchTab(tab) {
   currentTab = tab;
+  document.body.classList.remove('nav-open');
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.querySelector(`.nav-item[data-tab="${tab}"]`)?.classList.add('active');
 
@@ -54,7 +55,7 @@ function switchTab(tab) {
     comments: 'التعليقات والتحويل للخاص',
     simulator: 'مختبر تجربة البوت والفويس',
     knowledge: 'قاعدة المعرفة والأعمال السابقة',
-    marketing: 'التسويق الذكي وجدولة البوستات',
+    marketing: 'التسويق الذكي وجدولة المنشورات',
     settings: 'إعدادات الربط والـ APIs'
   };
   document.getElementById('current-tab-title').textContent = titles[tab] || '';
@@ -109,7 +110,7 @@ function renderConversationList(filter = 'all') {
   filtered.forEach(c => {
     const li = document.createElement('li');
     li.className = `conv-item ${c.id === activeConvId ? 'active' : ''}`;
-    li.onclick = () => selectConversation(c.id);
+    li.onclick = () => selectConversation(c.id, { open: true });
 
     const channelIcon = {
       whatsapp: 'fa-brands fa-whatsapp',
@@ -155,7 +156,9 @@ function renderConversationList(filter = 'all') {
   });
 }
 
-function selectConversation(id) {
+function selectConversation(id, { open = false } = {}) {
+  // On a phone the chat opens full screen only when someone taps a conversation.
+  if (open) document.querySelector('.inbox-layout')?.classList.add('chat-open');
   activeConvId = id;
   const conv = conversations.find(c => c.id === id);
   if (!conv) return;
@@ -196,10 +199,10 @@ function selectConversation(id) {
   }
   if (isOff) {
     handoffAlertBox.innerHTML = conv.pause_reason === 'human_reply'
-      ? `<i class="fa-solid fa-user-pen"></i> موظف رد على هذا العميل${conv.pause_source ? ' (' + escapeHtml(conv.pause_source) + ')' : ''}، فتوقف البوت حتى ما يتدخل بالمحادثة.${conv.bot_paused_until ? ' بيرجع يرد بعد انتهاء المدة.' : ' اضغط "إعادة تفعيل البوت" لما تخلص.'}`
+      ? `<i class="fa-solid fa-user-pen"></i> موظف رد على هذا العميل${conv.pause_source ? ' (' + escapeHtml(conv.pause_source) + ')' : ''}، فتوقف البوت حتى لا يتدخل في المحادثة.${conv.bot_paused_until ? ' يعود للرد بعد انتهاء المدة.' : ' اضغط "إعادة تفعيل البوت" عند انتهائها.'}`
       : conv.pause_reason === 'manual'
         ? '<i class="fa-solid fa-pause"></i> تم إيقاف البوت يدوياً لهذا العميل.'
-        : `<i class="fa-solid fa-bell"></i> العميل وصل لمرحلة الشراء وتحوّل للموظف — البوت ما رح يرد عليه نهائياً.${conv.assigned_to_name ? '<br>الموظف المسؤول: <b>' + escapeHtml(conv.assigned_to_name) + '</b>' : ''}${conv.handoff_reason ? '<br>السبب: ' + escapeHtml(conv.handoff_reason) : ''}`;
+        : `<i class="fa-solid fa-bell"></i> وصل العميل إلى مرحلة الشراء وحُوّل إلى الموظف، ولن يرد عليه البوت.${conv.assigned_to_name ? '<br>الموظف المسؤول: <b>' + escapeHtml(conv.assigned_to_name) + '</b>' : ''}${conv.handoff_reason ? '<br>السبب: ' + escapeHtml(conv.handoff_reason) : ''}`;
   }
 
   document.getElementById('side-lead-stage').textContent = conv.lead_stage || 'new';
@@ -233,7 +236,7 @@ function renderMessages(messages) {
     if (m.is_voice) {
       contentHtml = `
         <div class="voice-badge">
-          <i class="fa-solid fa-microphone"></i> رسالة صوتية (فويس)
+          <i class="fa-solid fa-microphone"></i> رسالة صوتية
         </div>
         ${m.media_url ? `<audio controls src="${m.media_url}" style="width: 100%; height: 32px; margin-bottom: 6px;"></audio>` : ''}
         <div style="font-size: 13px; color: #f8fafc; font-style: italic;">
@@ -363,9 +366,9 @@ function renderLeadsTable(leads) {
   const channelLabel = { whatsapp: 'واتساب', instagram_dm: 'إنستغرام', facebook_messenger: 'ماسنجر', simulator: 'محاكي' };
   const purchaseOptions = [
     ['not_purchased', 'لم يشترِ بعد'],
-    ['pending_human', 'بانتظار الموظف ⏳'],
-    ['won', 'اشترى ✅'],
-    ['lost', 'لم يشترِ ❌']
+    ['pending_human', 'بانتظار الموظف'],
+    ['won', 'اشترى'],
+    ['lost', 'لم يشترِ']
   ];
 
   leads.forEach(l => {
@@ -529,10 +532,10 @@ function renderCommentsTable(comments) {
       <td style="max-width: 200px;">"${escapeHtml(c.comment_text)}"</td>
       <td>
         <span class="badge-pill ${c.is_interested ? 'danger' : 'info'}" style="font-size: 11px;">
-          ${c.is_interested ? '🔥 مهتم بالشراء / استفسار' : 'تفاعل عام'}
+          ${c.is_interested ? 'مهتم بالشراء / استفسار' : 'تفاعل عام'}
         </span>
       </td>
-      <td style="max-width: 220px; color: #38bdf8;">${c.status === 'pending' ? '⏳ بانتظار الرد...' : c.status === 'skipped' ? '🔒 محوّل لموظف — البوت ما رد' : escapeHtml(c.bot_reply_text || '-')}</td>
+      <td style="max-width: 220px; color: #38bdf8;">${c.status === 'pending' ? 'بانتظار الرد...' : c.status === 'skipped' ? 'محوّل إلى موظف — لم يرد البوت' : escapeHtml(c.bot_reply_text || '-')}</td>
       <td>
         ${c.dm_triggered ? `
           <span class="badge-pill success" style="font-size: 11px;"><i class="fa-solid fa-paper-plane"></i> تم إرسال DM خاص</span>
@@ -557,11 +560,11 @@ document.getElementById('btn-simulate-comment-modal')?.addEventListener('click',
     const res = await fetch('/api/comments/simulate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, platform: 'facebook', user_name: 'عميل مجرب' })
+      body: JSON.stringify({ message: text, platform: 'facebook', user_name: 'عميل تجريبي' })
     });
     const data = await res.json();
     if (data.success) {
-      showToast(`تم استلام التعليق — البوت رح يرد بعد ${data.delay_seconds ?? 10} ثواني`, 'success');
+      showToast(`تم استلام التعليق، وسيرد البوت بعد ${data.delay_seconds ?? 10} ثواني`, 'success');
       loadComments();
       setTimeout(loadComments, ((data.delay_seconds ?? 10) + 4) * 1000);
     }
@@ -623,7 +626,7 @@ function updateSimulatorInspector(data) {
   document.getElementById('sim-inspect-class').textContent = ai.classification || 'Warm';
   document.getElementById('sim-inspect-score').textContent = `${ai.buying_probability || 40}%`;
   document.getElementById('sim-inspect-score-bar').style.width = `${ai.buying_probability || 40}%`;
-  document.getElementById('sim-inspect-active').innerHTML = data.bot_active !== false ? 'مفعل 🟢' : 'موقوف (محول للبشري) 🛑';
+  document.getElementById('sim-inspect-active').innerHTML = data.bot_active !== false ? 'مفعل' : 'موقوف (محول للبشري)';
   document.getElementById('sim-inspect-handoff').textContent = ai.handoff_triggered ? 'نعم (تم الاتفاق والتحويل!)' : 'لا';
   document.getElementById('sim-inspect-problem').textContent = ai.identified_problem || '-';
   document.getElementById('sim-inspect-solution').textContent = ai.proposed_solution || '-';
@@ -651,7 +654,7 @@ document.getElementById('sim-voice-upload')?.addEventListener('change', async (e
   formData.append('audio', file);
   if (simulatorConvId) formData.append('conversation_id', simulatorConvId);
 
-  appendSimBubble('customer', 'جاري رفع الفويس وتفريغه صوتياً...', true);
+  appendSimBubble('customer', 'جاري رفع التسجيل الصوتي وتفريغه...', true);
 
   try {
     const res = await fetch('/api/simulator/voice', { method: 'POST', body: formData });
@@ -660,13 +663,13 @@ document.getElementById('sim-voice-upload')?.addEventListener('change', async (e
       simulatorConvId = data.conversation.id;
       // Replace last user bubble with transcript
       simMessages.lastElementChild.previousElementSibling?.remove();
-      appendSimBubble('customer', data.transcription_failed ? '🎤 فويس (ما قدر يفرّغه)' : `🎤 (تم التفريغ الصوتي): "${data.transcript}"`, true);
+      appendSimBubble('customer', data.transcription_failed ? 'تسجيل صوتي (تعذّر تفريغه)' : `(تم التفريغ الصوتي): "${data.transcript}"`, true);
       appendSimBubble('bot', data.reply);
       updateSimulatorInspector(data);
-      showToast('تم استقبال الفويس والتفريغ والرد الذكي بنجاح!', 'success');
+      showToast('تم استلام التسجيل الصوتي وتفريغه والرد عليه بنجاح.', 'success');
     }
   } catch (err) {
-    showToast('فشل تفريغ الفويس الصوتي', 'error');
+    showToast('فشل تفريغ التسجيل الصوتي', 'error');
   }
 });
 
@@ -676,14 +679,14 @@ document.getElementById('sim-image-upload')?.addEventListener('change', async (e
   const formData = new FormData();
   formData.append('image', file);
   if (simulatorConvId) formData.append('conversation_id', simulatorConvId);
-  appendSimBubble('customer', '🖼️ جاري رفع الصورة وتحليلها...', true);
+  appendSimBubble('customer', 'جاري رفع الصورة وتحليلها...', true);
   try {
     const res = await fetch('/api/simulator/image', { method: 'POST', body: formData });
     const data = await res.json();
     if (data.success) {
       simulatorConvId = data.conversation.id;
       simMessages.lastElementChild?.remove();
-      appendSimBubble('customer', data.understood ? `🖼️ (البوت فهم الصورة): ${data.image_description}` : '🖼️ صورة (ما قدر يحللها — تأكد من مفتاح الذكاء الاصطناعي)', true);
+      appendSimBubble('customer', data.understood ? `(البوت فهم الصورة): ${data.image_description}` : 'صورة (تعذّر تحليلها — تحقّق من مفتاح الذكاء الاصطناعي)', true);
       appendSimBubble('bot', data.reply);
       updateSimulatorInspector(data);
     } else {
@@ -703,7 +706,7 @@ document.getElementById('btn-reset-simulator')?.addEventListener('click', () => 
   document.getElementById('sim-inspect-class').textContent = 'Cold';
   document.getElementById('sim-inspect-score').textContent = '20%';
   document.getElementById('sim-inspect-score-bar').style.width = '20%';
-  document.getElementById('sim-inspect-active').textContent = 'مفعل 🟢';
+  document.getElementById('sim-inspect-active').textContent = 'مفعل';
   document.getElementById('sim-inspect-handoff').textContent = 'لا';
   document.getElementById('sim-inspect-problem').textContent = '-';
   document.getElementById('sim-inspect-solution').textContent = '-';
@@ -737,7 +740,7 @@ async function loadKnowledge() {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
               <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer;">
                 <input type="checkbox" class="kb-doc-active" ${doc.is_active !== false ? 'checked' : ''}>
-                <span>البوت بيجاوب من هاي الوثيقة</span>
+                <span>يجيب البوت من هذه الوثيقة</span>
               </label>
               <button type="button" class="btn btn-primary kb-doc-save"><i class="fa-solid fa-floppy-disk"></i> حفظ الوثيقة</button>
             </div>
@@ -1045,12 +1048,12 @@ async function loadMetaOauthInfo() {
     const who = document.getElementById('meta-connected-as');
     who.style.display = d.connected ? 'block' : 'none';
     who.innerHTML = d.connected
-      ? `✅ مربوط: ${escapeHtml(d.page_name || 'صفحة فيسبوك')}${d.instagram_username ? ` + إنستغرام @${escapeHtml(d.instagram_username)}` : ''}${d.granted?.length ? ` — ${d.granted.length} صلاحية` : ''}`
+      ? `مربوط: ${escapeHtml(d.page_name || 'صفحة فيسبوك')}${d.instagram_username ? ` + إنستغرام @${escapeHtml(d.instagram_username)}` : ''}${d.granted?.length ? ` — ${d.granted.length} صلاحية` : ''}`
       : '';
     if (!document.getElementById('meta-app-id').value && d.app_id) document.getElementById('meta-app-id').value = d.app_id;
     const granted = new Set(d.granted || []);
     document.getElementById('meta-scopes-list').innerHTML = Object.entries(d.scopes).map(([k, label]) =>
-      `<div>${granted.size ? (granted.has(k) ? '✅' : '❌') : '•'} <code>${escapeHtml(k)}</code> — ${escapeHtml(label)}</div>`).join('') +
+      `<div>${granted.size ? (granted.has(k) ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>') : '•'} <code>${escapeHtml(k)}</code> — ${escapeHtml(label)}</div>`).join('') +
       (d.connected_at ? `<div style="margin-top:4px;">آخر ربط: ${escapeHtml(new Date(d.connected_at).toLocaleString('en-GB'))}</div>` : '');
   } catch { /* optional */ }
 }
@@ -1081,10 +1084,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const r = q.get('meta_oauth');
   if (!r) return;
   switchTab('settings');
-  showToast(q.get('msg') || (r === 'ok' ? 'تم الربط ✅' : 'فشل الربط'), r === 'ok' ? 'success' : 'error');
+  showToast(q.get('msg') || (r === 'ok' ? 'تم الربط' : 'فشل الربط'), r === 'ok' ? 'success' : 'error');
   const box = document.getElementById('meta-diagnose-result');
   box.style.display = 'block';
-  box.innerHTML = `${r === 'ok' ? '✅' : r === 'partial' ? '⚠️' : '❌'} ${escapeHtml(q.get('msg') || '')}`;
+  box.innerHTML = `${r === 'ok' ? '<i class="fa-solid fa-circle-check st-ok"></i>' : r === 'partial' ? '<i class="fa-solid fa-triangle-exclamation st-warn"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} ${escapeHtml(q.get('msg') || '')}`;
   history.replaceState(null, '', '/?tab=settings');
 });
 
@@ -1094,22 +1097,22 @@ document.getElementById('btn-meta-diagnose')?.addEventListener('click', async ()
   const box = document.getElementById('meta-diagnose-result');
   btn.disabled = true;
   box.style.display = 'block';
-  box.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> عم نسأل Meta مباشرة...';
+  box.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الاستعلام من Meta مباشرة...';
   try {
     const data = await (await fetch('/api/meta/diagnose')).json();
     if (!data.success) throw new Error(data.message);
     const rows = data.checks.map(c => `
       <div style="padding: 6px 0; border-bottom: 1px solid var(--border-color);">
-        ${c.ok ? '✅' : '❌'} <strong>${escapeHtml(c.label)}:</strong> ${escapeHtml(c.detail || '')}
-        ${!c.ok && c.fix ? `<div style="color: var(--accent-amber); font-size: 12px;">👉 ${escapeHtml(c.fix)}</div>` : ''}
+        ${c.ok ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} <strong>${escapeHtml(c.label)}:</strong> ${escapeHtml(c.detail || '')}
+        ${!c.ok && c.fix ? `<div style="color: var(--accent-amber); font-size: 12px;">${escapeHtml(c.fix)}</div>` : ''}
       </div>`).join('');
     const log = (data.webhook_log || []).slice(0, 15).map(e =>
       `<div>${escapeHtml(new Date(e.at).toLocaleTimeString())} — <strong>${escapeHtml(e.object)}</strong> ${escapeHtml(e.kind)} ${escapeHtml(e.detail || '')}</div>`).join('');
     box.innerHTML = rows + `
       <div style="margin-top: 10px;"><strong>آخر أحداث وصلت من Meta (منذ آخر تشغيل للسيرفر):</strong></div>
-      ${log || '<div style="color: var(--text-muted);">ولا حدث لهلأ — ابعت رسالة أو تعليق تجريبي واضغط الزر مرة ثانية.</div>'}`;
+      ${log || '<div style="color: var(--text-muted);">لا توجد أحداث حتى الآن — أرسل رسالة أو تعليقاً تجريبياً ثم اضغط الزر مرة أخرى.</div>'}`;
   } catch (err) {
-    box.innerHTML = `❌ ${escapeHtml(err.message)}`;
+    box.innerHTML = `${escapeHtml(err.message)}`;
   } finally {
     btn.disabled = false;
   }
@@ -1265,7 +1268,7 @@ function updateNavbarPills(s) {
 window.addEventListener('DOMContentLoaded', () => {
   loadConversations().then(() => {
     const target = new URLSearchParams(window.location.search).get('conversation');
-    if (target && conversations.some(c => c.id === target)) selectConversation(target);
+    if (target && conversations.some(c => c.id === target)) selectConversation(target, { open: true });
   });
   loadStats();
   loadSettings();
@@ -1319,7 +1322,7 @@ function renderWaStatus(st) {
     statusEl.classList.add('ok');
     statusEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> مربوط بالرقم +${escapeHtml(st.connected_number || '')}${st.connected_name ? ' — ' + escapeHtml(st.connected_name) : ''}`;
     if (st.number_mismatch) {
-      statusEl.innerHTML += `<div style="color:#fbbf24; font-size:12px; margin-top:6px;">⚠️ الرقم المربوط مختلف عن الرقم المدخل (${escapeHtml(st.expected_number)})</div>`;
+      statusEl.innerHTML += `<div style="color:#fbbf24; font-size:12px; margin-top:6px;">الرقم المربوط مختلف عن الرقم المدخل (${escapeHtml(st.expected_number)})</div>`;
     }
     btnConnect.style.display = 'none'; btnPair.style.display = 'none'; btnLogout.style.display = '';
   } else if (st.status === 'qr') {
@@ -1360,7 +1363,7 @@ document.getElementById('btn-wa-pair')?.addEventListener('click', async () => {
 });
 
 document.getElementById('btn-wa-logout')?.addEventListener('click', async () => {
-  if (!confirm('متأكد بدك تفصل رقم الواتساب عن البوت؟')) return;
+  if (!confirm('هل تريد فصل رقم واتساب عن البوت؟')) return;
   const res = await fetch('/api/whatsapp/logout', { method: 'POST' });
   const data = await res.json();
   showToast(data.message || 'تم الفصل', 'info');
@@ -1395,7 +1398,7 @@ document.getElementById('btn-add-notify-email')?.addEventListener('click', () =>
 });
 
 document.getElementById('btn-test-email')?.addEventListener('click', async () => {
-  showToast('جاري إرسال إيميل تجريبي... (احفظ الإعدادات أولاً إذا عدلت شي)', 'info');
+  showToast('جاري إرسال بريد تجريبي... (احفظ الإعدادات أولاً إذا عدّلت شيئاً)', 'info');
   const res = await fetch('/api/notifications/test', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1415,7 +1418,7 @@ async function loadNotifyLog() {
     const items = (data.log || []).slice(0, 6);
     box.innerHTML = items.length ? items.map(n => `
       <div class="notify-log-item">
-        <span>${n.status === 'sent' ? '✅' : '❌'}</span>
+        <span>${n.status === 'sent' ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'}</span>
         <span>${escapeHtml(n.subject || n.type)}</span>
         <span style="color: var(--text-muted);">${formatTime(n.created_at)}</span>
         ${n.error ? `<div style="color:#f87171; font-size: 11px; width: 100%;">${escapeHtml(n.error)}</div>` : ''}
@@ -1454,10 +1457,10 @@ document.getElementById('btn-run-health')?.addEventListener('click', async () =>
   try {
     const res = await fetch('/api/health');
     const data = await res.json();
-    const icon = { ok: '✅', warn: '⚠️', error: '❌' };
+    const icon = { ok: '<i class="fa-solid fa-circle-check st-ok"></i>', warn: '<i class="fa-solid fa-triangle-exclamation st-warn"></i>', error: '<i class="fa-solid fa-circle-xmark st-bad"></i>' };
     box.innerHTML = `
       <div class="health-summary">
-        <span class="badge-pill success">${data.summary.ok} شغال</span>
+        <span class="badge-pill success">${data.summary.ok} يعمل</span>
         <span class="badge-pill warning">${data.summary.warn} تنبيه</span>
         <span class="badge-pill danger">${data.summary.error} مشكلة</span>
       </div>
@@ -1476,11 +1479,11 @@ document.getElementById('btn-run-health')?.addEventListener('click', async () =>
 // Why is the bot off for this customer?
 function botOffLabel(conv) {
   if (conv.pause_reason === 'human_reply') {
-    const until = conv.bot_paused_until ? ` لغاية ${new Date(conv.bot_paused_until).toLocaleString('ar-JO', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}` : ' لحد ما ترجّعه';
+    const until = conv.bot_paused_until ? ` لغاية ${new Date(conv.bot_paused_until).toLocaleString('ar-JO', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}` : ' حتى إعادة تشغيله';
     return `موقوف — موظف رد${conv.pause_source ? ' من ' + conv.pause_source : ''}${until}`;
   }
   if (conv.pause_reason === 'manual') return 'موقوف يدوياً';
-  return 'محوّل للموظف — البوت ما بيرد';
+  return 'محوّل إلى الموظف — البوت لا يرد';
 }
 
 // 10. SALES TEAM / FOLLOW-UPS / REPORT / BACKUP
@@ -1495,7 +1498,7 @@ function renderTeam() {
       <strong>${escapeHtml(m.name)}</strong>
       <span style="direction: ltr; color: var(--text-muted);">${escapeHtml(m.email)}</span>
       <button type="button" class="btn btn-secondary btn-sm" data-remove="${i}" title="حذف"><i class="fa-solid fa-trash"></i></button>
-    </div>`).join('') : '<span style="font-size: 12px; color: var(--text-muted);">ما في موظفين — الإيميلات بتروح للإدارة.</span>';
+    </div>`).join('') : '<span style="font-size: 12px; color: var(--text-muted);">لا يوجد موظفون — تُرسل الرسائل إلى بريد الإدارة.</span>';
   box.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => { teamMembers.splice(Number(b.dataset.remove), 1); renderTeam(); showToast('اضغط "حفظ وتحديث الإعدادات" للتثبيت', 'info'); }));
   box.querySelectorAll('[data-active]').forEach(cb => cb.addEventListener('change', () => { teamMembers[Number(cb.dataset.active)].active = cb.checked; }));
 }
@@ -1505,7 +1508,7 @@ document.getElementById('btn-add-team')?.addEventListener('click', () => {
   const email = document.getElementById('team-new-email').value.trim().toLowerCase();
   if (!name) return showToast('اكتب اسم الموظف', 'error');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showToast('اكتب إيميل صحيح', 'error');
-  if (teamMembers.some(m => m.email === email)) return showToast('الإيميل موجود', 'error');
+  if (teamMembers.some(m => m.email === email)) return showToast('البريد مضاف مسبقاً', 'error');
   teamMembers.push({ id: email, name, email, active: true });
   document.getElementById('team-new-name').value = '';
   document.getElementById('team-new-email').value = '';
@@ -1518,8 +1521,8 @@ document.getElementById('btn-followup-preview')?.addEventListener('click', async
   const box = document.getElementById('fu-preview');
   const labels = { whatsapp: 'واتساب', instagram_dm: 'إنستغرام', facebook_messenger: 'ماسنجر' };
   box.innerHTML = data.candidates.length
-    ? '<div style="margin-top:8px;">رح تنبعت متابعة لـ:</div>' + data.candidates.map(c => `<div>• ${escapeHtml(c.name)} (${labels[c.channel] || c.channel}، ${c.score}%، ساكت من ${c.silent_hours} ساعة)</div>`).join('')
-    : '<div style="margin-top:8px; color: var(--text-muted);">ما في عملاء بحاجة متابعة هلق.</div>';
+    ? '<div style="margin-top:8px;">ستُرسل متابعة إلى:</div>' + data.candidates.map(c => `<div>• ${escapeHtml(c.name)} (${labels[c.channel] || c.channel}، ${c.score}%، منقطع منذ ${c.silent_hours} ساعة)</div>`).join('')
+    : '<div style="margin-top:8px; color: var(--text-muted);">لا يوجد عملاء بحاجة إلى متابعة حالياً.</div>';
 });
 
 document.getElementById('btn-report-now')?.addEventListener('click', async () => {
@@ -1533,7 +1536,7 @@ async function loadBackupInfo() {
   try {
     const data = await (await fetch('/api/backup/list')).json();
     const el = document.getElementById('bk-last');
-    if (el) el.textContent = data.last ? `آخر نسخة: ${formatTime(data.last.at)} — backups/${data.last.folder} (عدد النسخ: ${data.backups.length})` : 'لسا ما في نسخ احتياطية.';
+    if (el) el.textContent = data.last ? `آخر نسخة: ${formatTime(data.last.at)} — backups/${data.last.folder} (عدد النسخ: ${data.backups.length})` : 'لا توجد نسخ احتياطية بعد.';
   } catch (e) { /* ignore */ }
 }
 
@@ -1550,7 +1553,7 @@ async function loadSupabaseSyncStatus() {
   try {
     const s = await (await fetch('/api/supabase/status')).json();
     if (!s.enabled) {
-      box.innerHTML = '⚠️ Supabase مش مربوط — المحادثات محفوظة على السيرفر بس. أول ما تربطه، كل البيانات القديمة بتنرفع لحالها.';
+      box.innerHTML = 'Supabase غير مربوط — المحادثات محفوظة على الخادم فقط. عند الربط تُرفع جميع البيانات السابقة تلقائياً.';
       return;
     }
     const r = s.remote || {};
@@ -1560,7 +1563,7 @@ async function loadSupabaseSyncStatus() {
       row('الرسائل', s.local.messages, r.messages) +
       row('العملاء', s.local.leads, r.leads) +
       row('التعليقات', s.local.comments, r.comments) +
-      (s.pending ? `<div style="color:#fbbf24;">⏳ ${s.pending} تغيير بانتظار الحفظ (بيعيد المحاولة تلقائياً)</div>` : '<div style="color:#34d399;">✅ كل تغيير بينحفظ تلقائياً خلال ثانيتين</div>') +
+      (s.pending ? `<div style="color:#fbbf24;">${s.pending} تغيير بانتظار الحفظ (تُعاد المحاولة تلقائياً)</div>` : '<div style="color:#34d399;">يُحفظ كل تغيير تلقائياً خلال ثانيتين</div>') +
       (s.last_full_sync ? `<div>آخر فحص كامل: ${formatTime(s.last_full_sync)}</div>` : '') +
       (s.last_error ? `<div style="color:#f87171;">${escapeHtml(s.last_error.message)}</div>` : '');
   } catch (e) {
@@ -1574,3 +1577,9 @@ document.getElementById('btn-supabase-sync')?.addEventListener('click', async ()
   showToast(data.message, data.success ? 'success' : 'error');
   loadSupabaseSyncStatus();
 });
+
+// Small screens: the menu is a drawer, and a conversation opens full screen.
+document.getElementById('nav-toggle')?.addEventListener('click', () => document.body.classList.toggle('nav-open'));
+document.getElementById('nav-backdrop')?.addEventListener('click', () => document.body.classList.remove('nav-open'));
+document.getElementById('chat-back')?.addEventListener('click', () => document.querySelector('.inbox-layout')?.classList.remove('chat-open'));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.body.classList.remove('nav-open'); });

@@ -44,7 +44,7 @@ router.post('/meta', async (req, res) => {
   const appSecret = metaService.config().app_secret;
   if (!isValidSignature(req, appSecret)) {
     console.warn('[Meta Webhook] Invalid signature — ignored');
-    metaService.logWebhookEvent({ object: req.body?.object || '?', kind: 'rejected', detail: 'توقيع غير صحيح (App Secret مش مطابق)' });
+    metaService.logWebhookEvent({ object: req.body?.object || '?', kind: 'rejected', detail: 'توقيع غير صحيح (App Secret غير مطابق)' });
     return res.sendStatus(401);
   }
   res.status(200).send('EVENT_RECEIVED');

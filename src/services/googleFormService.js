@@ -162,7 +162,7 @@ class GoogleFormService {
     });
     this.sent.set(lead.id, fingerprint);
     storageService.saveLead({ id: lead.id, google_form_fp: fingerprint, google_form_synced: true });
-    return { success: true, message: 'تمت إضافة بيانات العميل إلى Google Form ✅', status: response.status };
+    return { success: true, message: 'تمت إضافة بيانات العميل إلى Google Form', status: response.status };
   }
 
   async test(url) {
@@ -175,7 +175,7 @@ class GoogleFormService {
     return {
       success: matched > 0,
       message: matched === FIELDS.length
-        ? `رابط Google Form شغال ✅ — كل الحقول (${matched}) مربوطة.`
+        ? `رابط Google Form يعمل — جميع الحقول (${matched}) مربوطة.`
         : `الفورم فيه ${questions.length} سؤال، انربط منها ${matched} من ${FIELDS.length}.${missing.length ? ` ناقص: ${missing.join('، ')}` : ''}`
     };
   }

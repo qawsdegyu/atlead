@@ -8,13 +8,13 @@
   const STEPS = [
     { key: 'topic', label: 'الموضوع', icon: 'fa-lightbulb' },
     { key: 'image', label: 'الصورة', icon: 'fa-image' },
-    { key: 'caption', label: 'الكابشن', icon: 'fa-pen-nib' },
+    { key: 'caption', label: 'النص', icon: 'fa-pen-nib' },
     { key: 'time', label: 'وقت النشر', icon: 'fa-clock' },
     { key: 'done', label: 'النشر', icon: 'fa-rocket' }
   ];
   const STATUS = {
-    topic: ['اختيار الموضوع', 'info'], image: ['اختيار الصورة', 'info'], caption: ['اختيار الكابشن', 'info'], time: ['اختيار الوقت', 'info'],
-    scheduled: ['مجدول', 'warning'], publishing: ['جاري النشر', 'warning'], published: ['انتشر', 'success'], partial: ['انتشر جزئياً', 'warning'],
+    topic: ['اختيار الموضوع', 'info'], image: ['اختيار الصورة', 'info'], caption: ['اختيار النص', 'info'], time: ['اختيار الوقت', 'info'],
+    scheduled: ['مجدول', 'warning'], publishing: ['جاري النشر', 'warning'], published: ['نُشر', 'success'], partial: ['نُشر جزئياً', 'warning'],
     failed: ['فشل', 'danger'], cancelled: ['ملغي', 'danger']
   };
   const CH_LABEL = { facebook: 'فيسبوك', instagram: 'إنستغرام', telegram: 'قناة تليجرام', _error: 'خطأ' };
@@ -38,7 +38,7 @@
 
   // ---------- loading overlay for slow AI steps ----------
   function loading(msg) {
-    $('mk-wizard-body').innerHTML = `<div class="mk-loading"><div class="mk-spinner"></div><p>${esc(msg)}</p><small>ممكن ياخد لحد دقيقة — لا تسكّر الصفحة</small></div>`;
+    $('mk-wizard-body').innerHTML = `<div class="mk-loading"><div class="mk-spinner"></div><p>${esc(msg)}</p><small>قد يستغرق ذلك حتى دقيقة — لا تغلق الصفحة</small></div>`;
   }
 
   async function run(msg, fn) {
@@ -123,15 +123,15 @@
     const body = $('mk-wizard-body');
     if (!plan || plan.status === 'cancelled') {
       body.innerHTML = `<div class="mk-empty"><i class="fa-solid fa-wand-magic-sparkles"></i>
-        <p>${plan ? 'تم إلغاء هذا البوست.' : 'ما في بوست قيد التحضير.'} اضغط <b>بوست جديد</b> وبندرس السوق ونقترحلك 3 مواضيع.</p>
-        <div class="mk-custom-topic"><input id="mk-custom-new" class="form-control" placeholder="أو اكتب موضوع من عندك وابدأ فيه مباشرة..."><button class="btn btn-secondary" data-act="custom-new">ابدأ بموضوعي</button></div></div>`;
+        <p>${plan ? 'تم إلغاء هذا المنشور.' : 'لا يوجد منشور قيد التحضير.'} اضغط <b>منشور جديد</b> وسندرس السوق ونقترح عليك 3 مواضيع.</p>
+        <div class="mk-custom-topic"><input id="mk-custom-new" class="form-control" placeholder="أو اكتب موضوعاً من عندك وابدأ به مباشرة..."><button class="btn btn-secondary" data-act="custom-new">ابدأ بموضوعي</button></div></div>`;
       return;
     }
     const s = plan.status;
     if (s === 'topic') {
       body.innerHTML = `
         ${plan.market_summary ? `<div class="mk-insight"><i class="fa-solid fa-chart-line"></i> <div><b>السوق اليوم:</b> ${esc(plan.market_summary)}</div></div>` : ''}
-        <h4 class="mk-q">1. اختار موضوع البوست</h4>
+        <h4 class="mk-q">1. اختر موضوع المنشور</h4>
         <div class="mk-options">${(plan.topics || []).map((t, i) => `
           <button class="mk-option" data-act="topic" data-i="${i}">
             <span class="mk-letter">${'ABC'[i] || i + 1}</span>
@@ -140,8 +140,8 @@
             ${t.why ? `<div class="mk-opt-why"><i class="fa-regular fa-lightbulb"></i> ${esc(t.why)}</div>` : ''}</div>
           </button>`).join('')}
         </div>
-        <div class="mk-custom-topic"><input id="mk-custom-topic" class="form-control" placeholder="ولا واحد عاجبك؟ اكتب موضوعك..."><button class="btn btn-secondary" data-act="custom">استخدم موضوعي</button></div>
-        <div class="mk-actions"><button class="btn btn-secondary btn-sm" data-act="regen" data-step="topics"><i class="fa-solid fa-rotate"></i> اقترح 3 مواضيع غيرهم</button>
+        <div class="mk-custom-topic"><input id="mk-custom-topic" class="form-control" placeholder="لم يعجبك أي منها؟ اكتب موضوعك..."><button class="btn btn-secondary" data-act="custom">استخدم موضوعي</button></div>
+        <div class="mk-actions"><button class="btn btn-secondary btn-sm" data-act="regen" data-step="topics"><i class="fa-solid fa-rotate"></i> اقترح 3 مواضيع أخرى</button>
         <button class="btn btn-danger btn-sm" data-act="cancel">إلغاء</button></div>`;
     } else if (s === 'image') {
       const imgs = plan.images || [];
@@ -150,24 +150,24 @@
       const f = fi >= 0 ? imgs[fi] : null;
       const chat = f ? (plan.image_chat || []).filter(c => c.target === f.file || c.result === f.file || (f.root && (c.target === f.root))) : [];
       body.innerHTML = `${summary()}
-        <h4 class="mk-q">2. اختار الصورة</h4>
+        <h4 class="mk-q">2. اختر الصورة</h4>
         <p class="form-hint" style="margin:-8px 0 12px;">اضغط على أي صورة لتكبيرها وتعديلها بالمحادثة، أو اعتمدها مباشرة.</p>
-        ${plan.image_error ? `<div class="mk-alert">${esc(plan.image_error)}<br><small>تقدر ترفع صورة من جهازك، أو تجرّب مرة ثانية.</small></div>` : ''}
+        ${plan.image_error ? `<div class="mk-alert">${esc(plan.image_error)}<br><small>يمكنك رفع صورة من جهازك، أو المحاولة مرة أخرى.</small></div>` : ''}
         ${f ? `
         <div class="mk-studio">
           <div class="mk-studio-img"><img src="${esc(f.url)}" alt="">
             <span class="mk-image-meta">${esc(f.style || '')}${f.engine && f.engine !== 'upload' ? ` · ${esc(f.engine)}` : ''}</span></div>
           <div class="mk-chat">
-            <div class="mk-chat-head"><b><i class="fa-solid fa-wand-magic-sparkles"></i> عدّل هالصورة</b>
+            <div class="mk-chat-head"><b><i class="fa-solid fa-wand-magic-sparkles"></i> عدّل هذه الصورة</b>
               <button class="btn btn-secondary btn-sm" data-act="close-studio" title="رجوع للصور"><i class="fa-solid fa-xmark"></i></button></div>
             <div class="mk-chat-log" id="mk-image-log">${chat.length ? chat.map(c => c.role === 'user'
               ? `<div class="mk-msg me">${esc(c.text)}</div>`
               : `<div class="mk-msg ai">${esc(c.text)}${c.result && c.result !== f.file ? ` <a href="#" data-act="focus-file" data-file="${esc(c.result)}">افتح النسخة</a>` : ''}</div>`).join('')
-              : '<div class="mk-chat-empty">اكتب أي تعديل بلغتك — مثلاً: «كبّر العنوان»، «خلّي الخلفية كحلية»، «غيّر الجملة لـ…»، «ضيف صورة موظف مبتسم».</div>'}</div>
-            <div class="mk-chips">${['كبّر العنوان وخلّيه أوضح', 'خلّي الألوان أقرب للبراند', 'بسّط التصميم وشيل الزحمة', 'خلّي الصورة أكثر واقعية'].map(t => `<button class="mk-chip" data-act="image-chip" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>
-            <div class="mk-chat-input"><textarea id="mk-image-msg" class="form-control" rows="2" placeholder="شو بدك تعدّل؟"></textarea>
+              : '<div class="mk-chat-empty">اكتب أي تعديل بلغتك — مثلاً: «كبّر العنوان»، «اجعل الخلفية كحلية»، «غيّر الجملة إلى…»، «أضف صورة موظف مبتسم».</div>'}</div>
+            <div class="mk-chips">${['كبّر العنوان واجعله أوضح', 'اجعل الألوان أقرب للهوية', 'بسّط التصميم وقلّل العناصر', 'اجعل الصورة أكثر واقعية'].map(t => `<button class="mk-chip" data-act="image-chip" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+            <div class="mk-chat-input"><textarea id="mk-image-msg" class="form-control" rows="2" placeholder="ما التعديل المطلوب؟"></textarea>
               <button class="btn btn-primary" data-act="image-send"><i class="fa-solid fa-paper-plane"></i></button></div>
-            <button class="btn btn-success" data-act="image" data-i="${fi}" style="width:100%;margin-top:10px;"><i class="fa-solid fa-check"></i> اعتمد هالصورة وكمّل للكابشن</button>
+            <button class="btn btn-success" data-act="image" data-i="${fi}" style="width:100%;margin-top:10px;"><i class="fa-solid fa-check"></i> اعتمد هذه الصورة وانتقل إلى النص</button>
           </div>
         </div>` : ''}
         <div class="mk-images">${imgs.map((im, i) => `
@@ -177,7 +177,7 @@
             <span class="mk-image-meta">${esc(im.style || '')}${im.engine && im.engine !== 'upload' ? ` · ${esc(im.engine)}` : ''}</span>
           </button>`).join('')}
           <label class="mk-image mk-upload"><input type="file" accept="image/*" id="mk-upload" hidden>
-            <i class="fa-solid fa-cloud-arrow-up"></i><span>ارفع صورتك</span></label>
+            <i class="fa-solid fa-cloud-arrow-up"></i><span>ارفع صورة</span></label>
         </div>
         <div class="mk-actions">${backBtn()}<button class="btn btn-secondary btn-sm" data-act="regen" data-step="images"><i class="fa-solid fa-rotate"></i> ولّد صور جديدة</button></div>`;
       const ilog = $('mk-image-log'); if (ilog) ilog.scrollTop = ilog.scrollHeight;
@@ -191,7 +191,7 @@
       });
     } else if (s === 'caption') {
       body.innerHTML = `${summary()}
-        <h4 class="mk-q">3. اختار الكابشن</h4>
+        <h4 class="mk-q">3. اختر النص</h4>
         <div class="mk-options">${(plan.captions || []).map((c, i) => `
           <div class="mk-option mk-caption" data-i="${i}">
             <span class="mk-letter">${'ABC'[i]}</span>
@@ -199,9 +199,9 @@
               <div class="mk-caption-text">${esc(c.text)}</div>
               <div class="mk-hashtags">${esc((c.hashtags || []).join(' '))}</div>
               <div class="mk-actions" style="margin-top:10px;">
-                <button class="btn btn-primary btn-sm" data-act="caption" data-i="${i}"><i class="fa-solid fa-check"></i> اختار هذا</button>
+                <button class="btn btn-primary btn-sm" data-act="caption" data-i="${i}"><i class="fa-solid fa-check"></i> اختر هذا</button>
                 <button class="btn btn-secondary btn-sm" data-act="chat-caption" data-i="${i}"><i class="fa-solid fa-wand-magic-sparkles"></i> عدّله بالذكاء الاصطناعي</button>
-                <button class="btn btn-secondary btn-sm" data-act="edit-caption" data-i="${i}"><i class="fa-solid fa-pen"></i> عدّل بإيدك</button>
+                <button class="btn btn-secondary btn-sm" data-act="edit-caption" data-i="${i}"><i class="fa-solid fa-pen"></i> عدّل يدوياً</button>
               </div></div>
           </div>`).join('')}
         </div>
@@ -212,31 +212,31 @@
         ${captionDraft ? `
         <div class="mk-studio mk-studio-caption" id="mk-caption-studio">
           <div class="mk-chat" style="flex:1;">
-            <div class="mk-chat-head"><b><i class="fa-solid fa-wand-magic-sparkles"></i> عدّل الكابشن بالمحادثة</b>
+            <div class="mk-chat-head"><b><i class="fa-solid fa-wand-magic-sparkles"></i> عدّل النص بالمحادثة</b>
               <button class="btn btn-secondary btn-sm" data-act="close-caption-chat" title="إغلاق"><i class="fa-solid fa-xmark"></i></button></div>
             <textarea id="mk-caption-draft" class="form-control mk-draft" rows="8">${esc(captionDraft)}</textarea>
-            <div class="mk-chat-log" id="mk-caption-log">${(plan.caption_chat || []).slice(-10).map(c => `<div class="mk-msg ${c.role === 'user' ? 'me' : 'ai'}">${esc(c.text)}</div>`).join('') || '<div class="mk-chat-empty">اطلب أي تعديل — «أقصر»، «أكثر رسمية»، «ضيف سؤال بالأول»، «بالإنجليزي».</div>'}</div>
-            <div class="mk-chips">${['خلّيه أقصر', 'أقوى بأول سطر', 'نبرة أكثر رسمية', 'ضيف إيموجي خفيفة', 'هاشتاغات أكثر'].map(t => `<button class="mk-chip" data-act="caption-chip" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>
-            <div class="mk-chat-input"><textarea id="mk-caption-msg" class="form-control" rows="2" placeholder="شو بدك تغيّر بالكابشن؟"></textarea>
+            <div class="mk-chat-log" id="mk-caption-log">${(plan.caption_chat || []).slice(-10).map(c => `<div class="mk-msg ${c.role === 'user' ? 'me' : 'ai'}">${esc(c.text)}</div>`).join('') || '<div class="mk-chat-empty">اطلب أي تعديل — «أقصر»، «أكثر رسمية»، «أضف سؤالاً في البداية»، «بالإنجليزية».</div>'}</div>
+            <div class="mk-chips">${['اجعله أقصر', 'افتتاحية أقوى', 'نبرة أكثر رسمية', 'أضف رموزاً تعبيرية خفيفة', 'هاشتاغات أكثر'].map(t => `<button class="mk-chip" data-act="caption-chip" data-text="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+            <div class="mk-chat-input"><textarea id="mk-caption-msg" class="form-control" rows="2" placeholder="ما التعديل المطلوب على النص؟"></textarea>
               <button class="btn btn-primary" data-act="caption-send"><i class="fa-solid fa-paper-plane"></i></button></div>
-            <button class="btn btn-success" data-act="caption-approve" style="width:100%;margin-top:10px;"><i class="fa-solid fa-check"></i> اعتمد هالكابشن وكمّل للوقت</button>
+            <button class="btn btn-success" data-act="caption-approve" style="width:100%;margin-top:10px;"><i class="fa-solid fa-check"></i> اعتمد هذا النص وانتقل إلى الموعد</button>
           </div>
         </div>` : ''}
-        <div class="mk-actions">${backBtn()}<button class="btn btn-secondary btn-sm" data-act="regen" data-step="captions"><i class="fa-solid fa-rotate"></i> اكتب كابشنات غيرهم</button></div>`;
+        <div class="mk-actions">${backBtn()}<button class="btn btn-secondary btn-sm" data-act="regen" data-step="captions"><i class="fa-solid fa-rotate"></i> اكتب نصوصاً أخرى</button></div>`;
       const clog = $('mk-caption-log'); if (clog) clog.scrollTop = clog.scrollHeight;
       $('mk-caption-msg')?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); body.querySelector('[data-act="caption-send"]').click(); } });
       if (captionDraft) $('mk-caption-studio')?.scrollIntoView({ block: 'nearest' });
     } else if (s === 'time') {
       body.innerHTML = `${summary()}
-        <h4 class="mk-q">4. اختار ساعة النشر</h4>
+        <h4 class="mk-q">4. اختر موعد النشر</h4>
         <div class="mk-options mk-times">${(plan.times || []).map((t, i) => `
           <button class="mk-option" data-act="time" data-i="${i}">
             <span class="mk-letter">${'ABC'[i]}</span>
             <div><div class="mk-opt-title"><i class="fa-regular fa-clock"></i> ${esc(t.label)}</div>
             <div class="mk-opt-text">${esc(t.reason)}</div></div>
-          </button>`).join('') || '<p class="form-hint">ما في أوقات مقترحة.</p>'}
+          </button>`).join('') || '<p class="form-hint">لا توجد أوقات مقترحة.</p>'}
         </div>
-        <div class="mk-custom-topic"><input type="datetime-local" id="mk-custom-time" class="form-control"><button class="btn btn-secondary" data-act="time-custom">وقت من عندي</button>
+        <div class="mk-custom-topic"><input type="datetime-local" id="mk-custom-time" class="form-control"><button class="btn btn-secondary" data-act="time-custom">وقت آخر</button>
           <button class="btn btn-success" data-act="now"><i class="fa-solid fa-bolt"></i> انشر الآن</button></div>
         <div class="mk-preview-wrap">${preview()}</div>
         <div class="mk-actions">${backBtn()}</div>`;
@@ -255,7 +255,7 @@
     const r = p.results || {};
     const rows = Object.entries(r).map(([k, v]) => `<div class="mk-result ${v.ok ? 'ok' : 'bad'}">
       <i class="fa-solid ${v.ok ? 'fa-circle-check' : 'fa-circle-xmark'}"></i> <b>${CH_LABEL[k] || k}</b>
-      ${v.ok ? (v.url ? `<a href="${esc(v.url)}" target="_blank" rel="noopener">فتح البوست ↗</a>` : 'تم') : `<span>${esc(v.error || 'فشل')}</span>`}</div>`);
+      ${v.ok ? (v.url ? `<a href="${esc(v.url)}" target="_blank" rel="noopener">فتح البوست</a>` : 'تم') : `<span>${esc(v.error || 'فشل')}</span>`}</div>`);
     return rows.join('');
   }
 
@@ -263,7 +263,7 @@
     const s = plan.status;
     const [label, cls] = STATUS[s] || [s, 'info'];
     const head = s === 'scheduled'
-      ? `<div class="mk-big-status warning"><i class="fa-solid fa-calendar-check"></i><div><b>البوست مجدول: ${esc(plan.scheduled_label || '')}</b><small>رح ينزل لحاله بهالوقت على: ${enabledChannels()}. وبيوصلك تأكيد على تليجرام.</small></div></div>`
+      ? `<div class="mk-big-status warning"><i class="fa-solid fa-calendar-check"></i><div><b>المنشور مجدول: ${esc(plan.scheduled_label || '')}</b><small>سيُنشر تلقائياً في هذا الموعد على: ${enabledChannels()}. وسيصلك تأكيد على تليجرام.</small></div></div>`
       : `<div class="mk-big-status ${cls}"><i class="fa-solid ${s === 'published' ? 'fa-rocket' : s === 'publishing' ? 'fa-spinner fa-spin' : 'fa-triangle-exclamation'}"></i><div><b>${label}</b>${plan.error ? `<small>${esc(plan.error)}</small>` : ''}</div></div>`;
     return `${head}
       <div class="mk-results">${resultsHtml(plan)}</div>
@@ -272,14 +272,14 @@
         ${s === 'scheduled' || s === 'failed' ? backBtn().replace('رجوع', 'تغيير الوقت') : ''}
         ${s === 'scheduled' ? '<button class="btn btn-success btn-sm" data-act="now-final"><i class="fa-solid fa-bolt"></i> انشر الآن</button><button class="btn btn-danger btn-sm" data-act="cancel">إلغاء الجدولة</button>' : ''}
         ${s === 'failed' || s === 'partial' ? '<button class="btn btn-primary btn-sm" data-act="retry"><i class="fa-solid fa-rotate-right"></i> أعد محاولة النشر</button>' : ''}
-        <button class="btn btn-secondary btn-sm" data-act="new"><i class="fa-solid fa-plus"></i> بوست جديد</button>
+        <button class="btn btn-secondary btn-sm" data-act="new"><i class="fa-solid fa-plus"></i> منشور جديد</button>
       </div>`;
   }
 
   function enabledChannels() {
     const ch = overview?.channels || {};
-    const on = Object.values(ch).filter(c => c.enabled).map(c => c.label + (c.ready ? '' : ' ⚠️'));
-    return esc(on.join('، ') || 'ولا منصة مفعّلة!');
+    const on = Object.values(ch).filter(c => c.enabled).map(c => c.label + (c.ready ? '' : ' (غير جاهز)'));
+    return esc(on.join('، ') || 'لا توجد منصة مفعّلة.');
   }
 
   // ---------- actions ----------
@@ -295,8 +295,8 @@
     if (act === 'image-chip') { const t = $('mk-image-msg'); t.value = b.dataset.text; t.focus(); return; }
     if (act === 'image-send') {
       const msg = $('mk-image-msg').value.trim();
-      if (!msg) return showToast('اكتب شو بدك تعدّل', 'error');
-      return chatCall('mk-image-log', msg, 'جاري تعديل الصورة… (ممكن ياخد لحد دقيقة)', async () => {
+      if (!msg) return showToast('اكتب التعديل المطلوب', 'error');
+      return chatCall('mk-image-log', msg, 'جاري تعديل الصورة… (قد يستغرق حتى دقيقة)', async () => {
         const d = await api(`${P}/image-chat`, { file: focusFile, message: msg });
         plan = d.plan; focusFile = d.plan.images[0]?.file || focusFile; render();
       });
@@ -306,7 +306,7 @@
     if (act === 'caption-chip') { const t = $('mk-caption-msg'); t.value = b.dataset.text; t.focus(); return; }
     if (act === 'caption-send') {
       const msg = $('mk-caption-msg').value.trim();
-      if (!msg) return showToast('اكتب شو بدك تغيّر', 'error');
+      if (!msg) return showToast('اكتب التعديل المطلوب', 'error');
       const current = $('mk-caption-draft').value;
       return chatCall('mk-caption-log', msg, 'جاري تعديل الكابشن…', async () => {
         const d = await api(`${P}/caption-chat`, { text: current, message: msg });
@@ -315,7 +315,7 @@
     }
     if (act === 'caption-approve') {
       const t = $('mk-caption-draft').value.trim();
-      if (!t) return showToast('الكابشن فاضي', 'error');
+      if (!t) return showToast('النص فارغ', 'error');
       captionDraft = '';
       return run('جاري حساب أفضل أوقات النشر...', () => api(`${P}/caption`, { text: t }));
     }
@@ -325,7 +325,7 @@
       if (!v) return showToast('اكتب الموضوع أولاً', 'error');
       if (act === 'custom') run('جاري تصميم الصور لموضوعك...', () => api(`${P}/topic`, { custom: v }));
       else run('جاري تصميم الصور لموضوعك...', () => api('/api/marketing/plans', { topic: v }));
-    } else if (act === 'image') run('جاري كتابة 3 كابشنات...', () => api(`${P}/image`, { index: i }));
+    } else if (act === 'image') run('جاري كتابة 3 نصوص...', () => api(`${P}/image`, { index: i }));
     else if (act === 'caption') run('جاري حساب أفضل أوقات النشر...', () => api(`${P}/caption`, { index: i }));
     else if (act === 'edit-caption') {
       const c = plan.captions[i];
@@ -334,23 +334,23 @@
       $('mk-caption-edit').focus();
     } else if (act === 'caption-custom') {
       const t = $('mk-caption-edit').value.trim();
-      if (!t) return showToast('النص فاضي', 'error');
+      if (!t) return showToast('النص فارغ', 'error');
       run('جاري حساب أفضل أوقات النشر...', () => api(`${P}/caption`, { text: t }));
     } else if (act === 'time') run('جاري الجدولة...', () => api(`${P}/schedule`, { index: i }));
     else if (act === 'time-custom') {
       const v = $('mk-custom-time').value;
-      if (!v) return showToast('اختار التاريخ والساعة', 'error');
+      if (!v) return showToast('اختر التاريخ والساعة', 'error');
       run('جاري الجدولة...', () => api(`${P}/schedule`, { iso: new Date(v).toISOString() }));
     } else if (act === 'now' || act === 'now-final') {
-      if (!confirm(`رح ينزل البوست هلق على: ${enabledChannels().replace(/&[a-z]+;/g, '')}. متأكد؟`)) return;
+      if (!confirm(`سيُنشر المنشور الآن على: ${enabledChannels().replace(/&[a-z]+;/g, '')}. متأكد؟`)) return;
       run('جاري النشر على المنصات...', () => api(`${P}/schedule`, { now: true }));
     } else if (act === 'regen') {
-      const msgs = { topics: 'جاري دراسة السوق واقتراح مواضيع جديدة...', images: 'جاري توليد صور جديدة...', captions: 'جاري كتابة كابشنات جديدة...' };
+      const msgs = { topics: 'جاري دراسة السوق واقتراح مواضيع جديدة...', images: 'جاري توليد صور جديدة...', captions: 'جاري كتابة نصوص جديدة...' };
       run(msgs[b.dataset.step], () => api(`${P}/regenerate`, { step: b.dataset.step }));
     } else if (act === 'back') run('...', () => api(`${P}/back`, {}));
     else if (act === 'retry') run('جاري إعادة النشر...', () => api(`${P}/retry`, {}));
     else if (act === 'cancel') {
-      if (!confirm('إلغاء هذا البوست؟')) return;
+      if (!confirm('إلغاء هذا المنشور؟')) return;
       run('...', () => api(`${P}/cancel`, {}));
     } else if (act === 'new') newPlan();
   });
@@ -380,14 +380,14 @@
     } catch (e) { return; }
     const ch = overview.channels || {};
     const pills = [
-      overview.telegram.configured ? ['success', 'fa-brands fa-telegram', 'تليجرام مربوط'] : ['danger', 'fa-brands fa-telegram', 'تليجرام مش مربوط'],
-      overview.ai_ready ? ['success', 'fa-solid fa-brain', 'AI جاهز'] : ['warning', 'fa-solid fa-brain', 'ما في مفتاح AI'],
-      ...Object.values(ch).filter(c => c.enabled).map(c => [c.ready ? 'success' : 'warning', 'fa-solid fa-share-nodes', `${c.label}: ${c.ready ? 'جاهز للنشر' : 'ناقص ربط'}`])
+      overview.telegram.configured ? ['success', 'fa-brands fa-telegram', 'تليجرام مربوط'] : ['danger', 'fa-brands fa-telegram', 'تليجرام غير مربوط'],
+      overview.ai_ready ? ['success', 'fa-solid fa-brain', 'AI جاهز'] : ['warning', 'fa-solid fa-brain', 'لا يوجد مفتاح AI'],
+      ...Object.values(ch).filter(c => c.enabled).map(c => [c.ready ? 'success' : 'warning', 'fa-solid fa-share-nodes', `${c.label}: ${c.ready ? 'جاهز للنشر' : 'يحتاج إلى ربط'}`])
     ];
     const next = (overview.plans || []).filter(p => p.status === 'scheduled').sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))[0];
     $('mk-status-strip').innerHTML = pills.map(([c, i, t]) => `<span class="badge-pill ${c}"><i class="${i}"></i> ${esc(t)}</span>`).join('') +
-      (next ? `<span class="badge-pill info"><i class="fa-solid fa-calendar"></i> البوست الجاي: ${esc(next.scheduled_label)}</span>` : '') +
-      (overview.telegram.configured ? '' : ' <a href="#" class="mk-link" id="mk-go-setup">اربطه من هون ←</a>');
+      (next ? `<span class="badge-pill info"><i class="fa-solid fa-calendar"></i> المنشور القادم: ${esc(next.scheduled_label)}</span>` : '') +
+      (overview.telegram.configured ? '' : ' <a href="#" class="mk-link" id="mk-go-setup">اربطه من هنا ←</a>');
     $('mk-go-setup')?.addEventListener('click', (e) => { e.preventDefault(); switchPane('setup'); });
     if (document.querySelector('.mk-subtab.active')?.dataset.mk === 'history') renderHistory();
     // A scheduled post was published in the background → show the result.
@@ -400,14 +400,14 @@
 
   function renderHistory() {
     const list = overview?.plans || [];
-    if (!list.length) { $('mk-history-body').innerHTML = '<div class="mk-empty"><p>ما في بوستات لسا.</p></div>'; return; }
+    if (!list.length) { $('mk-history-body').innerHTML = '<div class="mk-empty"><p>لا توجد منشورات بعد.</p></div>'; return; }
     $('mk-history-body').innerHTML = `<div class="mk-history">${list.map(p => {
       const [label, cls] = STATUS[p.status] || [p.status, 'info'];
       return `<div class="mk-history-item" data-id="${esc(p.id)}">
         ${p.image ? `<img src="${esc(p.image.url)}" alt="">` : '<div class="mk-noimg"><i class="fa-regular fa-image"></i></div>'}
         <div class="mk-history-info">
-          <div class="mk-opt-title">${esc(p.topic?.title || (p.topics || []).map(t => t.title).join(' / ') || 'بوست')}</div>
-          <div class="form-hint">${esc(p.date)} · ${p.source === 'morning' ? 'رسالة الصباح' : p.source === 'competitor' ? 'مستوحى من منافس' : 'يدوي'}${p.scheduled_label ? ` · ⏰ ${esc(p.scheduled_label)}` : ''}</div>
+          <div class="mk-opt-title">${esc(p.topic?.title || (p.topics || []).map(t => t.title).join(' / ') || 'منشور')}</div>
+          <div class="form-hint">${esc(p.date)} · ${p.source === 'morning' ? 'رسالة الصباح' : p.source === 'competitor' ? 'مستوحى من منافس' : 'يدوي'}${p.scheduled_label ? ` · ${esc(p.scheduled_label)}` : ''}</div>
           <div class="mk-results compact">${resultsHtml(p)}</div>
         </div>
         <span class="badge-pill ${cls}">${label}</span>
@@ -436,10 +436,10 @@
     const running = kit?.status === 'running';
     const p = kit?.progress || { done: 0, failed: 0, total: media.length };
     $('mk-kit-start').disabled = running;
-    $('mk-kit-start').querySelector('span').textContent = running ? 'جاري التصميم…' : kit ? 'كمّل الناقص' : 'صمّم كل الوسائط';
+    $('mk-kit-start').querySelector('span').textContent = running ? 'جاري التصميم…' : kit ? 'أكمل الناقص' : 'صمّم كل الوسائط';
     $('mk-kit-progress').innerHTML = kit ? `
       <div class="mk-kit-bar"><i style="width:${Math.round((p.done / p.total) * 100)}%"></i></div>
-      <div class="form-hint" style="margin:6px 0 16px;">${p.done} من ${p.total} جاهزين${p.failed ? ` · ${p.failed} ما زبطوا (اضغط «أعد التصميم» عليهم)` : ''}${running ? ' · التصاميم بتظهر وحدة وحدة، ممكن تاخد كم دقيقة' : ''}</div>` : '';
+      <div class="form-hint" style="margin:6px 0 16px;">${p.done} من ${p.total} جاهزة${p.failed ? ` · ${p.failed} لم تنجح (اضغط «أعد التصميم» عليها)` : ''}${running ? ' · تظهر التصاميم تباعاً، وقد يستغرق ذلك بضع دقائق' : ''}</div>` : '';
     const items = media.map(md => ({ ...md, ...(kit?.items?.find(i => i.key === md.key) || { status: 'idle' }) }));
     const groups = [...new Set(items.map(i => i.group))];
     $('mk-kit-body').innerHTML = groups.map(g => `
@@ -449,7 +449,7 @@
           <div class="mk-kit-frame" style="aspect-ratio:${i.aspect.replace(':', ' / ')}">
             ${i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener"><img src="${esc(i.url)}" alt="${esc(i.title)}" loading="lazy"></a>` : ''}
             ${i.status === 'running' || (i.status === 'pending' && running) ? `<div class="mk-kit-wait"><div class="mk-spinner"></div><span>${i.status === 'running' ? 'جاري التصميم…' : 'بالدور'}</span></div>` : ''}
-            ${i.status === 'failed' ? `<div class="mk-kit-wait err"><i class="fa-solid fa-triangle-exclamation"></i><span>${esc(i.error || 'ما زبط')}</span></div>` : ''}
+            ${i.status === 'failed' ? `<div class="mk-kit-wait err"><i class="fa-solid fa-triangle-exclamation"></i><span>${esc(i.error || 'لم ينجح')}</span></div>` : ''}
             ${!i.url && (i.status === 'idle' || (i.status === 'pending' && !running)) ? `<div class="mk-kit-wait idle"><span>${esc(i.aspect)}</span></div>` : ''}
           </div>
           <div class="mk-kit-meta">
@@ -464,7 +464,7 @@
   }
 
   $('mk-kit-start')?.addEventListener('click', async () => {
-    if (!confirm('رح نصمّم كل الوسائط بأفضل موديل (Nano Banana Pro). بتاخد كم دقيقة وبتستهلك من رصيد OpenRouter (تقريباً 10–15 سنت للتصميم). نبلّش؟')) return;
+    if (!confirm('سيتم تصميم جميع الوسائط بأفضل نموذج (Nano Banana Pro). تستغرق العملية بضع دقائق وتستهلك من رصيد OpenRouter (نحو 10–15 سنتاً للتصميم الواحد). هل تريد البدء؟')) return;
     try { const d = await api('/api/marketing/brand-kit/start', {}); showToast(d.message, 'success'); loadKit(); } catch (e) { showToast(e.message, 'error'); }
   });
   $('mk-pane-kit')?.addEventListener('click', async (e) => {
@@ -488,45 +488,45 @@
     box.innerHTML = `
       <div class="form-hint" style="margin-bottom:12px;">آخر تحديث: ${new Date(r.fetched_at).toLocaleString('en-GB')}</div>
       <div class="glass-card">
-        <h4 class="mk-card-title"><i class="fa-brands fa-instagram" style="color:#e1306c;"></i> المنافسون — أكثر بوستاتهم تفاعلاً</h4>
-        ${!comps.length ? '<p class="form-hint">ما في منافسين مضافين. أضفهم من تبويب <b>الإعدادات والربط</b>.</p>' : comps.map(c => c.error
+        <h4 class="mk-card-title"><i class="fa-brands fa-instagram" style="color:#e1306c;"></i> المنافسون — أكثر منشوراتهم تفاعلاً</h4>
+        ${!comps.length ? '<p class="form-hint">لا يوجد منافسون مضافون. أضفهم من تبويب <b>الإعدادات والربط</b>.</p>' : comps.map(c => c.error
           ? `<div class="mk-comp"><b>@${esc(c.username)}</b> <span class="mk-alert inline">${esc(c.error)}</span></div>`
           : `<div class="mk-comp"><div class="mk-comp-head"><b>@${esc(c.username)}</b> <span class="form-hint">${c.followers.toLocaleString()} متابع · متوسط تفاعل ${c.avg_engagement}</span></div>
             ${(c.posts || []).map(p => `<div class="mk-comp-post">
-              <div class="mk-comp-stats"><span>❤️ ${p.likes}</span><span>💬 ${p.comments}</span></div>
+              <div class="mk-comp-stats"><span><i class="fa-regular fa-heart"></i> ${p.likes}</span><span><i class="fa-regular fa-comment"></i> ${p.comments}</span></div>
               <div class="mk-comp-cap">${esc(p.caption.slice(0, 220)) || '<i>بدون نص</i>'}</div>
               <div class="mk-comp-actions">
-                ${p.permalink ? `<a href="${esc(p.permalink)}" target="_blank" rel="noopener" class="mk-link">فتح ↗</a>` : ''}
-                <button class="btn btn-secondary btn-sm" data-inspire="${esc(p.caption.slice(0, 400))}"><i class="fa-solid fa-wand-magic-sparkles"></i> اعمل بوست أحسن عن نفس الموضوع</button>
+                ${p.permalink ? `<a href="${esc(p.permalink)}" target="_blank" rel="noopener" class="mk-link">فتح</a>` : ''}
+                <button class="btn btn-secondary btn-sm" data-inspire="${esc(p.caption.slice(0, 400))}"><i class="fa-solid fa-wand-magic-sparkles"></i> أنشئ منشوراً أفضل عن الموضوع نفسه</button>
               </div></div>`).join('')}</div>`).join('')}
       </div>
       <div class="grid-2">
         <div class="glass-card">
-          <h4 class="mk-card-title"><i class="fa-solid fa-comments" style="color:#34d399;"></i> شو بيسألوا عملاءك (من البوت والتعليقات)</h4>
+          <h4 class="mk-card-title"><i class="fa-solid fa-comments" style="color:#34d399;"></i> ماذا يسأل عملاؤك (من البوت والتعليقات)</h4>
           ${[['مجالاتهم', cs.business_types], ['مشاكلهم', cs.problems], ['طلباتهم', cs.requests], ['اعتراضاتهم', cs.objections], ['تعليقات مهتمة', cs.comments]]
-            .filter(([, v]) => v && v.length).map(([k, v]) => `<div class="mk-signal"><b>${k}</b><ul>${v.slice(0, 6).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('') || '<p class="form-hint">لسا ما في محادثات كافية.</p>'}
+            .filter(([, v]) => v && v.length).map(([k, v]) => `<div class="mk-signal"><b>${k}</b><ul>${v.slice(0, 6).map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`).join('') || '<p class="form-hint">لا توجد محادثات كافية بعد.</p>'}
         </div>
         <div class="glass-card">
-          <h4 class="mk-card-title"><i class="fa-solid fa-clock" style="color:#f59e0b;"></i> أفضل أوقات النشر الجاية</h4>
+          <h4 class="mk-card-title"><i class="fa-solid fa-clock" style="color:#f59e0b;"></i> أفضل أوقات النشر القادمة</h4>
           ${(r.best_times || []).map(t => `<div class="mk-signal"><b>${esc(t.label)}</b><div class="form-hint">${esc(t.reason)}</div></div>`).join('')}
-          <p class="form-hint">${r.own_count >= 8 ? `محسوبة من تفاعل ${r.own_count} بوست سابق إلكم + أوقات الذروة بالمنطقة.` : 'محسوبة من أوقات الذروة بالأردن والمنطقة — بتصير أدق كل ما تنشروا أكتر.'}</p>
-          <h4 class="mk-card-title" style="margin-top:16px;"><i class="fa-solid fa-trophy" style="color:#fbbf24;"></i> أنجح بوستاتكم</h4>
-          ${(r.own_top || []).map(p => `<div class="mk-signal"><span class="form-hint">تفاعل ${p.engagement} · ${p.platform === 'instagram' ? 'إنستغرام' : 'فيسبوك'}</span><div>${esc(p.text.slice(0, 140)) || '<i>بدون نص</i>'}</div></div>`).join('') || '<p class="form-hint">ما قدرنا نقرأ بوستاتكم (تأكد من ربط Meta).</p>'}
+          <p class="form-hint">${r.own_count >= 8 ? `محسوبة من تفاعل ${r.own_count} منشوراً سابقاً لكم + أوقات الذروة في المنطقة.` : 'محسوبة من أوقات الذروة في الأردن والمنطقة، وتزداد دقتها مع زيادة النشر.'}</p>
+          <h4 class="mk-card-title" style="margin-top:16px;"><i class="fa-solid fa-trophy" style="color:#fbbf24;"></i> أنجح منشوراتكم</h4>
+          ${(r.own_top || []).map(p => `<div class="mk-signal"><span class="form-hint">تفاعل ${p.engagement} · ${p.platform === 'instagram' ? 'إنستغرام' : 'فيسبوك'}</span><div>${esc(p.text.slice(0, 140)) || '<i>بدون نص</i>'}</div></div>`).join('') || '<p class="form-hint">تعذّرت قراءة منشوراتكم (تحقّق من ربط Meta).</p>'}
         </div>
       </div>
       <div class="glass-card">
-        <h4 class="mk-card-title"><i class="fa-solid fa-newspaper" style="color:#60a5fa;"></i> أخبار المجال هالأسبوع</h4>
-        ${(r.news || []).map(n => `<div class="mk-news"><span class="mk-tag">${esc(n.keyword)}</span> ${esc(n.title)} <button class="btn btn-secondary btn-sm" data-news="${esc(n.title)}">بوست عن هالخبر</button></div>`).join('') || '<p class="form-hint">ما في أخبار حالياً.</p>'}
+        <h4 class="mk-card-title"><i class="fa-solid fa-newspaper" style="color:#60a5fa;"></i> أخبار المجال هذا الأسبوع</h4>
+        ${(r.news || []).map(n => `<div class="mk-news"><span class="mk-tag">${esc(n.keyword)}</span> ${esc(n.title)} <button class="btn btn-secondary btn-sm" data-news="${esc(n.title)}">منشور عن هذا الخبر</button></div>`).join('') || '<p class="form-hint">لا توجد أخبار حالياً.</p>'}
       </div>`;
   }
   $('mk-research-body').addEventListener('click', (e) => {
     const ins = e.target.closest('[data-inspire]');
     const news = e.target.closest('[data-news]');
     if (ins) {
-      const topic = prompt('شو عنوان البوست تبعك؟ (بنكتبه بأسلوبنا وبدون نسخ)', ins.dataset.inspire.split('\n')[0].slice(0, 80));
+      const topic = prompt('ما عنوان منشورك؟ (سنكتبه بأسلوبنا دون نسخ)', ins.dataset.inspire.split('\n')[0].slice(0, 80));
       if (topic) run('جاري تصميم الصور...', () => api('/api/marketing/plans', { topic, inspired_by: ins.dataset.inspire }));
     } else if (news) {
-      run('جاري تصميم الصور...', () => api('/api/marketing/plans', { topic: `رأينا بخبر: ${news.dataset.news}`.slice(0, 140), inspired_by: news.dataset.news }));
+      run('جاري تصميم الصور...', () => api('/api/marketing/plans', { topic: `رأينا في خبر: ${news.dataset.news}`.slice(0, 140), inspired_by: news.dataset.news }));
     }
   });
   $('mk-btn-refresh-research').addEventListener('click', () => loadResearch(true));
@@ -540,7 +540,7 @@
       ${g ? `<p class="mk-brand-summary">${esc(g.summary_ar || '')}</p>
         <div class="mk-swatches">${(g.palette || []).map(c => `<span class="mk-swatch" title="${esc(c.role)}"><i style="background:${esc(c.hex)}"></i>${esc(c.hex)}</span>`).join('')}</div>
         <div class="form-hint" style="margin:6px 0 10px;">${esc([g.typography, g.mood].filter(Boolean).join(' — '))}</div>`
-        : '<p class="form-hint" style="margin-bottom:10px;">لسا ما تعلّمنا هوية تصميمك. اضغط «تعلّم من صفحتي» وبنقرأ بوستاتك على إنستغرام ونطلع الألوان والخطوط وطريقة التصميم، عشان كل صورة جديدة تطلع بنفس الستايل.</p>'}
+        : '<p class="form-hint" style="margin-bottom:10px;">لم تُحلَّل هوية تصميمك بعد. اضغط «تعلّم من صفحتي» لقراءة منشوراتك على إنستغرام واستخراج الألوان والخطوط وأسلوب التصميم، لتخرج كل صورة جديدة بالأسلوب نفسه.</p>'}
       <div class="mk-brand-files">
         <div class="mk-brand-file logo">${b?.logo_url ? `<img src="${esc(b.logo_url)}" alt=""><button data-brand-remove="${esc(b.logo)}" title="حذف">×</button>` : '<span>اللوغو</span>'}</div>
         ${(b?.ref_urls || []).map(r => `<div class="mk-brand-file"><img src="${esc(r.url)}" alt=""><button data-brand-remove="${esc(r.file)}" title="حذف">×</button></div>`).join('')}
@@ -548,7 +548,7 @@
       <div class="mk-actions">
         <button type="button" class="btn btn-primary btn-sm" id="mk-brand-learn"><i class="fa-brands fa-instagram"></i> ${g ? 'أعد التعلّم من صفحتي' : 'تعلّم من صفحتي'}</button>
         <label class="btn btn-secondary btn-sm" style="cursor:pointer;"><i class="fa-solid fa-upload"></i> ارفع اللوغو<input type="file" accept="image/*" hidden data-brand-upload="logo"></label>
-        <label class="btn btn-secondary btn-sm" style="cursor:pointer;"><i class="fa-solid fa-images"></i> ضيف تصميم كمرجع<input type="file" accept="image/*" hidden data-brand-upload="ref"></label>
+        <label class="btn btn-secondary btn-sm" style="cursor:pointer;"><i class="fa-solid fa-images"></i> أضف تصميماً كمرجع<input type="file" accept="image/*" hidden data-brand-upload="ref"></label>
         ${(b?.refs || []).length ? '<button type="button" class="btn btn-secondary btn-sm" id="mk-brand-reanalyze"><i class="fa-solid fa-rotate"></i> حلّل من جديد</button>' : ''}
       </div>
       ${b?.learned_at ? `<div class="form-hint" style="margin-top:6px;">من ${esc(b.source || 'الصفحة')} — ${esc(String(b.posts_analyzed || (b.refs || []).length))} تصاميم، ${new Date(b.learned_at).toLocaleDateString('en-GB')}${overview?.image_engine ? ` · المولّد: ${esc(overview.image_engine)}` : ''}</div>` : ''}`;
@@ -567,7 +567,7 @@
   }
 
   $('mk-pane-setup')?.addEventListener('click', (e) => {
-    if (e.target.closest('#mk-brand-learn')) brandCall('جاري قراءة بوستات صفحتك وتحليل التصميم… (حوالي دقيقة)', () => api('/api/marketing/brand/learn', {}));
+    if (e.target.closest('#mk-brand-learn')) brandCall('جاري قراءة منشورات صفحتك وتحليل التصميم… (نحو دقيقة)', () => api('/api/marketing/brand/learn', {}));
     else if (e.target.closest('#mk-brand-reanalyze')) brandCall('جاري التحليل…', () => api('/api/marketing/brand/reanalyze', {}));
     const rm = e.target.closest('[data-brand-remove]');
     if (rm) brandCall('…', () => api('/api/marketing/brand/remove', { file: rm.dataset.brandRemove }));
@@ -634,7 +634,7 @@
     };
     try {
       await api('/api/settings', body);
-      showToast('تم حفظ إعدادات التسويق ✅', 'success');
+      showToast('تم حفظ إعدادات التسويق', 'success');
       await refreshList();
       fillSetup();
     } catch (e) { showToast(e.message, 'error'); }
@@ -652,7 +652,7 @@
     out.textContent = 'جاري البحث...';
     try {
       const r = await api('/api/marketing/telegram/detect', { bot_token: $('mk-tg-token').value.trim() });
-      out.innerHTML = r.chats.map(c => `<button type="button" class="btn btn-secondary btn-sm" data-chat="${esc(c.id)}" style="margin:4px 0 0 4px;">${esc(c.name)} (${esc(c.type)}) — ${esc(c.id)}</button>`).join('') + '<div>اضغط على محادثتك عشان تنضاف، ثم احفظ.</div>';
+      out.innerHTML = r.chats.map(c => `<button type="button" class="btn btn-secondary btn-sm" data-chat="${esc(c.id)}" style="margin:4px 0 0 4px;">${esc(c.name)} (${esc(c.type)}) — ${esc(c.id)}</button>`).join('') + '<div>اضغط على محادثتك لإضافتها، ثم احفظ.</div>';
     } catch (e) { out.textContent = e.message; }
   });
   $('mk-tg-detect-result').addEventListener('click', (e) => {

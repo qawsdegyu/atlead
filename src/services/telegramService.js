@@ -131,12 +131,12 @@ class TelegramService {
       const me = await this.call('getMe', {}, { token });
       const cfg = this.getConfig();
       if (!cfg.chatIds.length) {
-        return { success: true, bot: me.username, message: `البوت @${me.username} شغال ✅ — ابعث /start للبوت من تليجرام ثم اضغط "اكتشف رقم المحادثة".` };
+        return { success: true, bot: me.username, message: `البوت @${me.username} يعمل — أرسل /start للبوت من تليجرام ثم اضغط "اكتشف رقم المحادثة".` };
       }
       const res = await this.sendMessage('✅ <b>atlead</b>: ربط تليجرام شغال. رح توصلك هون اقتراحات البوستات كل صباح.', { type: 'test' });
       return res.success
-        ? { success: true, bot: me.username, message: `تم إرسال رسالة تجريبية من @${me.username} ✅` }
-        : { success: false, message: `البوت شغال بس الإرسال فشل: ${res.error} — تأكد إنك بعثت /start للبوت.` };
+        ? { success: true, bot: me.username, message: `تم إرسال رسالة تجريبية من @${me.username}` }
+        : { success: false, message: `البوت يعمل لكن الإرسال فشل: ${res.error} — تأكد من إرسال /start للبوت.` };
     } catch (err) {
       return { success: false, message: `فشل الاتصال بتليجرام: ${err.message}` };
     }

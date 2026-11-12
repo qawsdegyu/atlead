@@ -69,9 +69,9 @@ const STAGE_LABELS = {
 };
 
 const PURCHASE_LABELS = {
-  won: 'اشترى ✅',
-  lost: 'لم يشترِ ❌',
-  pending_human: 'بانتظار تواصل الموظف ⏳',
+  won: 'اشترى',
+  lost: 'لم يشترِ',
+  pending_human: 'بانتظار تواصل الموظف',
   not_purchased: 'لم يشترِ بعد'
 };
 
@@ -373,7 +373,7 @@ class GoogleSheetsService {
           ...(rowIndex ? { google_sheet_row_index: rowIndex } : {})
         });
       }
-      return { success: true, message: 'تم تحديث بيانات العميل في Google Sheets ✅', row: rowIndex };
+      return { success: true, message: 'تم تحديث بيانات العميل في Google Sheets', row: rowIndex };
     } catch (err) {
       const msg = this.explainError(err);
       console.error('Google Sheets sync error:', msg);
@@ -401,7 +401,7 @@ class GoogleSheetsService {
         const { title } = await this.prepareSheet(apiCfg, true);
         return {
           success: true,
-          message: `تم الربط بنجاح مع الشيت "${title}" — ورقة "${apiCfg.tab}" جاهزة بالأعمدة ✅`,
+          message: `تم الربط بنجاح مع الشيت "${title}" — ورقة "${apiCfg.tab}" جاهزة بالأعمدة`,
           service_account_email: apiCfg.sa.client_email
         };
       } catch (err) {

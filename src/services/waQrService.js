@@ -18,7 +18,7 @@ let makeWASocket, DisconnectReason = {}, fetchLatestBaileysVersion, downloadMedi
 function loadBaileys() {
   if (baileys) return;
   if (storageService.isServerless()) {
-    throw new Error('ربط واتساب بالـ QR بده سيرفر شغال دايماً (Railway) — ما بيشتغل على Vercel');
+    throw new Error('ربط واتساب عبر QR يتطلب خادماً يعمل باستمرار (Railway) — لا يعمل على Vercel');
   }
   baileys = require('@whiskeysockets/baileys');
   makeWASocket = baileys.makeWASocket || baileys.default;
@@ -157,7 +157,7 @@ class WaQrService {
         // Same number opened on another server/session → don't fight over it.
         if (code === DisconnectReason.connectionReplaced) {
           this.status = 'disconnected';
-          this.lastError = 'تم فتح نفس الجلسة من مكان آخر (سيرفر ثاني شغال؟). شغّل نسخة وحدة بس من البوت ثم اضغط "توليد QR".';
+          this.lastError = 'تم فتح نفس الجلسة من مكان آخر (هل يعمل خادم آخر؟). شغّل نسخة واحدة فقط من البوت ثم اضغط "توليد QR".';
           return;
         }
         // Corrupted / rejected session → wipe it so a fresh QR can be scanned.

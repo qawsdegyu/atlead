@@ -1236,3 +1236,141 @@ button.mk-option:hover { border-color: var(--primary); background: var(--primary
 .mk-kit-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 10px 12px 6px; font-size: 13px; }
 .mk-kit-actions { display: flex; gap: 6px; padding: 0 12px 12px; }
 .mk-kit-actions .form-control { padding: 6px 10px; font-size: 12px; }
+
+/* =====================================================================
+   atlead brand theme — the identity of the page itself:
+   orange #FF6F20 on black, the "atlead." wordmark in its red→orange gradient.
+   (Last layer: overrides the earlier blue accents everywhere.)
+   ===================================================================== */
+:root {
+  --bg-primary: #0a0a0b;
+  --bg-secondary: #0f0f11;
+  --bg-card: #141416;
+  --bg-raised: #1b1b1e;
+  --border-color: #26262a;
+  --border-strong: #34343a;
+  --border-highlight: rgba(255, 111, 32, .45);
+  --text-primary: #f4f4f5;
+  --text-secondary: #a8a8b0;
+  --text-muted: #7c7c85;
+  --primary: #ff6f20;
+  --primary-hover: #e85d10;
+  --primary-light: rgba(255, 111, 32, .12);
+  --primary-ink: #ffb37f;
+  --brand-gradient: linear-gradient(90deg, #ef3b2d 0%, #ff6f20 55%, #ffa04d 100%);
+  --accent-amber: #e8c13a;
+  --focus-ring: 0 0 0 3px rgba(255, 111, 32, .35);
+}
+
+/* Wordmark instead of the "at" square */
+.sidebar-header .logo-badge { display: none; }
+.brand-text h1 {
+  font-size: 26px; font-weight: 700; letter-spacing: -0.8px; line-height: 1;
+  background: var(--brand-gradient); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent; direction: ltr; text-align: start;
+}
+.brand-text span { color: var(--text-muted); font-size: 11px; display: block; margin-top: 6px; direction: ltr; text-align: start; }
+
+/* Accents → brand orange */
+.nav-item.active { background: var(--primary-light); border-inline-start-color: var(--primary); }
+.nav-item.active i { color: var(--primary); }
+.btn-primary { background: var(--primary); color: #160a03; }
+.btn-primary:hover { background: var(--primary-hover); color: #160a03; }
+.badge-pill.info { background: var(--primary-light); color: var(--primary-ink); border-color: rgba(255, 111, 32, .3); }
+.badge-pill.warning { background: rgba(232, 193, 58, .1); color: #f0cf62; border-color: rgba(232, 193, 58, .3); }
+.filter-chip.active, .mk-subtab.active { background: var(--primary-light); color: var(--primary-ink); border-color: rgba(255, 111, 32, .35); }
+.conv-item.active { background: var(--primary-light); border-color: rgba(255, 111, 32, .3); }
+.toast.info { background: #b8500f; }
+.mk-letter { background: var(--primary-light); color: var(--primary-ink); }
+.mk-step.current .mk-step-dot { background: var(--primary); border-color: var(--primary); color: #160a03; }
+button.mk-option:hover, .mk-image:hover, .mk-image.focused { border-color: var(--primary); }
+button.mk-option:hover { background: var(--primary-light); }
+.mk-msg.me { background: var(--primary); color: #160a03; }
+.mk-msg.ai a, .mk-link, .mk-result a, .mk-hashtags { color: var(--primary-ink); }
+.mk-chat-head i, .mk-empty > i { color: var(--primary); }
+.mk-spinner { border-top-color: var(--primary); }
+.mk-kit-bar i { background: var(--brand-gradient); }
+.mk-chip:hover { border-color: var(--primary); }
+.meta-connect-box { background: var(--primary-light); border-color: rgba(255, 111, 32, .3); }
+.progress-bar-fill { background: var(--brand-gradient); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
+::selection { background: rgba(255, 111, 32, .35); }
+.status-dot { background: var(--accent-emerald); }
+
+/* =====================================================================
+   Responsive: laptop → tablet → phone
+   ===================================================================== */
+.nav-toggle, .chat-back, .nav-backdrop { display: none; }
+.nav-toggle, .chat-back {
+  background: var(--bg-raised); border: 1px solid var(--border-strong); color: var(--text-primary);
+  width: 38px; height: 38px; border-radius: var(--radius-md); align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+}
+.data-table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.data-table { min-width: 720px; }
+
+/* Smaller laptops: inbox in two columns, customer details below */
+@media (max-width: 1280px) {
+  .inbox-layout { grid-template-columns: 300px 1fr; height: auto; }
+  .chat-list-pane, .chat-main-pane { height: calc(100vh - 130px); min-height: 520px; }
+  .chat-side-pane { grid-column: 1 / -1; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Tablets and phones */
+@media (max-width: 900px) {
+  .app-container { height: 100dvh; }
+  .sidebar {
+    position: fixed; top: 0; bottom: 0; inset-inline-start: 0; width: min(84vw, 300px); z-index: 60;
+    transform: translateX(100%); transition: transform .22s ease; box-shadow: none;
+  }
+  body.nav-open .sidebar { transform: translateX(0); box-shadow: -16px 0 40px rgba(0, 0, 0, .5); }
+  body.nav-open .nav-backdrop { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, .55); z-index: 55; }
+  .nav-toggle { display: inline-flex; }
+  .top-navbar { height: 56px; padding: 0 14px; }
+  .top-navbar-title h2 { font-size: 16px; }
+  .top-badges { display: none; }
+  .view-panel { padding: 14px 14px 80px; }
+  .glass-card { padding: 16px; border-radius: 12px; }
+  .grid-2, .grid-3 { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .grid-2 > *, .grid-3 > *, .grid-4 > * { min-width: 0; }
+  .stat-card { padding: 14px; }
+  .stat-val { font-size: 22px; }
+
+  /* Inbox: list → tap → full-screen chat with a back button */
+  .inbox-layout { grid-template-columns: 1fr; gap: 12px; height: auto; }
+  .chat-list-pane { height: calc(100dvh - 90px); min-height: 0; }
+  .chat-main-pane, .chat-side-pane { display: none; }
+  .inbox-layout.chat-open .chat-list-pane { display: none; }
+  .inbox-layout.chat-open .chat-main-pane { display: flex; height: calc(100dvh - 90px); min-height: 0; }
+  .inbox-layout.chat-open .chat-side-pane { display: flex; }
+  .chat-back { display: inline-flex; }
+  .chat-header { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
+  .msg-bubble { max-width: 88%; }
+
+  /* Pages with fixed-height cards */
+  #view-simulator .glass-card { height: auto !important; min-height: 70vh; }
+  .mk-kit-grid { grid-template-columns: 1fr; }
+  .mk-steps { gap: 2px; }
+  .mk-step-line { min-width: 6px; }
+  .mk-custom-topic .form-control { min-width: 0; }
+  .btn { padding: 9px 13px; }
+  #toast-container { left: 12px; right: 12px; bottom: 12px; }
+  /* Header rows (title + buttons) wrap instead of overflowing */
+  .view-panel div[style*="justify-content: space-between"], .glass-card div[style*="justify-content: space-between"] { flex-wrap: wrap; gap: 10px; }
+  .view-panel div[style*="justify-content: space-between"] > div[style*="display: flex"] { flex-wrap: wrap; }
+  .btn { white-space: normal; text-align: center; }
+  #lang-toggle { top: 10px !important; bottom: auto !important; left: 12px !important; padding: 6px 10px; box-shadow: none !important; }
+}
+
+@media (max-width: 420px) {
+  .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mk-images { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mk-subtabs { overflow-x: auto; flex-wrap: nowrap; }
+  .mk-subtab { white-space: nowrap; }
+}
+
+/* Status marks (instead of emojis) */
+.st-ok { color: var(--accent-emerald); }
+.st-bad { color: var(--accent-rose, #f43f5e); }
+.st-warn { color: var(--accent-amber); }

@@ -20,7 +20,7 @@ const step = (fn) => async (req, res) => {
   } catch (err) {
     console.error('[Marketing API]', err.message);
     const m = err.response?.data?.error?.message || err.message;
-    res.status(400).json({ success: false, message: m === 'NO_AI_KEY' ? 'ما في مفتاح ذكاء اصطناعي شغال — حطه بإعدادات الربط ← الذكاء الاصطناعي.' : m });
+    res.status(400).json({ success: false, message: m === 'NO_AI_KEY' ? 'لا يوجد مفتاح ذكاء اصطناعي يعمل — أضفه من إعدادات الربط ← الذكاء الاصطناعي.' : m });
   }
 };
 
@@ -76,16 +76,16 @@ const brandReply = (res, brand, message) => res.json({
 const brandFail = (res, err) => res.status(400).json({ success: false, message: err.response?.data?.error?.message || err.message });
 
 router.post('/brand/learn', async (req, res) => {
-  try { brandReply(res, await marketingService.learnBrand(), 'تعلّمنا هوية التصميم من صفحتك ✅'); } catch (e) { brandFail(res, e); }
+  try { brandReply(res, await marketingService.learnBrand(), 'تم تعلّم هوية التصميم من صفحتك'); } catch (e) { brandFail(res, e); }
 });
 router.post('/brand/reanalyze', async (req, res) => {
-  try { brandReply(res, await marketingService.reanalyzeBrand(), 'حدّثنا هوية التصميم ✅'); } catch (e) { brandFail(res, e); }
+  try { brandReply(res, await marketingService.reanalyzeBrand(), 'تم تحديث هوية التصميم'); } catch (e) { brandFail(res, e); }
 });
 router.post('/brand/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file || !/^image\//.test(req.file.mimetype)) throw new Error('ارفع ملف صورة (PNG / JPG)');
     const kind = req.body.kind === 'logo' ? 'logo' : 'ref';
-    brandReply(res, await marketingService.addBrandFile(req.file.buffer, kind), kind === 'logo' ? 'تم حفظ اللوغو ✅' : 'تمت إضافة التصميم كمرجع ✅');
+    brandReply(res, await marketingService.addBrandFile(req.file.buffer, kind), kind === 'logo' ? 'تم حفظ اللوغو' : 'تمت إضافة التصميم كمرجع');
   } catch (e) { brandFail(res, e); }
 });
 router.post('/brand/remove', (req, res) => {
@@ -105,7 +105,7 @@ router.get('/brand-kit', (req, res) => {
 router.post('/brand-kit/start', (req, res) => {
   try {
     const keys = Array.isArray(req.body.keys) && req.body.keys.length ? req.body.keys.map(String) : null;
-    res.json({ success: true, kit: brandKit.start({ keys, fresh: req.body.fresh === true }), message: 'بدأ التصميم — الصور بتظهر وحدة وحدة ✨' });
+    res.json({ success: true, kit: brandKit.start({ keys, fresh: req.body.fresh === true }), message: 'بدأ التصميم، وستظهر الصور تباعاً' });
   } catch (e) { res.status(400).json({ success: false, message: e.message }); }
 });
 router.post('/brand-kit/redo', (req, res) => {
@@ -140,7 +140,7 @@ router.post('/brief/send', async (req, res) => {
     res.json({
       success: true,
       telegram_sent: sent.success,
-      message: sent.success ? 'تم إرسال اقتراحات اليوم على تليجرام ✅' : `الاقتراحات جاهزة هون، بس ما انبعتت على تليجرام: ${sent.error}`,
+      message: sent.success ? 'تم إرسال اقتراحات اليوم على تليجرام' : `الاقتراحات جاهزة هنا، لكن تعذّر إرسالها على تليجرام: ${sent.error}`,
       plan: marketingService.view(plan)
     });
   } catch (err) {

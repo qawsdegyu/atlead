@@ -217,7 +217,7 @@ ${this.langRule()}
     const pool = [...FALLBACK_TOPICS.filter(t => !used.has(t.title)), ...FALLBACK_TOPICS];
     const start = Number(today.dateKey.replace(/-/g, '')) % pool.length;
     const topics = [0, 1, 2].map(i => pool[(start + i) % pool.length]).filter((t, i, a) => a.findIndex(x => x.title === t.title) === i);
-    return { topics, market_summary: 'اقتراحات جاهزة (ما في مفتاح AI شغال حالياً — اربط مفتاح بالإعدادات عشان الاقتراحات تنبني على دراسة السوق).', ai: false };
+    return { topics, market_summary: 'اقتراحات جاهزة (لا يوجد مفتاح ذكاء اصطناعي يعمل حالياً — أضف مفتاحاً في الإعدادات لتُبنى الاقتراحات على دراسة السوق).', ai: false };
   }
 
   // ---- visual identity (learned from the page's own posts) ------------------
@@ -536,7 +536,7 @@ ${this.langRule()}
   async editImage(id, file, message) {
     const plan = this.mustGet(id, ['image', 'caption', 'time']);
     const msg = String(message || '').trim().slice(0, 600);
-    if (!msg) throw new Error('اكتب شو بدك تعدّل');
+    if (!msg) throw new Error('اكتب التعديل المطلوب');
     const src = (plan.images || []).find(im => im.file === file);
     if (!src) throw new Error('اختار صورة من القائمة');
     imageService.resetCooldown();
@@ -557,7 +557,7 @@ ${this.langRule()}
     fresh.images = [{ file: r.file, style: `تعديل ${version}`, engine: r.engine, parent: file, root: src.root || file, note: msg, headline: src.headline || '' }, ...(fresh.images || [])].slice(0, 16);
     fresh.image_chat = [...(fresh.image_chat || []),
       { role: 'user', text: msg, target: file, at: new Date().toISOString() },
-      { role: 'assistant', text: 'عدّلتها ✅', result: r.file, target: file, at: new Date().toISOString() }].slice(-40);
+      { role: 'assistant', text: 'تم التعديل.', result: r.file, target: file, at: new Date().toISOString() }].slice(-40);
     fresh.image_error = '';
     return this.savePlan(fresh);
   }
@@ -570,7 +570,7 @@ ${this.langRule()}
     const plan = this.mustGet(id, ['caption', 'time']);
     const msg = String(message || '').trim().slice(0, 600);
     const text = String(current || plan.caption_draft || plan.caption || '').trim();
-    if (!msg) throw new Error('اكتب شو بدك تعدّل');
+    if (!msg) throw new Error('اكتب التعديل المطلوب');
     if (!text) throw new Error('اختار أو اكتب كابشن أول');
     const history = (plan.caption_chat || []).slice(-8).map(m => `${m.role === 'user' ? 'صاحب الشركة' : 'أنت'}: ${m.text}`).join('\n');
     const voice = this.getBrand()?.guide?.mood ? `نبرة الهوية: ${this.getBrand().guide.mood}` : '';
@@ -668,7 +668,7 @@ ${this.langRule()}
       if (!t) throw new Error('اختار وقت من القائمة');
       at = new Date(t.iso);
       label = t.label;
-      if (at.getTime() < Date.now()) throw new Error('هذا الوقت عدّى — اختار وقت ثاني');
+      if (at.getTime() < Date.now()) throw new Error('هذا الوقت قد مضى — اختر وقتاً آخر');
     }
     Object.assign(plan, { scheduled_at: at.toISOString(), scheduled_label: label, status: 'scheduled', results: null, error: '' });
     return this.savePlan(plan);
@@ -687,7 +687,7 @@ ${this.langRule()}
     // Restored from the database storage if this server lost the file.
     const filePath = await imageService.ensureLocal(plan.image_file);
     if (!filePath) {
-      Object.assign(plan, { status: 'failed', error: 'ملف الصورة مش موجود على السيرفر' });
+      Object.assign(plan, { status: 'failed', error: 'ملف الصورة غير موجود على الخادم' });
       return this.savePlan(plan);
     }
     const before = plan.results || {};
@@ -735,7 +735,7 @@ ${this.langRule()}
       if (now - at > LATE_LIMIT_MIN * 60000) {
         // The server was down at the chosen time: don't post at a random hour — ask the admin.
         const plan = this.getPlan(p.id);
-        Object.assign(plan, { status: 'failed', error: `فات موعد النشر (${p.scheduled_label || ''}) لأن السيرفر كان متوقف — اختار وقت جديد أو انشر الآن.` });
+        Object.assign(plan, { status: 'failed', error: `فات موعد النشر (${p.scheduled_label || ''}) لأن الخادم كان متوقفاً — اختر وقتاً جديداً أو انشر الآن.` });
         this.savePlan(plan);
         telegram.sendMessage(`⏰ <b>فات موعد بوست</b>\n📌 ${esc(plan.topic?.title || '')}\n${esc(plan.error)}`, {
           buttons: [[{ text: 'اختار وقت جديد', url: `${this.dashboardUrl()}/?tab=marketing&plan=${plan.id}` }]], type: 'missed_post'

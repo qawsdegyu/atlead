@@ -179,5 +179,5 @@ test('credit-friendly requests, and never an off-brand free image when the brand
   fake('get', /image\.pollinations\.ai/, () => img);
   p = await mk.regenerate(p.id, 'images');
   assert.ok(!calls.some(c => /pollinations/.test(c.url)), 'free generator not used when the brand has references');
-  assert.match(p.image_error, /رصيد OpenRouter خلص/, 'clear reason shown');
+  assert.match(p.image_error, /نفد رصيد OpenRouter/, 'clear reason shown');
 });

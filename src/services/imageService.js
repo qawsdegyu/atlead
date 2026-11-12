@@ -228,7 +228,7 @@ class ImageService {
       } catch (e) {
         const reason = errMsg(e);
         lastErr = new Error(/credit|insufficient|payment|402/i.test(reason + (e.response?.status || ''))
-          ? 'رصيد OpenRouter خلص — اشحن من openrouter.ai ← Credits وبعدين اضغط «كمّل الناقص».'
+          ? 'نفد رصيد OpenRouter — اشحن الرصيد من openrouter.ai ← Credits ثم اضغط «أكمل الناقص».'
           : `${this.label(a)}: ${reason}`);
         this._lastReason = lastErr.message;
         this._bad.set(`${a.p.key}|${a.model}`, Date.now());
@@ -241,7 +241,7 @@ class ImageService {
         return { file: await this.save(await this.viaPollinations(prompt), kind, aspect), engine: 'Pollinations (مجاني)' };
       } catch (e) {
         const busy = /402|429/.test(e.message) ? 'مضغوط حالياً' : e.message;
-        lastErr = new Error(`${lastErr.message} — والمولّد المجاني ${busy}. للحصول على صور مضمونة: حط مفتاح Gemini أو OpenAI بالإعدادات.`);
+        lastErr = new Error(`${lastErr.message} — والمولّد المجاني ${busy}. للحصول على صور مضمونة: أضف مفتاح Gemini أو OpenAI في الإعدادات.`);
       }
     }
     throw lastErr;
@@ -254,7 +254,7 @@ class ImageService {
    */
   async edit(fileName, prompt, refs = [], { aspect = ASPECT, kind = 'post' } = {}) {
     const src = this.dataUrl(fileName) || (await this.ensureLocal(fileName) && this.dataUrl(fileName));
-    if (!src) throw new Error('الصورة الأصلية مش موجودة');
+    if (!src) throw new Error('الصورة الأصلية غير موجودة');
     return this.generate(prompt, [src, ...refs], { allowFree: false, aspect, kind });
   }
 

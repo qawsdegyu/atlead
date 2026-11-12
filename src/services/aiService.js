@@ -37,8 +37,8 @@ const OPENAI_COMPATIBLE = {
   groq: { base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' }
 };
 
-const VOICE_FAILED_TEXT = '🎤 رسالة صوتية (تعذّر تفريغها)';
-const VOICE_MARKERS = [VOICE_FAILED_TEXT, '__VOICE_TRANSCRIPTION_FAILED__', 'رسالة صوتية من العميل'];
+const VOICE_FAILED_TEXT = 'رسالة صوتية (تعذّر تفريغها)';
+const VOICE_MARKERS = [VOICE_FAILED_TEXT, '🎤 رسالة صوتية (تعذّر تفريغها)', '__VOICE_TRANSCRIPTION_FAILED__', 'رسالة صوتية من العميل'];
 
 class AiService {
   get VOICE_FAILED_TEXT() { return VOICE_FAILED_TEXT; }

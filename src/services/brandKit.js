@@ -25,7 +25,7 @@ const COPY = {
 // Each medium: what it is, its frame, and a concrete art direction.
 const MEDIA = [
   // ---- Social
-  { key: 'ig_post', group: 'سوشال ميديا', title: 'بوست إنستغرام', aspect: '4:5',
+  { key: 'ig_post', group: 'سوشال ميديا', title: 'منشور إنستغرام', aspect: '4:5',
     brief: `A hero Instagram feed post. The Arabic headline "${COPY.hook_ar}" set huge and bold as the visual anchor, one striking 3D object (a glowing chat bubble turning into a sales graph) as the focal point, the logo small in a corner. Scroll-stopping contrast, magazine-grade typographic hierarchy.` },
   { key: 'ig_story', group: 'سوشال ميديا', title: 'ستوري إنستغرام', aspect: '9:16',
     brief: `A full-screen Instagram Story. Top third: Arabic headline "${COPY.tagline_ar}". Middle: a phone showing a WhatsApp-style conversation answered instantly by an AI assistant. Bottom: a pill-shaped CTA "${COPY.cta_ar}" with a subtle swipe-up arrow. Keep 250px safe zones top and bottom.` },
@@ -40,9 +40,9 @@ const MEDIA = [
   { key: 'yt_thumb', group: 'سوشال ميديا', title: 'صورة يوتيوب', aspect: '16:9',
     brief: `A YouTube thumbnail for a video "كيف تضاعف مبيعاتك بالذكاء الاصطناعي": an expressive Arab business owner (surprised, positive), huge Arabic text "ضاعف مبيعاتك" with a bold outline, a rising arrow, high contrast that reads at small size.` },
   // ---- Ads & outdoor
-  { key: 'billboard', group: 'إعلانات وطرق', title: 'لوحة إعلانية بالشارع', aspect: '16:9',
+  { key: 'billboard', group: 'إعلانات وطرق', title: 'لوحة إعلانية في الشارع', aspect: '16:9',
     brief: `A photorealistic mockup of a large roadside billboard on a busy Amman street at golden hour (Abdoun bridge or Sweifieh feel), showing the campaign "${COPY.hook_ar}" with the logo. The billboard design itself must be minimal and readable from far: one line, one visual, logo.` },
-  { key: 'rollup', group: 'إعلانات وطرق', title: 'رول أب بمعرض', aspect: '9:16',
+  { key: 'rollup', group: 'إعلانات وطرق', title: 'رول أب في معرض', aspect: '9:16',
     brief: `A photorealistic mockup of a roll-up banner standing at a tech expo booth. Banner layout: logo at top, Arabic "${COPY.tagline_ar}", three short benefit lines with icons, and a QR code area with "${COPY.cta_ar}" at eye level. Soft exhibition lighting.` },
   { key: 'magazine_ad', group: 'إعلانات وطرق', title: 'إعلان مجلة', aspect: '3:4',
     brief: `A full-page business magazine ad photographed on a desk: a bold editorial composition, Arabic headline "مبيعاتك شغالة 24 ساعة", a premium product-style shot of a phone with notifications, a short body text block and the logo at the bottom.` },
@@ -127,7 +127,7 @@ class BrandKit {
     const brand = marketing.getBrand();
     if (!brand?.logo && !(brand?.refs || []).length) throw new Error('تعلّم الهوية من صفحتك أو ارفع اللوغو أول (الإعدادات والربط ← هوية التصميم).');
     let kit = this.state();
-    if (kit?.status === 'running') throw new Error('في تصميم شغال هلق — استنى يخلص.');
+    if (kit?.status === 'running') throw new Error('يوجد تصميم قيد التنفيذ — انتظر حتى ينتهي.');
     imageService.resetCooldown();
     const wanted = keys ? MEDIA.filter(m => keys.includes(m.key)) : MEDIA;
     if (!wanted.length) throw new Error('اختار وسيلة من القائمة');
@@ -139,7 +139,7 @@ class BrandKit {
         : (old || { key: m.key, title: m.title, group: m.group, aspect: m.aspect, status: 'pending', file: null, history: [] });
     });
     const queue = items.filter(i => i.status === 'pending' && wanted.some(m => m.key === i.key)).map(i => i.key);
-    if (!queue.length) throw new Error('كل التصاميم جاهزة — اضغط «أعد التصميم» على اللي بدك تغيّره.');
+    if (!queue.length) throw new Error('جميع التصاميم جاهزة — اضغط «أعد التصميم» على ما تريد تغييره.');
     kit = { status: 'running', started_at: now(), updated_at: now(), items, progress: { done: items.filter(i => i.status === 'done').length, failed: 0, total: items.length } };
     marketing.saveBrand({ kit });
     this.run(queue).catch(e => console.error('[BrandKit] job error:', e.message));
@@ -151,7 +151,7 @@ class BrandKit {
     const m = MEDIA.find(x => x.key === key);
     if (!m) throw new Error('وسيلة غير معروفة');
     const kit = this.state();
-    if (kit?.status === 'running') throw new Error('في تصميم شغال هلق — استنى يخلص.');
+    if (kit?.status === 'running') throw new Error('يوجد تصميم قيد التنفيذ — انتظر حتى ينتهي.');
     const it = kit?.items?.find(i => i.key === key);
     if (!it) return this.start({ keys: [key], fresh: true });
     imageService.resetCooldown();

@@ -27,7 +27,7 @@ class HealthService {
     const label = 'الذكاء الاصطناعي (ردود البوت)';
     const providers = aiService.getProviders();
     if (!providers.length) {
-      return fail('ai', label, 'ما في أي مفتاح ذكاء اصطناعي — البوت رح يرد من الأجوبة المعتمدة بملفات الشركة بس، بدل ما يحكي كـ AI Agent. أضف مفتاح (Gemini أو OpenAI أو Claude) من بطاقة الذكاء الاصطناعي.');
+      return fail('ai', label, 'لا يوجد مفتاح ذكاء اصطناعي — سيرد البوت من الأجوبة المعتمدة في ملفات الشركة فقط. أضف مفتاحاً من بطاقة الذكاء الاصطناعي.');
     }
     const results = [];
     for (const p of providers) {
@@ -48,10 +48,10 @@ class HealthService {
     if (working.length) {
       const broken = results.filter(r => !r.ok);
       return (broken.length ? warn : ok)('ai', label,
-        `AI Agent شغال ✅ عن طريق ${describe(working[0])}، وبيجاوب من ملفات الشركة.` +
-        (broken.length ? ` مفتاح ثاني ما زبط: ${broken.map(r => `${describe(r)} — ${r.why || 'رد غير متوقع'}`).join(' | ')}` : ''));
+        `المساعد الذكي يعمل عبر ${describe(working[0])}، ويجيب من ملفات الشركة.` +
+        (broken.length ? ` مفتاح آخر لا يعمل: ${broken.map(r => `${describe(r)} — ${r.why || 'رد غير متوقع'}`).join(' | ')}` : ''));
     }
-    return fail('ai', label, `ولا مفتاح شغال — البوت عم يرد من الأجوبة المعتمدة بس. ${results.map(r => `${describe(r)}: ${r.why || 'رد غير متوقع'}`).join(' | ')}`);
+    return fail('ai', label, `لا يوجد مفتاح يعمل — يرد البوت من الأجوبة المعتمدة فقط. ${results.map(r => `${describe(r)}: ${r.why || 'رد غير متوقع'}`).join(' | ')}`);
   }
 
   async checkWhatsApp() {
@@ -62,7 +62,7 @@ class HealthService {
       if (st.status !== 'connected') {
         return fail('whatsapp', label, `مش مربوط (${st.status})${st.last_error ? ` — ${st.last_error}` : ''}. اضغط "توليد QR" وامسحه من الأجهزة المرتبطة.`);
       }
-      if (st.number_mismatch) return warn('whatsapp', label, `مربوط بالرقم +${st.connected_number} بس هذا مش الرقم اللي كاتبه (${st.expected_number}).`);
+      if (st.number_mismatch) return warn('whatsapp', label, `مربوط بالرقم +${st.connected_number} لكنه يختلف عن الرقم المُدخل (${st.expected_number}).`);
       return ok('whatsapp', label, `مربوط عبر QR بالرقم +${st.connected_number}${st.connected_name ? ` (${st.connected_name})` : ''}.`);
     }
     const r = await whatsappService.testConnection();
@@ -84,7 +84,7 @@ class HealthService {
       if (me.data.igError) {
         results.push(warn('meta_ig', 'حساب إنستغرام', 'الرمز ما عنده صلاحية قراءة حساب الإنستغرام وتعليقات الصفحة (pages_read_engagement / instagram_basic). أضف الصلاحيات بتطبيق Meta وأنشئ رمز جديد.'));
       } else if (!ig) {
-        results.push(warn('meta_ig', 'حساب إنستغرام', 'ما في حساب إنستغرام أعمال مربوط بهذه الصفحة — رسائل وتعليقات إنستغرام ما رح توصل. اربطه من إعدادات الصفحة.'));
+        results.push(warn('meta_ig', 'حساب إنستغرام', 'لا يوجد حساب إنستغرام أعمال مربوط بهذه الصفحة، فلن تصل رسائل إنستغرام وتعليقاته. اربطه من إعدادات الصفحة.'));
       }
     } catch (err) {
       const m = err.response?.data?.error?.message || err.message;
@@ -95,7 +95,7 @@ class HealthService {
       const fields = await metaService.getPageSubscription();
       const missing = ['messages', 'feed', 'message_echoes'].filter(f => !fields.includes(f));
       results.push(missing.length
-        ? fail('meta_sub', 'اشتراك الصفحة بالويب هوك', `الصفحة مش مشتركة بـ: ${missing.join(', ')} — اضغط "فحص الاتصال" ببطاقة Meta وبنشترك تلقائياً.`)
+        ? fail('meta_sub', 'اشتراك الصفحة بالويب هوك', `الصفحة غير مشتركة في: ${missing.join(', ')} — اضغط "فحص الاتصال" في بطاقة Meta ليتم الاشتراك تلقائياً.`)
         : ok('meta_sub', 'اشتراك الصفحة بالويب هوك', `مشتركة بـ: ${fields.join(', ')}.`));
     } catch (err) {
       results.push(warn('meta_sub', 'اشتراك الصفحة بالويب هوك', `تعذر الفحص: ${err.response?.data?.error?.message || err.message}`));
@@ -103,7 +103,7 @@ class HealthService {
 
     results.push(cfg.app_secret
       ? ok('meta_secret', 'حماية الويب هوك', 'App Secret مضاف — أي طلب مزيف بينرفض.')
-      : warn('meta_secret', 'حماية الويب هوك', 'أضف App Secret عشان السيرفر يرفض أي رسائل مزيفة مش جاية من Meta.'));
+      : warn('meta_secret', 'حماية الويب هوك', 'أضف App Secret ليرفض الخادم أي رسائل مزيفة لا تأتي من Meta.'));
     return results;
   }
 
@@ -111,11 +111,11 @@ class HealthService {
     const label = 'قاعدة البيانات (Supabase)';
     const supaCfg = storageService.getSettings().supabase || {};
     if (supaCfg.url && supaCfg.enabled === false) {
-      return fail('supabase', label, 'البيانات مدخلة بس خيار "تفعيل حفظ الرسائل والمحادثات في Supabase" مش مفعّل — فعّله واحفظ.');
+      return fail('supabase', label, 'البيانات مُدخلة، لكن خيار "تفعيل حفظ الرسائل والمحادثات في Supabase" غير مفعّل — فعّله ثم احفظ.');
     }
     const client = supabaseService.getClient();
     if (!client) {
-      return fail('supabase', label, 'مش مربوطة — البيانات محفوظة على السيرفر بس، وإذا انمسح السيرفر بتروح ذاكرة العملاء. أضف URL و Service Role Key.');
+      return fail('supabase', label, 'غير مربوطة — البيانات محفوظة على الخادم فقط، وقد تُفقد ذاكرة العملاء إذا مُسح الخادم. أضف URL و Service Role Key.');
     }
     const tables = {
       conversations: 'id,local_id,customer_summary,customer_email,purchase_status,wa_jid,pause_reason,bot_paused_until,assigned_to_name,follow_up_count',
@@ -134,18 +134,18 @@ class HealthService {
     if (problems.length) {
       const keyIssue = problems.some(p => /permission|JWT|Invalid API key|401/i.test(p));
       return fail('supabase', label, keyIssue
-        ? `المفتاح ما عنده صلاحية — استخدم Service Role Key (مش anon). ${problems[0]}`
+        ? `المفتاح لا يملك صلاحية — استخدم Service Role Key (وليس anon). ${problems[0]}`
         : `الجداول ناقصة أو قديمة — شغّل ملف supabase_schema.sql كامل بـ SQL Editor. (${problems.join(' | ')})`);
     }
     const cfg = storageService.getSettings().supabase || {};
     if (!cfg.service_role_key && cfg.anon_key) {
-      return warn('supabase', label, 'شغالة، بس انت مستخدم anon key — الأفضل Service Role Key.');
+      return warn('supabase', label, 'تعمل، لكنك تستخدم anon key — يُفضّل Service Role Key.');
     }
     // Reading works even with the public key (RLS just returns nothing) — so test a real WRITE.
     const { error: writeError } = await client.from('app_settings').upsert({ key: '_healthcheck', value: { at: new Date().toISOString() } }, { onConflict: 'key' });
     if (writeError) {
       return fail('supabase', label, /row-level security|permission denied|42501/i.test(writeError.message)
-        ? 'المفتاح المستخدم هو المفتاح العام (anon / publishable) وما بيقدر يحفظ إشي. حط المفتاح السري بدالُه: Supabase ← Project Settings ← API Keys ← Secret key (sb_secret_...) أو service_role.'
+        ? 'المفتاح المستخدم هو المفتاح العام (anon / publishable) ولا يستطيع الحفظ. ضع المفتاح السري بدلاً منه: Supabase ← Project Settings ← API Keys ← Secret key (sb_secret_...) أو service_role.'
         : `فشل الحفظ بـ Supabase: ${writeError.message}`);
     }
 
@@ -155,7 +155,7 @@ class HealthService {
     if (sync.pending > 0 || sync.last_error) {
       return warn('supabase', label, `متصلة — ${counts}. في ${sync.pending} تغيير بانتظار الحفظ (بيعيد المحاولة كل دقيقة)${sync.last_error ? ': ' + sync.last_error.message : ''}.`);
     }
-    return ok('supabase', label, `متصلة، وكل المحادثات بتنحفظ تلقائياً ✅ — ${counts}.`);
+    return ok('supabase', label, `متصلة، وكل المحادثات بتنحفظ تلقائياً — ${counts}.`);
   }
 
   async checkKnowledge() {
@@ -173,11 +173,11 @@ class HealthService {
   async checkSheets() {
     const label = 'Google Sheets / Form';
     if (!googleSheetsService.isConfigured()) {
-      return warn('sheets', label, 'مش مربوط — بيانات العملاء ما رح تنزل على الشيت أو الفورم.');
+      return warn('sheets', label, 'غير مربوط — لن تُرسل بيانات العملاء إلى الجدول أو النموذج.');
     }
     if (storageService.getSettings().google_sheets?.auto_sync === false) {
       const r = await googleSheetsService.testConnection();
-      return warn('sheets', label, `${r.message} — بس التحديث التلقائي متوقف.`);
+      return warn('sheets', label, `${r.message} — لكن التحديث التلقائي متوقف.`);
     }
     const r = await googleSheetsService.testConnection();
     return r.success ? ok('sheets', label, r.message) : fail('sheets', label, r.message);
@@ -186,7 +186,7 @@ class HealthService {
   async checkEmail() {
     const label = 'إشعارات Gmail';
     const cfg = notificationService.getConfig();
-    if (!cfg.enabled) return warn('email', label, 'الإشعارات متوقفة — الموظف ما رح يعرف لما يكون في عميل جاهز.');
+    if (!cfg.enabled) return warn('email', label, 'الإشعارات متوقفة — لن يُبلَّغ الموظف عند وجود عميل جاهز.');
     if (!cfg.recipients.length) return fail('email', label, 'ما في إيميلات مستلمين — أضف إيميل الموظف.');
     if (!cfg.gmailUser || !cfg.gmailPassword) return fail('email', label, 'أدخل Gmail المرسل و App Password.');
     try {
@@ -194,7 +194,7 @@ class HealthService {
       return ok('email', label, `تسجيل الدخول لـ ${cfg.gmailUser} ناجح — الإشعارات بتوصل لـ ${cfg.recipients.join(', ')}.`);
     } catch (err) {
       return fail('email', label, /Invalid login|BadCredentials|Username and Password/i.test(err.message)
-        ? 'Gmail رفض الدخول — لازم App Password (مش كلمة سر الإيميل) مع تفعيل التحقق بخطوتين.'
+        ? 'رفض Gmail الدخول — يلزم App Password (وليس كلمة مرور البريد) مع تفعيل التحقق بخطوتين.'
         : err.message);
     }
   }
@@ -226,7 +226,7 @@ class HealthService {
       ? ok('delay', 'تأخير الرد', `${delay} ثواني بعد آخر رسالة، مع "يكتب الآن..." والرد المقتبس.`)
       : warn('delay', 'تأخير الرد', `التأخير ${delay} ثواني — أقل من 8 بيزيد خطر حظر رقم الواتساب.`));
     out.push(s.bot?.pause_on_human_reply === false
-      ? warn('human_pause', 'إيقاف البوت لما يرد موظف', 'متوقف — إذا رد موظف على عميل، البوت رح يكمل يرد معه.')
+      ? warn('human_pause', 'إيقاف البوت عند رد الموظف', 'متوقف — إذا رد موظف على عميل، سيواصل البوت الرد أيضاً.')
       : ok('human_pause', 'إيقاف البوت لما يرد موظف', Number(s.bot?.human_pause_hours) > 0 ? `مفعّل — البوت بيوقف ${s.bot.human_pause_hours} ساعة.` : 'مفعّل — البوت بيوقف لحد ما ترجّعه يدوياً.'));
     const team = require('./crmService').getTeam();
     out.push(team.length
@@ -236,7 +236,7 @@ class HealthService {
     const bh = require('./businessHours');
     const bhCfg = bh.getConfig();
     out.push(bhCfg.enabled
-      ? ok('hours', 'ساعات الدوام', `${bhCfg.days.map(d => bh.DAY_NAMES[d]).join('، ')} من ${bhCfg.start} لـ ${bhCfg.end} — هلق ${bh.isOpen() ? 'دوام ✅' : 'خارج الدوام'}.`)
+      ? ok('hours', 'ساعات الدوام', `${bhCfg.days.map(d => bh.DAY_NAMES[d]).join('، ')} من ${bhCfg.start} إلى ${bhCfg.end} — الآن ${bh.isOpen() ? 'دوام' : 'خارج الدوام'}.`)
       : warn('hours', 'ساعات الدوام', 'متوقفة — البوت بيحكي للعميل "بأسرع وقت" حتى بالليل.'));
 
     const fu = require('./followUpService').getConfig();
@@ -250,7 +250,7 @@ class HealthService {
       ? warn('report', 'التقرير اليومي', 'متوقف.')
       : managers.length
         ? ok('report', 'التقرير اليومي', `كل يوم الساعة ${rep.time} إلى ${managers.join(', ')}.`)
-        : warn('report', 'التقرير اليومي', 'مفعّل بس ما في إيميلات إدارة — أضف إيميل ببطاقة الإشعارات.'));
+        : warn('report', 'التقرير اليومي', 'مفعّل، لكن لا توجد عناوين بريد للإدارة — أضف بريداً في بطاقة الإشعارات.'));
 
     const last = storageService.getState('last_backup');
     const bk = require('./backupService').getConfig();
@@ -272,13 +272,13 @@ class HealthService {
     const telegram = require('./telegramService');
     const tg = telegram.getConfig();
     if (!tg.token) {
-      out.push(warn('telegram', 'بوت تليجرام', 'مش مربوط — رسالة الصباح (اقتراحات البوستات) وتنبيهات العملاء الجاهزين ما رح توصلك. اربطه من تبويب التسويق الذكي ← الإعدادات والربط.'));
+      out.push(warn('telegram', 'بوت تليجرام', 'غير مربوط — لن تصلك رسالة الصباح (اقتراحات المنشورات) وتنبيهات العملاء الجاهزين. اربطه من التسويق الذكي ← الإعدادات والربط.'));
     } else {
       try {
         const me = await telegram.call('getMe', {}, { timeout: 10000 });
         out.push(tg.chatIds.length
-          ? ok('telegram', 'بوت تليجرام', `@${me.username} شغال، بيبعت لـ ${tg.chatIds.length} محادثة.`)
-          : warn('telegram', 'بوت تليجرام', `@${me.username} شغال بس ما في رقم محادثة — ابعث /start للبوت واضغط «اكتشف رقم المحادثة».`));
+          ? ok('telegram', 'بوت تليجرام', `@${me.username} يعمل، ويرسل إلى ${tg.chatIds.length} محادثة.`)
+          : warn('telegram', 'بوت تليجرام', `@${me.username} يعمل، لكن لا يوجد رقم محادثة — أرسل /start للبوت واضغط «اكتشف رقم المحادثة».`));
       } catch (err) {
         out.push(fail('telegram', 'بوت تليجرام', `التوكن مرفوض: ${err.message}`));
       }
@@ -290,9 +290,9 @@ class HealthService {
     }
     const db = require('./marketingService').dbStatus();
     out.push(!db.enabled
-      ? warn('marketing_db', 'حفظ البوستات بالداتابيس', 'Supabase مش مربوط — البوستات والصور محفوظة على السيرفر بس.')
+      ? warn('marketing_db', 'حفظ المنشورات في قاعدة البيانات', 'Supabase غير مربوط — المنشورات والصور محفوظة على الخادم فقط.')
       : db.pending
-        ? warn('marketing_db', 'حفظ البوستات بالداتابيس', 'في تغييرات لسا ما وصلت Supabase — بنعيد المحاولة كل دقيقة.')
+        ? warn('marketing_db', 'حفظ المنشورات في قاعدة البيانات', 'توجد تغييرات لم تصل إلى Supabase بعد — تُعاد المحاولة كل دقيقة.')
         : ok('marketing_db', 'حفظ البوستات بالداتابيس', 'البوستات والصور ويوم آخر رسالة صباح محفوظين بـ Supabase.'));
     return out;
   }

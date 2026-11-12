@@ -94,7 +94,7 @@ class SupabaseSync {
         const c = storageService.getCommentByCommentId(id);
         if (c && !(await supabaseService.saveComment(c))) { this.dirty.comment.add(id); failed++; }
       }
-      if (failed) this.lastError = { at: new Date().toISOString(), message: `${failed} عنصر ما انحفظ — رح يعيد المحاولة تلقائياً` };
+      if (failed) this.lastError = { at: new Date().toISOString(), message: `${failed} عنصر لم يُحفظ — ستُعاد المحاولة تلقائياً` };
       return { failed };
     })();
     try {
@@ -114,7 +114,7 @@ class SupabaseSync {
    * Unchanged records are skipped (cheap), so this is safe to run often.
    */
   async fullSync() {
-    if (!this.enabled()) return { success: false, message: 'Supabase مش مربوط' };
+    if (!this.enabled()) return { success: false, message: 'Supabase غير مربوط' };
     if (this.flushing) await this.flushing;
     const started = Date.now();
     const st = this._state();
@@ -148,8 +148,8 @@ class SupabaseSync {
     return {
       success: stats.failed === 0,
       message: stats.failed
-        ? `انحفظ معظم البيانات، و${stats.failed} عنصر رح ينعاد إرسالهم تلقائياً.`
-        : `كل البيانات محفوظة بـ Supabase ✅ (${stats.conversations} محادثة، ${stats.messages} رسالة جديدة، ${stats.leads} عميل، ${stats.comments} تعليق)`,
+        ? `حُفظت معظم البيانات، وسيُعاد إرسال ${stats.failed} عنصر تلقائياً.`
+        : `كل البيانات محفوظة بـ Supabase (${stats.conversations} محادثة، ${stats.messages} رسالة جديدة، ${stats.leads} عميل، ${stats.comments} تعليق)`,
       stats
     };
   }

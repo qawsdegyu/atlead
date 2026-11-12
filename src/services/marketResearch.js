@@ -23,9 +23,9 @@ const DEFAULT_KEYWORDS = ['أتمتة المبيعات', 'الذكاء الاص�
 // Typical high-engagement hours for a business audience in Jordan / the Levant (local time).
 // weekday: 0 = Sunday. Friday & Saturday are the weekend.
 const BASE_HOURS = {
-  work: [{ h: 9, why: 'بداية الدوام — الناس بتفتح السوشال أول ما توصل' }, { h: 13, why: 'استراحة الغدا' }, { h: 20, why: 'ذروة المسا بعد الدوام' }],
-  fri: [{ h: 14, why: 'بعد صلاة الجمعة والغدا' }, { h: 18, why: 'عصر الجمعة — تصفح مرتاح' }, { h: 21, why: 'سهرة الجمعة' }],
-  sat: [{ h: 11, why: 'صباح السبت المتأخر' }, { h: 17, why: 'عصر السبت' }, { h: 21, why: 'سهرة قبل بداية الأسبوع' }]
+  work: [{ h: 9, why: 'بداية الدوام — يتصفح الناس مواقع التواصل عند وصولهم' }, { h: 13, why: 'استراحة الغداء' }, { h: 20, why: 'ذروة المساء بعد الدوام' }],
+  fri: [{ h: 14, why: 'بعد صلاة الجمعة والغداء' }, { h: 18, why: 'عصر الجمعة — وقت تصفح هادئ' }, { h: 21, why: 'مساء الجمعة' }],
+  sat: [{ h: 11, why: 'صباح السبت المتأخر' }, { h: 17, why: 'عصر السبت' }, { h: 21, why: 'مساء ما قبل بداية الأسبوع' }]
 };
 
 class MarketResearch {
@@ -36,7 +36,7 @@ class MarketResearch {
   async fetchCompetitor(username) {
     const cfg = meta();
     if (!cfg.page_access_token || !cfg.instagram_account_id) {
-      return { username, error: 'لازم ربط حساب إنستغرام أعمال (بطاقة Meta بالإعدادات) عشان نقرأ حسابات المنافسين.' };
+      return { username, error: 'يلزم ربط حساب إنستغرام أعمال (بطاقة Meta في الإعدادات) لقراءة حسابات المنافسين.' };
     }
     try {
       const fields = `business_discovery.username(${username}){username,name,followers_count,media_count,media.limit(15){caption,like_count,comments_count,timestamp,permalink,media_type}}`;
@@ -62,7 +62,7 @@ class MarketResearch {
       };
     } catch (e) {
       const m = errMsg(e);
-      return { username, error: /cannot be found|does not exist|Invalid user/i.test(m) ? 'الحساب مش موجود أو مش حساب أعمال/صانع محتوى (الحسابات الشخصية ما بتنقرأ).' : m };
+      return { username, error: /cannot be found|does not exist|Invalid user/i.test(m) ? 'الحساب غير موجود أو ليس حساب أعمال/صانع محتوى (لا يمكن قراءة الحسابات الشخصية).' : m };
     }
   }
 
@@ -206,7 +206,7 @@ class MarketResearch {
       const weekday = (now.weekday + offset) % 7;
       const base = weekday === 5 ? BASE_HOURS.fri : weekday === 6 ? BASE_HOURS.sat : BASE_HOURS.work;
       const day = [
-        ...ownHours.filter(o => o.h >= 7 && o.h <= 23).map(o => ({ h: o.h, why: 'أعلى تفاعل على منشوراتكم السابقة بهالساعة 📈', own: true })),
+        ...ownHours.filter(o => o.h >= 7 && o.h <= 23).map(o => ({ h: o.h, why: 'أعلى تفاعل على منشوراتكم السابقة في هذه الساعة', own: true })),
         ...base
       ].filter((s, i, arr) => arr.findIndex(x => Math.abs(x.h - s.h) < 2) === i) // no two slots within 2 hours
         .sort((a, b) => a.h - b.h);

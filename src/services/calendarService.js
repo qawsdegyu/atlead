@@ -105,7 +105,22 @@ class CalendarService {
     return axios({ method, url: `${API}${url}`, data, params, headers: { Authorization: `Bearer ${token}` }, timeout: 20000 });
   }
 
-  async busy(from, to, { fresh = false } = {}) {
+  /**
+   * Rehearsals only: a test conversation (rehearsal_calendar) gets a simulated calendar when Google
+   * Calendar is not connected. Known busy blocks tomorrow 10:00–12:00 and 14:00–15:00 (Amman), plus
+   * whatever that rehearsal booked. Nothing is ever written to a real calendar.
+   */
+  mockFor(conv) { return !!(conv && conv.rehearsal_calendar && !this.isActive()) ? conv.id || 'rehearsal' : null; }
+
+  mockBusy(mock) {
+    const cfg = this.getConfig();
+    const day = localParts(new Date(Date.now() + 86400000), cfg.timezone).dateKey;
+    const block = (a, b) => ({ start: zoned(day, a, cfg.timezone).getTime(), end: zoned(day, b, cfg.timezone).getTime() });
+    return [block(600, 720), block(840, 900), ...((this._mockBooked || new Map()).get(mock) || [])];
+  }
+
+  async busy(from, to, { fresh = false, mock = null } = {}) {
+    if (mock) return this.mockBusy(mock);
     const cfg = this.getConfig();
     const key = `${cfg.calendar_id}|${from.toISOString().slice(0, 15)}|${to.toISOString().slice(0, 13)}`;
     if (!fresh && this._busy && this._busy.key === key && Date.now() - this._busy.at < 60000) return this._busy.list;
@@ -133,12 +148,12 @@ class CalendarService {
    * Free times per day for the next days, inside the booking hours, as real intervals.
    * [{ dateKey, weekday, label, ranges: [{ start: Date, end: Date }] }]
    */
-  async availability({ fresh = false } = {}) {
+  async availability({ fresh = false, mock = null } = {}) {
     const cfg = this.getConfig();
     const now = Date.now();
     const earliest = now + cfg.min_notice_hours * 3600000;
     const horizon = now + (cfg.days_ahead + 1) * 86400000;
-    const busy = await this.busy(new Date(now), new Date(horizon), { fresh });
+    const busy = await this.busy(new Date(now), new Date(horizon), { fresh, mock });
     const slot = cfg.duration_minutes * 60000;
     const grid = 30 * 60000;
     const win = this.dayWindow(cfg);
@@ -177,10 +192,11 @@ class CalendarService {
 
   /** Text block for the AI: the only times it may offer. */
   async promptBlock(conv = {}) {
-    if (!this.isActive()) return '';
+    const mock = this.mockFor(conv);
+    if (!this.isActive() && !mock) return '';
     const cfg = this.getConfig();
     let days;
-    try { days = await this.availability(); } catch (e) {
+    try { days = await this.availability({ mock }); } catch (e) {
       console.warn('[Calendar] availability failed:', e.message);
       return '\nمواعيد الاستشارة: تعذّر قراءة تقويم المهندس الآن. إذا طلب العميل موعداً، خذ الوقت اللي بناسبه وقل إن الفريق سيؤكده معه — لا تؤكد موعداً بنفسك.\n';
     }
@@ -206,7 +222,7 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
   }
 
   /** Is this exact slot inside the booking rules and free right now? */
-  async checkSlot(start) {
+  async checkSlot(start, mock = null) {
     const cfg = this.getConfig();
     const end = new Date(start.getTime() + cfg.duration_minutes * 60000);
     if (start.getTime() < Date.now() + cfg.min_notice_hours * 3600000) return { ok: false, why: 'too_soon' };
@@ -216,17 +232,17 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
     const win = this.dayWindow(cfg);
     const endMin = lp.minutes + cfg.duration_minutes;
     if (lp.minutes < win.start || endMin > win.end) return { ok: false, why: 'outside_hours' };
-    const busy = await this.busy(start, end, { fresh: true });
+    const busy = await this.busy(start, end, { fresh: true, mock });
     if (busy.some(b => b.start < end.getTime() && b.end > start.getTime())) return { ok: false, why: 'taken' };
     return { ok: true, end };
   }
 
   /** Nearest free slot starts (for "that time is taken, how about…"). */
-  async suggestions(count = 3, after = null) {
+  async suggestions(count = 3, after = null, mock = null) {
     const cfg = this.getConfig();
     const step = 30 * 60000;
     const out = [];
-    const days = await this.availability({ fresh: true });
+    const days = await this.availability({ fresh: true, mock });
     for (const d of days) {
       for (const r of d.ranges) {
         for (let t = r.start.getTime(); t + cfg.duration_minutes * 60000 <= r.end.getTime(); t += step) {
@@ -253,16 +269,17 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
    */
   async book({ start: startText, conv = {}, lang = 'ar' }) {
     const cfg = this.getConfig();
+    const mock = this.mockFor(conv);
     const start = this.parseLocal(startText);
     const en = lang === 'en';
     const alternatives = async (after) => {
-      const s = await this.suggestions(3, after).catch(() => []);
+      const s = await this.suggestions(3, after, mock).catch(() => []);
       if (!s.length) return en ? 'There are no free times in the coming days; our team will contact you to arrange one.' : 'لا توجد أوقات متاحة خلال الأيام القادمة، وسيتواصل معك الفريق لترتيب موعد.';
       return (en ? 'The nearest free times are: ' : 'أقرب الأوقات المتاحة: ') + s.map(d => this.label(d, lang)).join(en ? ', ' : '، ') + (en ? '. Which one suits you?' : '. أي وقت يناسبك؟');
     };
     if (!start) return { ok: false, reply: await alternatives() };
     let check;
-    try { check = await this.checkSlot(start); } catch (e) {
+    try { check = await this.checkSlot(start, mock); } catch (e) {
       console.error('[Calendar] check failed:', e.message);
       return { ok: false, error: e.message, reply: en ? 'I could not confirm the time right now. Our team will confirm it with you shortly.' : 'تعذّر تأكيد الموعد الآن، وسيتواصل معك الفريق لتأكيده قريباً.' };
     }
@@ -293,7 +310,12 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
     };
     const cal = encodeURIComponent(cfg.calendar_id);
     let created;
-    try {
+    if (mock) {
+      created = { id: `rehearsal_${crypto.randomBytes(4).toString('hex')}`, hangoutLink: 'https://meet.google.com/rehearsal-only' };
+      const list = ((this._mockBooked ||= new Map()).get(mock) || []).filter(b => b.id !== conv.appointment_event_id);
+      list.push({ id: created.id, start: start.getTime(), end: check.end.getTime() });
+      this._mockBooked.set(mock, list);
+    } else try {
       created = (await this.api('post', `/calendars/${cal}/events`, {
         ...event, conferenceData: { createRequest: { requestId: crypto.randomUUID(), conferenceSolutionKey: { type: 'hangoutsMeet' } } }
       }, { conferenceDataVersion: 1 })).data;
@@ -308,7 +330,7 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
     const link = created.hangoutLink || created.conferenceData?.entryPoints?.find(p => p.entryPointType === 'video')?.uri || cfg.meeting_link || '';
 
     // Moving an existing booking: remove the old event.
-    if (conv.appointment_event_id && conv.appointment_event_id !== created.id) {
+    if (!mock && conv.appointment_event_id && conv.appointment_event_id !== created.id) {
       this.api('delete', `/calendars/${cal}/events/${encodeURIComponent(conv.appointment_event_id)}`).catch(() => {});
     }
 
@@ -328,7 +350,7 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
     // Tell the team on Telegram (in the background).
     try {
       const telegram = require('./telegramService');
-      if (telegram.isConfigured()) {
+      if (telegram.isConfigured() && !mock) {
         const esc = (s) => String(s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
         telegram.sendMessage([
           `<b>${conv.appointment_event_id ? 'تم تغيير موعد استشارة' : 'موعد استشارة جديد'}</b>${sim ? ' (تجربة)' : ''}`,

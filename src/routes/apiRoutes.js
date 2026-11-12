@@ -419,6 +419,17 @@ router.get('/calls/:token', (req, res) => {
   res.json({ success: true, call: s });
 });
 
+// Booking rehearsal: scripted customers through the real chat pipeline (simulated calendar if Google Calendar is off).
+router.post('/bookings/rehearse', (req, res) => {
+  try { res.json({ success: true, job: require('../services/bookingRehearsal').start(String(req.body?.scenario || 'book'), { cleanup: req.body?.keep !== true }) }); }
+  catch (e) { res.status(400).json({ success: false, message: e.message }); }
+});
+router.get('/bookings/rehearse/:id', (req, res) => {
+  const job = require('../services/bookingRehearsal').get(req.params.id);
+  if (!job) return res.status(404).json({ success: false });
+  res.json({ success: true, job });
+});
+
 // Call rehearsal: a simulated customer talks to the call AI (same script and tools), then the real analysis.
 router.post('/calls/rehearse', (req, res) => {
   try {

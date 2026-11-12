@@ -2,7 +2,11 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>atlead | منصة إدارة أنظمة المبيعات الذكية والشات بوت</title>
   <link rel="stylesheet" href="style.css">
   <!-- Font Awesome Icons -->
@@ -35,10 +39,6 @@
           <i class="fa-solid fa-comment-dots"></i>
           <span>التعليقات والتحويل للخاص</span>
         </li>
-        <li class="nav-item" data-tab="simulator">
-          <i class="fa-solid fa-robot"></i>
-          <span>مختبر تجربة البوت والفويس</span>
-        </li>
         <li class="nav-item" data-tab="marketing">
           <i class="fa-solid fa-bullhorn"></i>
           <span>التسويق الذكي وجدولة المنشورات</span>
@@ -62,6 +62,16 @@
     </aside>
 
     <div class="nav-backdrop" id="nav-backdrop"></div>
+
+    <!-- PHONE TAB BAR -->
+    <nav class="tabbar" id="tabbar" aria-label="التنقل">
+      <button type="button" class="tab active" data-tab="inbox"><i class="fa-solid fa-comments"></i><span>المحادثات</span></button>
+      <button type="button" class="tab" data-tab="crm"><i class="fa-solid fa-users"></i><span>العملاء</span></button>
+      <button type="button" class="tab" data-tab="comments"><i class="fa-solid fa-comment-dots"></i><span>التعليقات</span></button>
+      <button type="button" class="tab" data-tab="marketing"><i class="fa-solid fa-bullhorn"></i><span>التسويق</span></button>
+      <button type="button" class="tab" data-tab="knowledge"><i class="fa-solid fa-book-open"></i><span>المعرفة</span></button>
+      <button type="button" class="tab" data-tab="settings"><i class="fa-solid fa-sliders"></i><span>الإعدادات</span></button>
+    </nav>
 
     <!-- MAIN CONTENT -->
     <main class="main-content">
@@ -136,6 +146,7 @@
                 <div id="active-chat-badge-area">
                   <!-- Bot status badge -->
                 </div>
+                <button type="button" class="chat-info-btn" id="chat-info" aria-label="بيانات العميل" title="بيانات العميل"><i class="fa-solid fa-circle-info"></i></button>
                 <button type="button" class="btn btn-secondary btn-sm btn-danger-ghost" id="btn-delete-chat" title="حذف المحادثة" style="display: none;"><i class="fa-solid fa-trash"></i></button>
               </div>
             </div>
@@ -157,8 +168,10 @@
             </form>
           </div>
 
-          <!-- Right: Customer & Deal Insight Panel -->
+          <!-- Right: Customer & Deal Insight Panel (a bottom sheet on phones) -->
+          <div class="sheet-backdrop" id="sheet-backdrop"></div>
           <div class="chat-side-pane">
+            <div class="sheet-head"><span class="sheet-grip"></span><strong>بيانات العميل</strong><button type="button" class="sheet-close" id="sheet-close" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button></div>
             
             <!-- Bot State Control -->
             <div class="bot-status-card" id="bot-toggle-card">
@@ -362,114 +375,6 @@
               </tbody>
             </table>
           </div>
-        </div>
-      </section>
-
-      <!-- 4. BOT SIMULATOR & VOICE LAB TAB -->
-      <section class="view-panel" id="view-simulator">
-        <div class="grid-2">
-
-          <!-- Left: Interactive Test Chat -->
-          <div class="glass-card" style="display: flex; flex-direction: column; height: 750px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-              <div>
-                <h3 class="card-title">جرّب البوت</h3>
-                <p class="card-sub">اكتب رسالة أو أرسل صورة أو تسجيلاً صوتياً، وشاهد كيف يرد البوت.</p>
-              </div>
-              <button class="btn btn-secondary btn-sm" id="btn-reset-simulator">
-                <i class="fa-solid fa-rotate-right"></i> إعادة تعيين
-              </button>
-            </div>
-
-            <div class="chat-messages-container" id="sim-messages" style="background: rgba(0,0,0,0.2); border-radius: var(--radius-md); border: 1px solid var(--border-color); flex: 1;">
-              <!-- Simulated messages -->
-            </div>
-
-            <!-- Voice upload or text send -->
-            <div style="margin-top: 14px; display: flex; flex-direction: column; gap: 10px;">
-              
-              <!-- Quick test prompts -->
-              <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;">
-                <button class="btn btn-secondary btn-sm sim-quick-btn" data-text="مرحبا، شو الأسعار عندكم؟">اسأل عن الأسعار</button>
-                <button class="btn btn-secondary btn-sm sim-quick-btn" data-text="شو المشاريع والأعمال اللي اشتغلتوها قبل هيك؟">اسأل عن سوابق الأعمال</button>
-                <button class="btn btn-secondary btn-sm sim-quick-btn" data-text="تمام ممتاز، أنا موافق وبدي أحجز موعد استشارة معكم لنتفق ونبدأ الشغل">جرّب مرحلة الصفقة والإغلاق (Handoff)</button>
-              </div>
-
-              <!-- Input row -->
-              <div style="display: flex; gap: 8px;">
-                <input type="text" id="sim-text-input" class="chat-input" placeholder="اكتب رسالة لتجربة رد البوت...">
-                <button class="btn btn-primary" id="btn-send-sim-text">
-                  <i class="fa-solid fa-paper-plane"></i>
-                </button>
-
-                <!-- Image simulation button -->
-                <label class="btn btn-secondary" style="cursor: pointer;" title="رفع صورة لاختبار فهم البوت للصور">
-                  <i class="fa-solid fa-image"></i>
-                  <input type="file" id="sim-image-upload" accept="image/*" style="display: none;">
-                </label>
-                <!-- Voice Note simulation button -->
-                <label class="btn btn-success" style="cursor: pointer;" title="رفع تسجيل صوتي لاختباره">
-                  <i class="fa-solid fa-microphone"></i>
-                  <input type="file" id="sim-voice-upload" accept="audio/*" style="display: none;">
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <!-- Right: AI Live Reasoning & Deal Inspector -->
-          <div class="glass-card" style="height: 750px; overflow-y: auto;">
-            <h3 class="card-title">ما فهمه البوت</h3>
-            <p class="card-sub">تصنيف العميل ونسبة الشراء بعد كل رد.</p>
-
-            <div class="lead-metric">
-              <span class="lead-metric-title">مرحلة العميل الحالية (Stage):</span>
-              <span class="lead-metric-value" id="sim-inspect-stage" style="color: #38bdf8;">new</span>
-            </div>
-
-            <div class="lead-metric">
-              <span class="lead-metric-title">التصنيف (Classification):</span>
-              <span class="lead-metric-value" id="sim-inspect-class">Cold</span>
-            </div>
-
-            <div class="lead-metric">
-              <span class="lead-metric-title">نسبة الشراء والاهتمام المتوقعة:</span>
-              <span class="lead-metric-value" id="sim-inspect-score" style="color: #34d399;">25%</span>
-            </div>
-
-            <div class="progress-bar-bg" style="margin-bottom: 16px;">
-              <div class="progress-bar-fill" id="sim-inspect-score-bar" style="width: 25%;"></div>
-            </div>
-
-            <div class="lead-metric">
-              <span class="lead-metric-title">حالة تشغيل البوت (Bot Active):</span>
-              <span class="lead-metric-value" id="sim-inspect-active" style="color: #34d399;">مفعل</span>
-            </div>
-
-            <div class="lead-metric">
-              <span class="lead-metric-title">تحويل للبشري / ديل (Handoff Triggered):</span>
-              <span class="lead-metric-value" id="sim-inspect-handoff" style="color: var(--text-muted);">لا (False)</span>
-            </div>
-
-            <div style="margin-top: 16px;">
-              <span style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">المشكلة المكتشفة:</span>
-              <div id="sim-inspect-problem" style="padding: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; font-size: 13px;">-</div>
-            </div>
-
-            <div style="margin-top: 12px;">
-              <span style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">الحل المقترح من atlead:</span>
-              <div id="sim-inspect-solution" style="padding: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; font-size: 13px; color: #38bdf8;">-</div>
-            </div>
-
-            <!-- Handover Confirmation banner -->
-            <div id="sim-handoff-banner" style="display: none; margin-top: 20px; padding: 16px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px;">
-              <h4 style="color: #fbbf24; font-size: 14px; margin-bottom: 6px;">
-                <i class="fa-solid fa-circle-check"></i> العميل جاهز وتحوّل للموظف
-              </h4>
-              <p style="font-size: 12.5px; color: #fef08a;">توقف البوت مع هذا العميل، وحُفظت بياناته وأُرسلت إلى الفريق.</p>
-            </div>
-
-          </div>
-
         </div>
       </section>
 

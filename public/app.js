@@ -3,7 +3,6 @@ let currentTab = 'inbox';
 let conversations = [];
 let activeConvId = null;
 let currentLead = null;
-let simulatorConvId = null;
 
 // DOM Elements
 const conversationList = document.getElementById('conversation-list');
@@ -53,12 +52,17 @@ function switchTab(tab) {
     inbox: 'صندوق المحادثات الموحد',
     crm: 'إدارة الصفقات والـ CRM',
     comments: 'التعليقات والتحويل للخاص',
-    simulator: 'مختبر تجربة البوت والفويس',
     knowledge: 'قاعدة المعرفة والأعمال السابقة',
     marketing: 'التسويق الذكي وجدولة المنشورات',
     settings: 'إعدادات الربط والـ APIs'
   };
-  document.getElementById('current-tab-title').textContent = titles[tab] || '';
+  // Phones get short titles (same words as the tab bar).
+  const short = { inbox: 'المحادثات', crm: 'العملاء', comments: 'التعليقات', knowledge: 'المعرفة', marketing: 'التسويق', settings: 'الإعدادات' };
+  document.getElementById('current-tab-title').textContent = (isPhone() ? short[tab] : titles[tab]) || '';
+  document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.body.dataset.tab = tab;
+  window.scrollTo(0, 0);
+  document.querySelector('.main-content')?.scrollTo?.(0, 0);
 
   if (tab === 'inbox') loadConversations();
   if (tab === 'crm') { loadLeads(); loadStats(); }
@@ -594,146 +598,6 @@ document.getElementById('btn-simulate-comment-modal')?.addEventListener('click',
   } catch (err) {
     showToast('فشل محاكاة التعليق', 'error');
   }
-});
-
-// 4. SIMULATOR & VOICE LAB
-const simMessages = document.getElementById('sim-messages');
-const simTextInput = document.getElementById('sim-text-input');
-const btnSendSimText = document.getElementById('btn-send-sim-text');
-
-async function sendSimMessage(text) {
-  if (!text) return;
-
-  // Add customer message bubble
-  appendSimBubble('customer', text);
-  simTextInput.value = '';
-
-  try {
-    const res = await fetch('/api/simulator/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, conversation_id: simulatorConvId })
-    });
-    const data = await res.json();
-    if (data.success) {
-      simulatorConvId = data.conversation.id;
-      appendSimBubble('bot', data.reply);
-      updateSimulatorInspector(data);
-    }
-  } catch (err) {
-    appendSimBubble('bot', 'حدث خطأ أثناء معالجة الرسالة في المختبر.');
-  }
-}
-
-function appendSimBubble(sender, text, isVoice = false) {
-  const row = document.createElement('div');
-  row.className = `msg-row ${sender}`;
-  row.innerHTML = `
-    <div class="msg-bubble">
-      ${isVoice ? '<div class="voice-badge"><i class="fa-solid fa-microphone"></i> تسجيل صوتي</div>' : ''}
-      ${escapeHtml(text)}
-    </div>
-    <div class="msg-info">
-      <span>${sender === 'customer' ? 'أنت (المستخدم)' : 'مساعد atlead الذكي'}</span>
-      <span>•</span>
-      <span>الآن</span>
-    </div>
-  `;
-  simMessages.appendChild(row);
-  simMessages.scrollTop = simMessages.scrollHeight;
-}
-
-function updateSimulatorInspector(data) {
-  const ai = data.ai_details || {};
-  document.getElementById('sim-inspect-stage').textContent = ai.lead_stage || 'discovery';
-  document.getElementById('sim-inspect-class').textContent = ai.classification || 'Warm';
-  document.getElementById('sim-inspect-score').textContent = `${ai.buying_probability || 40}%`;
-  document.getElementById('sim-inspect-score-bar').style.width = `${ai.buying_probability || 40}%`;
-  document.getElementById('sim-inspect-active').innerHTML = data.bot_active !== false ? 'مفعل' : 'موقوف (محول للبشري)';
-  document.getElementById('sim-inspect-handoff').textContent = ai.handoff_triggered ? 'نعم (تم الاتفاق والتحويل!)' : 'لا';
-  document.getElementById('sim-inspect-problem').textContent = ai.identified_problem || '-';
-  document.getElementById('sim-inspect-solution').textContent = ai.proposed_solution || '-';
-
-  if (ai.handoff_triggered || ai.lead_stage === 'deal_closing' || data.bot_active === false) {
-    document.getElementById('sim-handoff-banner').style.display = 'block';
-  }
-}
-
-btnSendSimText?.addEventListener('click', () => sendSimMessage(simTextInput.value.trim()));
-simTextInput?.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendSimMessage(simTextInput.value.trim());
-});
-
-document.querySelectorAll('.sim-quick-btn').forEach(btn => {
-  btn.addEventListener('click', () => sendSimMessage(btn.dataset.text));
-});
-
-// Voice file simulation upload
-document.getElementById('sim-voice-upload')?.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const formData = new FormData();
-  formData.append('audio', file);
-  if (simulatorConvId) formData.append('conversation_id', simulatorConvId);
-
-  appendSimBubble('customer', 'جاري رفع التسجيل الصوتي وتفريغه...', true);
-
-  try {
-    const res = await fetch('/api/simulator/voice', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (data.success) {
-      simulatorConvId = data.conversation.id;
-      // Replace last user bubble with transcript
-      simMessages.lastElementChild.previousElementSibling?.remove();
-      appendSimBubble('customer', data.transcription_failed ? 'تسجيل صوتي (تعذّر تفريغه)' : `(تم التفريغ الصوتي): "${data.transcript}"`, true);
-      appendSimBubble('bot', data.reply);
-      updateSimulatorInspector(data);
-      showToast('تم استلام التسجيل الصوتي وتفريغه والرد عليه بنجاح.', 'success');
-    }
-  } catch (err) {
-    showToast('فشل تفريغ التسجيل الصوتي', 'error');
-  }
-});
-
-document.getElementById('sim-image-upload')?.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const formData = new FormData();
-  formData.append('image', file);
-  if (simulatorConvId) formData.append('conversation_id', simulatorConvId);
-  appendSimBubble('customer', 'جاري رفع الصورة وتحليلها...', true);
-  try {
-    const res = await fetch('/api/simulator/image', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (data.success) {
-      simulatorConvId = data.conversation.id;
-      simMessages.lastElementChild?.remove();
-      appendSimBubble('customer', data.understood ? `(البوت فهم الصورة): ${data.image_description}` : 'صورة (تعذّر تحليلها — تحقّق من مفتاح الذكاء الاصطناعي)', true);
-      appendSimBubble('bot', data.reply);
-      updateSimulatorInspector(data);
-    } else {
-      showToast(data.message || 'فشل تحليل الصورة', 'error');
-    }
-  } catch (err) {
-    showToast('فشل رفع الصورة', 'error');
-  }
-  e.target.value = '';
-});
-
-document.getElementById('btn-reset-simulator')?.addEventListener('click', () => {
-  simulatorConvId = null;
-  simMessages.innerHTML = '';
-  document.getElementById('sim-handoff-banner').style.display = 'none';
-  document.getElementById('sim-inspect-stage').textContent = 'new';
-  document.getElementById('sim-inspect-class').textContent = 'Cold';
-  document.getElementById('sim-inspect-score').textContent = '20%';
-  document.getElementById('sim-inspect-score-bar').style.width = '20%';
-  document.getElementById('sim-inspect-active').textContent = 'مفعل';
-  document.getElementById('sim-inspect-handoff').textContent = 'لا';
-  document.getElementById('sim-inspect-problem').textContent = '-';
-  document.getElementById('sim-inspect-solution').textContent = '-';
-  appendSimBubble('bot', 'أهلاً وسهلاً بك في شركة atlead! كيف بنقدر نساعدك ونطور مبيعات شركتك اليوم؟');
 });
 
 // 5. KNOWLEDGE BASE TAB
@@ -1322,8 +1186,6 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   loadStats();
   loadSettings();
-  // Welcome message in simulator
-  appendSimBubble('bot', 'أهلاً وسهلاً بك في شركة atlead! كيف بنقدر نساعدك ونطور مبيعات شركتك اليوم؟');
 });
 
 
@@ -1695,3 +1557,34 @@ document.addEventListener('click', async (e) => {
     link.remove();
   }
 });
+
+// ---------------- Phone app shell
+function isPhone() { return window.matchMedia('(max-width: 900px)').matches; }
+
+document.querySelectorAll('.tabbar .tab').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
+
+// Customer details as a bottom sheet inside a conversation.
+const closeSheet = () => document.body.classList.remove('sheet-open');
+document.getElementById('chat-info')?.addEventListener('click', () => document.body.classList.toggle('sheet-open'));
+document.getElementById('sheet-close')?.addEventListener('click', closeSheet);
+document.getElementById('sheet-backdrop')?.addEventListener('click', closeSheet);
+document.getElementById('chat-back')?.addEventListener('click', closeSheet);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
+
+// Tables become cards on phones: every cell carries its column name.
+function labelTable(table) {
+  const heads = [...table.querySelectorAll('thead th')].map(th => th.textContent.trim());
+  table.querySelectorAll('tbody tr').forEach(tr => {
+    [...tr.children].forEach((td, i) => { if (heads[i] && td.tagName === 'TD') td.dataset.label = heads[i]; });
+  });
+}
+document.querySelectorAll('table.data-table').forEach(table => {
+  labelTable(table);
+  const body = table.querySelector('tbody');
+  if (body) new MutationObserver(() => labelTable(table)).observe(body, { childList: true });
+});
+
+// Short title follows the screen size.
+window.matchMedia('(max-width: 900px)').addEventListener('change', () => switchTab(currentTab));
+document.body.dataset.tab = currentTab;
+if (isPhone()) switchTab(currentTab);

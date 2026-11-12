@@ -679,6 +679,14 @@
     "«كل البيانات» ملف واحد بصفحة لكل نوع.": "\"All data\" is one file with a sheet for each type.",
     "تم الحذف": "Deleted",
     "فشل الحذف": "Delete failed",
+    "المحادثات": "Chats",
+    "العملاء": "Customers",
+    "التعليقات": "Comments",
+    "التسويق": "Marketing",
+    "المعرفة": "Knowledge",
+    "الإعدادات": "Settings",
+    "بيانات العميل": "Customer details",
+    "إغلاق": "Close",
     'لم تُحلَّل هوية تصميمك بعد. اضغط «تعلّم من صفحتي» لقراءة منشوراتك على إنستغرام واستخراج الألوان والخطوط وأسلوب التصميم، لتخرج كل صورة جديدة بالأسلوب نفسه.': "Your design identity has not been analyzed yet. Press \"Learn from my page\" to read your Instagram posts and extract colors, fonts and design style, so every new image follows the same look."
   };
 
@@ -782,6 +790,7 @@
     btn.type = 'button';
     btn.className = 'btn btn-secondary btn-sm';
     btn.style.cssText = 'position: fixed; bottom: 18px; left: 18px; z-index: 9999; box-shadow: 0 4px 14px rgba(0,0,0,.25);';
+    btn.classList.add('lang-fab');
     btn.addEventListener('click', () => setLang(lang === 'en' ? 'ar' : 'en'));
     document.body.appendChild(btn);
   }

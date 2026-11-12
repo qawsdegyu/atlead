@@ -30,7 +30,9 @@ function offeredTimes(text) {
   let m;
   while ((m = re.exec(text))) out.push({ d: +m[1], mo: +m[2], h: +m[3], mi: +m[4], raw: m[0] });
   // Several times after one date ("16/11 الساعة 10:00 أو 12:30") share that date.
-  const dateMatch = text.match(/(\d{1,2})\/(\d{1,2})/);
+  let dateMatch = text.match(/(\d{1,2})\/(\d{1,2})/);
+  // "بكرا" / "tomorrow" without a written date = tomorrow.
+  if (!dateMatch && /بكرا|بكره|غداً|غدا|tomorrow/i.test(text)) { const [, mo, d] = tomorrowKey().split('-').map(Number); dateMatch = [null, d, mo]; }
   if (dateMatch) {
     const re2 = /(?:الساعة|at|،|or|أو)\s*(\d{1,2}):(\d{2})/g;
     while ((m = re2.exec(text))) if (!out.some(o => o.h === +m[1] && o.mi === +m[2])) out.push({ d: +dateMatch[1], mo: +dateMatch[2], h: +m[1], mi: +m[2], raw: m[0] });
@@ -38,8 +40,24 @@ function offeredTimes(text) {
   return out;
 }
 
+// When the bot turns a time down, only what comes after its offer ("عندي…", "أقرب…", "available…") counts as offered.
+function offerPart(text) {
+  const refusal = text.search(/مش متاح|غير متاح|ما بزبط|محجوز|خارج أوقات|not available|taken|outside the available/i);
+  if (refusal < 0) return text;
+  const rest = text.slice(refusal);
+  const offer = rest.search(/عندي|عنا|أقرب|متاحة|available|nearest|free/i);
+  if (offer < 0) return '';
+  const part = rest.slice(offer);
+  // "…13/11 الساعة 11:00 مش متاح. عندي الساعة 12:00 أو 15:00" → the offered times are on that same date.
+  if (!/\d{1,2}\/\d{1,2}/.test(part)) {
+    const dates = text.slice(0, refusal + offer).match(/\d{1,2}\/\d{1,2}/g);
+    if (dates) return `${dates[dates.length - 1]} ${part}`;
+  }
+  return part;
+}
+
 function pick(text, nth = 0) {
-  const t = offeredTimes(text);
+  const t = offeredTimes(offerPart(text));
   const o = t[Math.min(nth, t.length - 1)];
   if (!o) return null;
   return `${o.d}/${o.mo} ${String(o.h).padStart(2, '0')}:${String(o.mi).padStart(2, '0')}`;
@@ -94,14 +112,12 @@ async function run(id, key) {
       // Rule check on every time the bot mentioned.
       const now = Date.now();
       const tomorrow = tomorrowKey();
-      for (const o of offeredTimes(r.reply)) {
+      for (const o of offeredTimes(offerPart(r.reply))) {
         const key2 = `${new Date().getFullYear()}-${String(o.mo).padStart(2, '0')}-${String(o.d).padStart(2, '0')}`;
         const at = cal._zoned(key2, o.h * 60 + o.mi, 'Asia/Amman').getTime();
         const minutes = o.h * 60 + o.mi;
         const isTomorrow = key2 === tomorrow;
         const inBusy = isTomorrow && ((minutes >= 600 && minutes < 720) || (minutes >= 840 && minutes < 900));
-        const wasRefused = /غير متاح|خارج أوقات|not available|has just been taken|outside the available/i.test(r.reply) && r.reply.indexOf(o.raw) < r.reply.search(/أقرب|nearest/i);
-        if (wasRefused) continue; // the bot is quoting the customer's rejected time
         if (job.calendar === 'simulated' && inBusy) problems.push(`offered a busy time: ${o.raw}`);
         if (minutes < 540 || minutes + 30 > 1260) problems.push(`outside booking hours: ${o.raw}`);
         if (at < now) problems.push(`in the past: ${o.raw}`);
@@ -133,6 +149,8 @@ async function run(id, key) {
 module.exports = {
   SCENARIOS,
   offeredTimes,
+  offerPart,
+  pick,
   start(key = 'book', { cleanup = true } = {}) {
     if (!SCENARIOS[key]) throw new Error('unknown scenario');
     const id = crypto.randomBytes(6).toString('hex');

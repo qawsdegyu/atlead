@@ -111,3 +111,31 @@ test('if Google Meet cannot be created, the booking still happens with the fixed
   assert.match(r.reply_text, /zoom\.us\/j\/123/);
   storage.updateSettings({ calendar: { meeting_link: '' } }, { skipDbSync: true });
 });
+
+// Bugs found by the live rehearsal: the model may forget to book, may claim a booking, or hand off mid-scheduling.
+const convOffered = () => ({
+  ...conv(),
+  messages: [{ sender: 'bot', content: `عندي مواعيد متاحة بكرا ${+tomorrow.slice(8)}/${+tomorrow.slice(5, 7)} الساعة 12:00 أو الساعة 16:00. أي وقت يناسبك؟` }]
+});
+
+test('the customer picks an offered time and the model forgets to book → the server books it', async () => {
+  answers = [{ reply_text: 'تمام، هل هذا الوقت مناسب لك؟', buying_probability: 70 }];
+  const r = await ai.generateReply(convOffered(), 'تمام، الساعة 16:00 بناسبني');
+  assert.equal(inserted.length, 1);
+  assert.equal(inserted[0].start.dateTime, at('16:00').toISOString());
+  assert.match(r.reply_text, /تم تأكيد موعد استشارتك/);
+});
+
+test('the model can never claim a booking that did not happen', async () => {
+  answers = [{ reply_text: 'تمام، تم حجز اجتماعك مع المهندس!', buying_probability: 80 }];
+  const r = await ai.generateReply(convOffered(), 'وكمان عندي سؤال عن الأسعار');
+  assert.equal(inserted.length, 0);
+  assert.doesNotMatch(r.reply_text, /تم حجز/);
+  assert.match(r.reply_text, /أي وقت من هدول بناسبك/);
+});
+
+test('agreeing a time is never interrupted by the generic handoff message', async () => {
+  answers = [{ reply_text: 'ممتاز، أي وقت بناسبك؟', handoff_triggered: true, buying_probability: 95 }];
+  const r = await ai.generateReply(convOffered(), 'بدي اجتماع، شو الأوقات؟');
+  assert.equal(crm.shouldHandoff(r), false);
+});

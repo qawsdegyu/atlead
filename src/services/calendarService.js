@@ -216,7 +216,9 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
 - إذا العميل حابب يحجز استشارة أو اجتماع، أو سأل إذا في موعد فاضي: اقترح وقتين أو ثلاثة محددين من الأوقات المتاحة فوق (مثل "الأحد 16/11 الساعة 10:00")، ولا تقترح أي وقت خارجها أبداً.
 - إذا طلب وقتاً غير موجود ضمن المتاح: قل بوضوح إنه غير متاح، واقترح أقرب وقتين متاحين له.
 - خلال تبادل المواعيد ضع "scheduling": true في الـ JSON (بدون تحويل للموظف).
-- فقط عندما يوافق العميل صراحة على وقت محدد واحد: ضع "book_start": "YYYY-MM-DD HH:MM" (التاريخ من القائمة فوق، والوقت ضمن المتاح). النظام يحجز الموعد ويرسل له التأكيد ورابط الاجتماع تلقائياً — لا تكتب رابطاً من عندك.
+- عندما يوافق العميل على وقت محدد: ضع فوراً "book_start": "YYYY-MM-DD HH:MM" ولا تطلب منه تأكيداً إضافياً ولا رقم هاتف قبل الحجز. النظام يحجز ويرسل التأكيد ورابط الاجتماع — لا تكتب رابطاً من عندك.
+- ممنوع تكتب "تم الحجز" أو "تم تأكيد الموعد" بنفسك أبداً؛ التأكيد يكتبه النظام فقط بعد الحجز الفعلي.
+- خلال اختيار الموعد لا تحوّل العميل لموظف ولا ترسل رسالة التحويل.
 - إذا طلب العميل تغيير موعده المحجوز: نفس الطريقة، والنظام ينقل الموعد.
 `;
   }
@@ -254,6 +256,66 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
       }
     }
     return out;
+  }
+
+  /**
+   * Times the bot offered in a message: [{ key: 'YYYY-MM-DD HH:MM' }]. Understands "16/11 الساعة 10:00 أو 12:30",
+   * "بكرا الساعة 10:00", "tomorrow at 10:00", and skips a time the bot just turned down.
+   */
+  offeredIn(text) {
+    const cfg = this.getConfig();
+    let t = String(text || '');
+    const refusal = t.search(/مش متاح|غير متاح|ما بزبط|محجوز|خارج أوقات|not available|taken|outside the available/i);
+    if (refusal >= 0) {
+      const rest = t.slice(refusal);
+      const offer = rest.search(/عندي|عنا|أقرب|متاحة|available|nearest|free/i);
+      const before = t.slice(0, refusal).match(/\d{1,2}\/\d{1,2}/g);
+      t = offer < 0 ? '' : (before && !/\d{1,2}\/\d{1,2}/.test(rest.slice(offer)) ? `${before[before.length - 1]} ` : '') + rest.slice(offer);
+    }
+    const now = localParts(new Date(), cfg.timezone);
+    const keyFor = (d, mo) => { let y = now.y; if (mo < now.mo - 6) y += 1; return `${y}-${pad(mo)}-${pad(d)}`; };
+    const tomorrow = localParts(new Date(Date.now() + 86400000), cfg.timezone);
+    const out = [];
+    let date = null;
+    const re = /(\d{1,2})\/(\d{1,2})|(بكرا|بكره|غداً|غدا|tomorrow)|(\d{1,2}):(\d{2})/gi;
+    let m;
+    while ((m = re.exec(t))) {
+      if (m[1]) date = keyFor(+m[1], +m[2]);
+      else if (m[3]) date = tomorrow.dateKey;
+      else if (m[4] && date) {
+        const k = `${date} ${pad(+m[4])}:${m[5]}`;
+        if (!out.includes(k)) out.push(k);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Which offered time did the customer just pick? Returns 'YYYY-MM-DD HH:MM' or null.
+   * "12:00 بناسبني", "الساعة 12", "الأول", "the second one", "تمام" (when only one time was offered),
+   * or an explicit date + time ("15/11 الساعة 10:00").
+   */
+  choiceFrom(customerText, lastBotText) {
+    const text = String(customerText || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+    const offered = this.offeredIn(lastBotText);
+    // Explicit date and time from the customer: use it (the calendar check decides if it is free).
+    const explicit = this.offeredIn(text.replace(/(\d{1,2})\s*(?:ص|الصبح|صباحاً|am)\b/gi, '$1:00').replace(/الساعة\s*(\d{1,2})(?!:)/g, 'الساعة $1:00'));
+    if (explicit.length === 1) return explicit[0];
+    if (!offered.length) return null;
+    const hm = text.match(/(\d{1,2}):(\d{2})/) || text.match(/(?:الساعة|at)\s*(\d{1,2})\b/i);
+    if (hm) {
+      let h = +hm[1];
+      const mi = hm[2] ? +hm[2] : 0;
+      if (/مسا|مساءً|بالليل|العصر|pm/i.test(text) && h < 12) h += 12;
+      const same = offered.filter(k => +k.slice(11, 13) === h && +k.slice(14, 16) === mi);
+      const pm = offered.filter(k => +k.slice(11, 13) === h + 12 && +k.slice(14, 16) === mi);
+      if (same.length === 1) return same[0];
+      if (!same.length && pm.length === 1) return pm[0];
+    }
+    const ord = [/(الأول|الاول|أول وقت|first)/i, /(الثاني|التاني|second)/i, /(الثالث|التالت|third)/i].findIndex(r => r.test(text));
+    if (ord >= 0 && offered[ord]) return offered[ord];
+    if (offered.length === 1 && /(تمام|اوكي|أوكي|ok|okay|yes|نعم|أكيد|اكيد|موافق|بناسبني|مناسب|works|sounds good|perfect)/i.test(text)) return offered[0];
+    return null;
   }
 
   parseLocal(text) {

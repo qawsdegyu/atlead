@@ -332,6 +332,23 @@ Your previous answer was in Arabic. The customer writes in English — return th
         result.ai_call_offered = true;
         result.scheduling = true; // not a handoff yet: the call comes first
       }
+      // Booking safety net (does not rely on the model remembering):
+      if (calendarBlock) {
+        const lastBot = [...(conversation.messages || [])].reverse().find(m => m.sender === 'bot')?.content || '';
+        // 1) The customer picked one of the times we just offered (or gave an exact date and time) → book it.
+        const choice = calendarService.choiceFrom(incomingMessage, lastBot);
+        if (!result.book_start && choice) result.book_start = choice;
+        // 2) While a time is being agreed, the generic handoff message must not cut in.
+        if (calendarService.offeredIn(lastBot).length || calendarService.offeredIn(result.reply_text).length) result.scheduling = true;
+        // 3) The model may never claim a booking that did not happen.
+        if (!result.book_start && /(تم|رح)\s*(حجز|تأكيد|أحجز|أكد)|حجزت(لك|لك)?|حجزتلك|is (booked|confirmed)|I(?:'| ha)ve booked|booking (is )?confirmed/i.test(result.reply_text || '')) {
+          const s = await calendarService.suggestions(3, null, calendarService.mockFor(conversation)).catch(() => []);
+          result.reply_text = s.length
+            ? (lang === 'en' ? `Which of these times suits you: ${s.map(d => calendarService.label(d, 'en')).join(', ')}?` : `أي وقت من هدول بناسبك: ${s.map(d => calendarService.label(d, 'ar')).join('، ')}؟`)
+            : (lang === 'en' ? 'Our team will contact you to fix the meeting time.' : 'رح يتواصل معك فريقنا لتحديد موعد الاجتماع.');
+          result.scheduling = true;
+        }
+      }
       // The customer confirmed a time: book it for real (re-checked against the calendar).
       if (calendarBlock && result.book_start) {
         const booking = await calendarService.book({ start: result.book_start, conv: conversation, lang });

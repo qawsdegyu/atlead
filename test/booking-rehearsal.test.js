@@ -48,6 +48,6 @@ test('the checker catches a bot that offers a busy time', async () => {
   const job = await wait(rehearsal.start('busy_time', { cleanup: false }).id);
   assert.ok(job.problems.some(p => /busy/.test(p)), JSON.stringify(job.problems));
   // …and the booking itself is refused by the calendar check.
-  assert.equal(job.bookings.length, 0);
+  assert.ok(job.bookings.every(b => !/11:00/.test(b)), 'the busy time is never booked: ' + JSON.stringify(job.bookings));
   assert.ok(job.transcript.some(l => /غير متاح/.test(l)));
 });

@@ -280,7 +280,11 @@ ${conversation.handoff_at ? `- مهم: العميل تحوّل لموظف الم
 6. التنسيق: الرد بيوصل على واتساب/إنستغرام/ماسنجر — لا تستخدم Markdown (لا [نص](رابط) ولا ** ولا #). اكتب الرابط كامل لحاله مثل https://agsco.shop
 7. لا تخمّن أبداً: جاوب فقط من المرجع الرسمي وبيانات العميل. إذا المعلومة مش موجودة بالمرجع، قل بوضوح إنها بدها تأكيد من الفريق واعرض إنهم يتواصلوا معه — لا تخترع.
 8. الأرقام: ممنوع تذكر أي رقم (سعر، تكلفة، نسبة، مدة تنفيذ، عدد عملاء، نتائج) إلا إذا كان مكتوب حرفياً بالمرجع. الأسعار تحديداً: لا سعر ولا رينج ولا "يبدأ من" — السعر بيتحدد بعد الاستشارة المجانية.
-${callBlock}${calendarBlock}
+${callBlock}${calendarBlock}${!calendarBlock && !callOn && !conversation.requested_meeting_time ? `
+طلب استشارة أو اجتماع (التقويم غير مربوط حالياً):
+- إذا طلب العميل استشارة أو اجتماع أو موعد: رحّب بطلبه واسأله سؤالاً واحداً: أي يوم ووقت بناسبه؟ وضع "scheduling": true (بدون تحويل للموظف بعد).
+- لما يحدد يوم أو وقت: ضع "requested_time": "اليوم والوقت كما قاله العميل" — النظام يسجّل الطلب ويبلّغ الفريق ليأكد الموعد معه. لا تقل إن الموعد تأكد.
+` : ''}
 أعد النتيجة بصيغة JSON حصراً.
 ${lang === 'en' ? `
 IMPORTANT: The customer's last message is in ENGLISH. Write "reply_text" entirely in English (professional, friendly). Do not use Arabic in reply_text.` : ''}
@@ -331,6 +335,30 @@ Your previous answer was in Arabic. The customer writes in English — return th
         result.reply_text = `${result.reply_text}\n\n${lang === 'en' ? 'Call link' : 'رابط المكالمة'}: ${callService.publicUrl(session.token)}`;
         result.ai_call_offered = true;
         result.scheduling = true; // not a handoff yet: the call comes first
+      }
+      // No calendar and no AI call: never jump straight to the handoff on "I want a consultation".
+      // Ask for the customer's preferred time first, record it, then the team confirms it.
+      if (!calendarBlock && !callOn && !conversation.requested_meeting_time) {
+        // Real booking requests only ("we get 50 appointments a week" is not one).
+        const wantsMeeting = /(احجز|أحجز|نحجز|حجز (موعد|استشار|اجتماع|مكالم)|(بدي|بدنا|ممكن|حابب|بحب) (موعد|استشار|اجتماع|مكالم|أحكي مع المهندس)|استشار[ةه] مجاني[ةه]|موعد مع المهندس|\bbook (a|an|the)\b|\bschedule (a|an)\b|appointment with|meeting with|free consultation|\bbook\b.*\b(meeting|call|consultation|appointment)\b)/i.test(incomingMessage);
+        const lastBot = [...(conversation.messages || [])].reverse().find(m => m.sender === 'bot')?.content || '';
+        const askedTime = /(أي يوم|اي يوم|أي وقت|اي وقت|يوم ووقت|الوقت اللي|which day|what time|which time|when suits|when works)/i.test(lastBot);
+        const saysTime = /(\d{1,2}(:\d{2})?|بكرا|بكره|بعد بكرا|اليوم|الأحد|الاحد|الاثنين|الإثنين|الثلاثاء|الأربعاء|الاربعاء|الخميس|الجمعة|السبت|الصبح|الظهر|العصر|المسا|بالليل|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|morning|afternoon|evening|am|pm)/i.test(incomingMessage);
+        if (!result.requested_time && askedTime && saysTime) result.requested_time = String(incomingMessage).trim().slice(0, 120);
+        if (result.requested_time) {
+          result.reply_text = lang === 'en'
+            ? `Thank you! I have noted your request for a free consultation: ${result.requested_time}. Our team will contact you shortly to confirm the time.`
+            : `تمام، سجّلت طلبك للاستشارة المجانية: ${result.requested_time}. فريقنا رح يتواصل معك قريباً لتأكيد الموعد.`;
+          result.handoff_triggered = true;
+          result.consultation_requested = true;
+        } else if (wantsMeeting) {
+          result.scheduling = true; // keep the conversation going: no generic handoff message
+          if (!/[?؟]/.test(result.reply_text || '') || !/(يوم|وقت|day|time)/i.test(result.reply_text || '')) {
+            result.reply_text = lang === 'en'
+              ? 'Happy to arrange a free consultation for you. Which day and time suit you best?'
+              : 'أكيد، بنرتبلك استشارة مجانية. أي يوم ووقت بناسبوك؟';
+          }
+        }
       }
       // Booking safety net (does not rely on the model remembering):
       if (calendarBlock) {
@@ -445,6 +473,7 @@ Your previous answer was in Arabic. The customer writes in English — return th
         demo_requested: parsed.demo_requested === true,
         scheduling: parsed.scheduling === true,
         offer_ai_call: parsed.offer_ai_call === true,
+        requested_time: typeof parsed.requested_time === 'string' && parsed.requested_time.trim() ? parsed.requested_time.trim().slice(0, 120) : null,
         book_start: typeof parsed.book_start === 'string' && parsed.book_start.trim() ? parsed.book_start.trim() : null
       };
     } catch (e) {

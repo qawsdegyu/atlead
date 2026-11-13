@@ -36,7 +36,7 @@ test('handoff: message sent once, bot keeps answering, then stops when a rep rep
   const sent = [];
   const phone = '+962790000001';
   aiAnswer = { reply_text: 'تمام', buying_probability: 90, lead_stage: 'deal_closing', handoff_triggered: true };
-  await say(phone, 'بدي أحجز استشارة', sent);
+  await say(phone, 'بدي أحكي مع موظف المبيعات لو سمحت', sent);
   let conv = storage.getConversationByChannelUser('whatsapp', phone);
   assert.match(sent[0], /رح يتواصل معك/, 'handoff message sent');
   assert.ok(conv.handoff_at, 'marked as handed off');

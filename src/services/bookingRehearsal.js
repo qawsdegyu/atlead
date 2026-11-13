@@ -18,7 +18,9 @@ const SCENARIOS = {
   busy_time: { lang: 'ar', name: 'هبة', lines: () => ['مرحبا، بدي أحجز استشارة مع المهندس', `بناسبني بكرا ${dm(tomorrowKey())} الساعة 11:00`, '<pick>'] },
   outside_hours: { lang: 'ar', name: 'خالد', lines: () => ['بدي موعد مع المهندس', `بكرا ${dm(tomorrowKey())} الساعة 11 بالليل`, '<pick>'] },
   reschedule: { lang: 'ar', name: 'سارة', lines: () => ['مرحبا بدي أحجز اجتماع مع المهندس', '<pick>', 'معلش بدي أغيّر الموعد لوقت ثاني', '<pick2>'] },
-  english: { lang: 'en', name: 'John', lines: () => ['Hi, I would like to book a meeting with your engineer', '<pick>'] }
+  english: { lang: 'en', name: 'John', lines: () => ['Hi, I would like to book a meeting with your engineer', '<pick>'] },
+  // The real WhatsApp case, with no calendar connected (as on the live site today).
+  no_calendar: { lang: 'ar', name: 'operix', calendar: false, lines: () => ['مرحبا', 'بدي احجز استشاره مجانيه', 'يوم الأحد الساعة 11 الصبح'] }
 };
 
 const jobs = new Map();
@@ -84,7 +86,7 @@ async function run(id, key) {
   const cal = require('./calendarService');
   try {
     let conv = storageService.saveConversation({
-      channel: 'simulator_booking', external_user_id: `booking_${id}`, customer_name: sc.name, lead_stage: 'new', is_bot_active: true, rehearsal_calendar: true
+      channel: 'simulator_booking', external_user_id: `booking_${id}`, customer_name: sc.name, lead_stage: 'new', is_bot_active: true, rehearsal_calendar: sc.calendar !== false
     });
     job.calendar = cal.isActive() ? 'google' : 'simulated';
     const transcript = [];
@@ -93,7 +95,7 @@ async function run(id, key) {
     let lastBot = '';
     let picks = 0;
     const lines = sc.lines();
-    for (let i = 0; i < lines.length + 2 && i < 8; i++) {
+    for (let i = 0; i < lines.length + (sc.calendar === false ? 0 : 2) && i < 8; i++) {
       let text = lines[i];
       if (!text) {
         if (bookings.length >= (key === 'reschedule' ? 2 : 1)) break;
@@ -145,6 +147,7 @@ async function run(id, key) {
       status: 'done', scenario: key, transcript, bookings, problems,
       final: {
         appointment: conv.appointment_label || null,
+        requested_time: conv.requested_meeting_time || null,
         meeting_link: conv.appointment_link || null,
         handed_to_sales: !!conv.handoff_at,
         handoff_reason: conv.handoff_reason || null

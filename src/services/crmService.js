@@ -65,6 +65,7 @@ class CrmService {
 
   handoffReason(aiResult) {
     if (aiResult?.appointment) return `حجز استشارة أونلاين: ${aiResult.appointment.appointment_label}`;
+    if (aiResult?.requested_time) return `طلب موعد استشارة — الوقت المطلوب: ${aiResult.requested_time} (يحتاج تأكيد)`;
     const { threshold } = handoffConfig();
     if (aiResult?.handoff_triggered) return 'العميل وافق / طلب التواصل مع موظف';
     if (HANDOFF_STAGES.includes(aiResult?.lead_stage)) return 'العميل وصل لمرحلة ما قبل الشراء (Deal Closing)';
@@ -117,7 +118,7 @@ class CrmService {
 
   /** The text the customer gets this turn: a booking confirmation wins over the generic handoff message. */
   replyForTurn(convId, aiResult, handoff) {
-    if (handoff && aiResult?.appointment) { this.assignRep(convId); return aiResult.reply_text; }
+    if (handoff && (aiResult?.appointment || aiResult?.requested_time)) { this.assignRep(convId); return aiResult.reply_text; }
     return handoff ? this.prepareHandoffMessage(convId) : aiResult.reply_text;
   }
 

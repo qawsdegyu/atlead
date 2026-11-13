@@ -324,6 +324,7 @@ class ReplyEngine {
     if (aiResult.ai_call_offered && !conv.ai_call_status) patch.ai_call_status = 'offered';
     // Consultation booked in Google Calendar.
     if (aiResult.appointment) Object.assign(patch, aiResult.appointment, { consultation_booked: true, consultation_requested: true });
+    if (aiResult.requested_time && !aiResult.appointment) Object.assign(patch, { requested_meeting_time: aiResult.requested_time, consultation_requested: true });
     // When the follow-up engine would next nudge this customer (shown in the CRM / Google Form).
     patch.next_follow_up_at = handoff || conv.handoff_at || patch.appointment_at ? null : require('./followUpService').nextFollowUpAt({ ...conv, ...patch });
 

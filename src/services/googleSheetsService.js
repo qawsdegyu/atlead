@@ -284,7 +284,7 @@ class GoogleSheetsService {
       c.ai_call_summary, c.ai_call_next_step, fmtDate(c.ai_call_at),
       c.ai_call_duration_sec ? Math.round(c.ai_call_duration_sec / 60) : '',
       transcript,
-      c.appointment_label, c.appointment_link
+      c.appointment_label || (c.requested_meeting_time ? `مطلوب (يحتاج تأكيد): ${c.requested_meeting_time}` : ''), c.appointment_link
     ].map(v => (v === null || v === undefined ? '' : v));
   }
 

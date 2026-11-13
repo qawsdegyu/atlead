@@ -737,6 +737,16 @@
     "18 ثانية": "18 seconds",
     "اطلب هذا الكود من هاتفك (الخط الأردني) واضغط اتصال لتفعيل التحويل:": "Dial this code from your phone (Jordanian line) and press call to turn on forwarding:",
     "أو كل حالة على حدة:": "Or one case at a time:",
+    "Gmail المهندس": "Engineer's Gmail",
+    "غير مربوط": "Not connected",
+    "ربط التقويم": "Connect calendar",
+    "نسخ رابط الربط للمهندس": "Copy connect link for the engineer",
+    "فصل": "Disconnect",
+    "يفتح المهندس الرابط، يسجّل الدخول بحساب Google ويضغط «السماح»، فيُربط التقويم ويُفعَّل الحجز تلقائياً.": "The engineer opens the link, signs in with Google and presses \"Allow\" — the calendar is connected and booking turns on automatically.",
+    "إعداد تسجيل الدخول بـ Google (مرة واحدة)": "Google sign-in setup (one time)",
+    "من Google Cloud ← APIs & Services ← Credentials ← OAuth client ID (Web application). أضف رابط الرجوع هذا في Authorized redirect URIs:": "From Google Cloud ← APIs & Services ← Credentials ← OAuth client ID (Web application). Add this redirect link under Authorized redirect URIs:",
+    "طريقة بديلة بدون تسجيل دخول: شارك التقويم مع حساب الخدمة الموجود في بطاقة Google Sheets بصلاحية «إجراء تغييرات على الأحداث».": "Alternative without sign-in: share the calendar with the service account from the Google Sheets card, with \"Make changes to events\".",
+    "مربوط بحساب": "Connected to",
     'لم تُحلَّل هوية تصميمك بعد. اضغط «تعلّم من صفحتي» لقراءة منشوراتك على إنستغرام واستخراج الألوان والخطوط وأسلوب التصميم، لتخرج كل صورة جديدة بالأسلوب نفسه.': "Your design identity has not been analyzed yet. Press \"Learn from my page\" to read your Instagram posts and extract colors, fonts and design style, so every new image follows the same look."
   };
 

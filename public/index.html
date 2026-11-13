@@ -1087,10 +1087,28 @@
               <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer;"><input type="checkbox" id="cal-enabled"><span><strong>يحجز البوت الاستشارات الأونلاين في تقويم المهندس</strong></span></label>
               <span class="form-hint" style="display: block; margin-top: 6px;">يقترح البوت الأوقات المتاحة فقط، ويتحقق من التقويم قبل الحجز، ويرسل للعميل رابط الاجتماع.</span>
               <div class="form-group" style="margin-top: 12px;">
-                <label class="form-label">تقويم المهندس (بريده على Google)</label>
+                <label class="form-label">Gmail المهندس</label>
                 <input type="text" id="cal-id" class="form-control" placeholder="name@gmail.com" dir="ltr">
               </div>
-              <div class="form-hint" id="cal-share-hint" style="margin-bottom: 10px;">شارك التقويم مع حساب الخدمة الموجود في بطاقة Google Sheets: Google Calendar ← إعدادات التقويم ← المشاركة مع أشخاص محددين ← صلاحية «إجراء تغييرات على الأحداث».</div>
+              <div class="cal-connect" id="cal-connect">
+                <div id="cal-connect-status" class="cal-connect-status">غير مربوط</div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-cal-connect"><i class="fa-brands fa-google"></i> ربط التقويم</button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-cal-link"><i class="fa-solid fa-link"></i> نسخ رابط الربط للمهندس</button>
+                  <button type="button" class="btn btn-secondary btn-sm btn-danger-ghost" id="btn-cal-disconnect" style="display: none;">فصل</button>
+                </div>
+                <span class="form-hint">يفتح المهندس الرابط، يسجّل الدخول بحساب Google ويضغط «السماح»، فيُربط التقويم ويُفعَّل الحجز تلقائياً.</span>
+              </div>
+              <details class="cal-oauth-setup" style="margin-bottom: 10px;">
+                <summary>إعداد تسجيل الدخول بـ Google (مرة واحدة)</summary>
+                <div class="grid-2" style="margin-top: 10px;">
+                  <div class="form-group"><label class="form-label">Google Client ID</label><input type="text" id="cal-client-id" class="form-control" dir="ltr" placeholder="....apps.googleusercontent.com"></div>
+                  <div class="form-group"><label class="form-label">Google Client Secret</label><input type="password" id="cal-client-secret" class="form-control" dir="ltr"></div>
+                </div>
+                <span class="form-hint">من Google Cloud ← APIs &amp; Services ← Credentials ← OAuth client ID (Web application). أضف رابط الرجوع هذا في Authorized redirect URIs:</span>
+                <code class="cal-redirect" id="cal-redirect" dir="ltr"></code>
+              </details>
+              <div class="form-hint" id="cal-share-hint" style="margin-bottom: 10px;">طريقة بديلة بدون تسجيل دخول: شارك التقويم مع حساب الخدمة الموجود في بطاقة Google Sheets بصلاحية «إجراء تغييرات على الأحداث».</div>
               <label class="form-label">أيام الحجز</label>
               <div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 6px 0 12px;">
                 <label style="display: flex; align-items: center; gap: 4px; font-size: 12.5px;"><input type="checkbox" class="cal-day" value="0" checked> الأحد</label>

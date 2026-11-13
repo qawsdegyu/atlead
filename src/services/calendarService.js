@@ -80,13 +80,95 @@ class CalendarService {
     } catch { return null; }
   }
 
+  /** Connected by the engineer's Google sign-in (no manual calendar sharing needed). */
+  usesOAuth() {
+    const cfg = this.getConfig();
+    return !!(cfg.oauth_refresh_token && cfg.google_client_id && cfg.google_client_secret);
+  }
+
   /** Enabled and has what it needs to work. */
   isActive() {
     const cfg = this.getConfig();
-    return !!(cfg.enabled && cfg.calendar_id && this.serviceAccount());
+    return !!(cfg.enabled && cfg.calendar_id && (this.usesOAuth() || this.serviceAccount()));
+  }
+
+  oauthRedirect() {
+    let base = '';
+    try { base = require('./socialPublisher').publicBaseUrl(); } catch { /* optional */ }
+    if (!base) base = require('./notificationService').getConfig().dashboardUrl || '';
+    return `${base.replace(/\/+$/, '')}/oauth/google/callback`;
+  }
+
+  /** One-time link (valid 2 hours): opens Google sign-in for the engineer's Gmail. */
+  connectLink(email) {
+    const cfg = this.getConfig();
+    if (!cfg.google_client_id || !cfg.google_client_secret) throw new Error('أدخل Google Client ID و Client Secret أولاً.');
+    const token = crypto.randomBytes(18).toString('base64url');
+    storageService.setState('calendar_oauth', { token, email: String(email || '').trim(), at: Date.now() });
+    return { link: this.oauthRedirect().replace('/oauth/google/callback', `/connect-calendar/${token}`), redirect_uri: this.oauthRedirect() };
+  }
+
+  validConnectToken(token) {
+    const st = storageService.getState('calendar_oauth', null);
+    return !!(st && token && st.token === token && Date.now() - st.at < 2 * 3600000) ? st : null;
+  }
+
+  googleAuthUrl(token) {
+    const cfg = this.getConfig();
+    const st = this.validConnectToken(token);
+    if (!st) return null;
+    const q = new URLSearchParams({
+      client_id: cfg.google_client_id,
+      redirect_uri: this.oauthRedirect(),
+      response_type: 'code',
+      scope: 'openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy',
+      access_type: 'offline',
+      prompt: 'consent',
+      include_granted_scopes: 'true',
+      state: token,
+      ...(st.email ? { login_hint: st.email } : {})
+    });
+    return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
+  }
+
+  /** Google sends the engineer back here: keep the long-lived permission and switch booking on. */
+  async finishConnect(code, state) {
+    const cfg = this.getConfig();
+    if (!this.validConnectToken(state)) throw new Error('انتهت صلاحية رابط الربط. اطلب رابطاً جديداً من لوحة التحكم.');
+    const res = await axios.post(TOKEN_URL, new URLSearchParams({
+      code, client_id: cfg.google_client_id, client_secret: cfg.google_client_secret, redirect_uri: this.oauthRedirect(), grant_type: 'authorization_code'
+    }).toString(), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 15000 });
+    const { refresh_token: refresh, id_token: idToken } = res.data || {};
+    if (!refresh) throw new Error('لم يمنح Google صلاحية دائمة. احذف وصول التطبيق من حساب Google ثم أعد الربط.');
+    let email = '';
+    try { email = JSON.parse(Buffer.from(String(idToken).split('.')[1], 'base64url').toString()).email || ''; } catch { /* optional */ }
+    storageService.updateSettings({ calendar: {
+      oauth_refresh_token: refresh, oauth_email: email, oauth_connected_at: new Date().toISOString(),
+      calendar_id: email || cfg.calendar_id || 'primary', enabled: true
+    } });
+    storageService.setState('calendar_oauth', null);
+    this._token = null; this._busy = null;
+    return { email };
+  }
+
+  async disconnect() {
+    const cfg = this.getConfig();
+    if (cfg.oauth_refresh_token) axios.post(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(cfg.oauth_refresh_token)}`).catch(() => {});
+    storageService.updateSettings({ calendar: { oauth_refresh_token: '', oauth_email: '', oauth_connected_at: null } });
+    this._token = null;
   }
 
   async token() {
+    if (this.usesOAuth()) {
+      const cfg = this.getConfig();
+      const now = Math.floor(Date.now() / 1000);
+      if (this._token && this._token.email === 'oauth' && this._token.exp - 60 > now) return this._token.value;
+      const res = await axios.post(TOKEN_URL, new URLSearchParams({
+        client_id: cfg.google_client_id, client_secret: cfg.google_client_secret, refresh_token: cfg.oauth_refresh_token, grant_type: 'refresh_token'
+      }).toString(), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 15000 });
+      this._token = { value: res.data.access_token, exp: now + (res.data.expires_in || 3600), email: 'oauth' };
+      return this._token.value;
+    }
     const sa = this.serviceAccount();
     if (!sa) throw new Error('NO_SA');
     const now = Math.floor(Date.now() / 1000);
@@ -468,6 +550,18 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
   /** Settings → "فحص التقويم". */
   async test() {
     const cfg = this.getConfig();
+    if (this.usesOAuth()) {
+      try {
+        const next = await this.suggestions(3);
+        return {
+          success: true, connected_email: cfg.oauth_email,
+          message: `التقويم مربوط بحساب ${cfg.oauth_email || 'Google'}.${next.length ? ` أقرب الأوقات المتاحة: ${next.map(d => this.label(d)).join('، ')}.` : ' لا توجد أوقات متاحة ضمن أوقات الحجز خلال الأيام القادمة.'}`
+        };
+      } catch (e) {
+        const msg = e.response?.data?.error_description || e.response?.data?.error?.message || e.message;
+        return { success: false, message: /invalid_grant/.test(msg) ? 'انتهى إذن Google أو أُلغي. اضغط «ربط التقويم» مرة أخرى.' : `تعذّر الوصول إلى التقويم: ${msg}` };
+      }
+    }
     const sa = this.serviceAccount();
     if (!sa) return { success: false, message: 'يلزم ملف Service Account من Google — أضفه في بطاقة Google Sheets أولاً (نفس الحساب يُستخدم للتقويم).' };
     if (!cfg.calendar_id) return { success: false, message: 'اكتب معرّف تقويم المهندس (عادةً بريده على Gmail).', service_account_email: sa.client_email };

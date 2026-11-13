@@ -220,7 +220,10 @@ function selectConversation(id, { open = false } = {}) {
   document.getElementById('side-lead-solution').textContent = conv.proposed_solution || 'لم يحدد بعد';
   renderAiCall(conv);
   const apptBox = document.getElementById('side-lead-appointment-box');
-  if (apptBox) {
+  if (apptBox && !conv.appointment_at && conv.requested_meeting_time) {
+    apptBox.style.display = '';
+    document.getElementById('side-lead-appointment').textContent = `الوقت المطلوب (يحتاج تأكيد): ${conv.requested_meeting_time}`;
+  } else if (apptBox) {
     apptBox.style.display = conv.appointment_at ? '' : 'none';
     if (conv.appointment_at) {
       document.getElementById('side-lead-appointment').innerHTML = escapeHtml(conv.appointment_label || new Date(conv.appointment_at).toLocaleString('ar'))
@@ -780,7 +783,11 @@ async function loadSettings() {
       document.getElementById('bh-hold-emails').checked = !!bh.hold_emails_until_open;
       const cal = s.calendar || {};
       document.getElementById('cal-enabled').checked = !!cal.enabled;
-      document.getElementById('cal-id').value = cal.calendar_id || '';
+      document.getElementById('cal-id').value = cal.oauth_email || cal.calendar_id || '';
+      document.getElementById('cal-client-id').value = cal.google_client_id || '';
+      document.getElementById('cal-client-secret').value = cal.google_client_secret || '';
+      document.getElementById('cal-redirect').textContent = `${location.origin}/oauth/google/callback`;
+      renderCalendarConnect(cal);
       const calDays = Array.isArray(cal.days) ? cal.days.map(Number) : [0, 1, 2, 3, 4, 5, 6];
       document.querySelectorAll('.cal-day').forEach(cb => { cb.checked = calDays.includes(Number(cb.value)); });
       document.getElementById('cal-all-day').checked = !!cal.all_day;
@@ -893,6 +900,8 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
     calendar: {
       enabled: document.getElementById('cal-enabled').checked,
       calendar_id: document.getElementById('cal-id').value.trim(),
+      google_client_id: document.getElementById('cal-client-id').value.trim(),
+      google_client_secret: document.getElementById('cal-client-secret').value,
       days: [...document.querySelectorAll('.cal-day')].filter(cb => cb.checked).map(cb => Number(cb.value)),
       all_day: document.getElementById('cal-all-day').checked,
       start: document.getElementById('cal-start').value || '09:00',
@@ -1704,3 +1713,55 @@ document.getElementById('btn-phone-connect')?.addEventListener('click', async ()
     box.innerHTML = `<i class="fa-solid fa-circle-xmark st-bad"></i> ${escapeHtml(err.message)}`;
   }
 });
+
+// ---------------- Google Calendar: connect with the engineer's Google sign-in
+function renderCalendarConnect(cal) {
+  const box = document.getElementById('cal-connect-status');
+  if (!box) return;
+  const connected = !!cal.oauth_email;
+  box.innerHTML = connected
+    ? `<i class="fa-solid fa-circle-check st-ok"></i> مربوط بحساب <b dir="ltr">${escapeHtml(cal.oauth_email)}</b>${cal.oauth_connected_at ? ` منذ ${escapeHtml(new Date(cal.oauth_connected_at).toLocaleDateString('ar'))}` : ''}`
+    : '<i class="fa-solid fa-circle-xmark st-bad"></i> غير مربوط';
+  document.getElementById('btn-cal-disconnect').style.display = connected ? '' : 'none';
+}
+
+async function calendarConnectLink() {
+  // Save the email and Google keys first (the secret stays untouched if it is still the masked value).
+  await fetch('/api/settings', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ calendar: {
+      calendar_id: document.getElementById('cal-id').value.trim(),
+      google_client_id: document.getElementById('cal-client-id').value.trim(),
+      google_client_secret: document.getElementById('cal-client-secret').value
+    } })
+  });
+  const r = await (await fetch('/api/calendar/connect-link', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: document.getElementById('cal-id').value.trim() })
+  })).json();
+  if (!r.success) {
+    showToast(r.message || 'تعذّر إنشاء رابط الربط', 'error');
+    document.querySelector('.cal-oauth-setup')?.setAttribute('open', '');
+    return null;
+  }
+  return r.link;
+}
+
+document.getElementById('btn-cal-connect')?.addEventListener('click', async () => {
+  const link = await calendarConnectLink();
+  if (link) { window.open(link, '_blank', 'noopener'); showToast('سجّل الدخول بحساب المهندس واضغط «السماح»، ثم ارجع هنا.', 'info'); }
+});
+document.getElementById('btn-cal-link')?.addEventListener('click', async () => {
+  const link = await calendarConnectLink();
+  if (!link) return;
+  try { await navigator.clipboard.writeText(link); showToast('تم نسخ رابط الربط — أرسله للمهندس (صالح لمدة ساعتين)', 'success'); }
+  catch { prompt('رابط الربط:', link); }
+});
+document.getElementById('btn-cal-disconnect')?.addEventListener('click', async () => {
+  if (!confirm('فصل تقويم المهندس؟ سيتوقف الحجز التلقائي حتى يُربط من جديد.')) return;
+  await fetch('/api/calendar/disconnect', { method: 'POST' });
+  showToast('تم فصل التقويم', 'success');
+  loadSettings();
+});
+// Coming back to the tab after connecting → refresh the status.
+document.addEventListener('visibilitychange', () => { if (!document.hidden && currentTab === 'settings') loadSettings(); });

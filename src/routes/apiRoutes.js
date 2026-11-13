@@ -37,7 +37,8 @@ const SECRET_FIELDS = {
   google_sheets: ['service_account_json', 'private_key'],
   notifications: ['gmail_app_password'],
   telegram: ['bot_token'],
-  phone_ai: ['twilio_auth_token']
+  phone_ai: ['twilio_auth_token'],
+  calendar: ['google_client_secret', 'oauth_refresh_token']
 };
 const MASK = '••••••••';
 const isMasked = (v) => typeof v === 'string' && v.startsWith(MASK);
@@ -68,6 +69,16 @@ function stripMasked(body) {
 
 router.get('/settings', (req, res) => {
   res.json({ success: true, settings: maskSettings(storageService.getSettings()) });
+});
+
+// Google Calendar: one-time sign-in link for the engineer, and disconnect.
+router.post('/calendar/connect-link', (req, res) => {
+  try { res.json({ success: true, ...require('../services/calendarService').connectLink(req.body?.email) }); }
+  catch (e) { res.status(400).json({ success: false, message: e.message }); }
+});
+router.post('/calendar/disconnect', async (req, res) => {
+  await require('../services/calendarService').disconnect();
+  res.json({ success: true, message: 'تم فصل التقويم' });
 });
 
 // Google Calendar: check access and show the nearest free times.

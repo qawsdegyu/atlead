@@ -72,6 +72,26 @@ const callRoutes = require('./src/routes/callRoutes');
 app.use('/call', callRoutes.page);
 app.use('/api/call', callRoutes.api);
 
+// Google Calendar: the engineer signs in with Google once (link from the dashboard). State-protected.
+const calendarPage = (ok, title, body) => `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>atlead — ${title}</title>
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0b;color:#f4f4f5;font-family:system-ui,Tahoma,sans-serif;padding:24px;text-align:center}
+.card{max-width:420px}.mark{font-size:30px;font-weight:700;background:linear-gradient(90deg,#ef3b2d,#ff6f20,#ffa04d);-webkit-background-clip:text;background-clip:text;color:transparent;direction:ltr}
+h1{font-size:22px;margin:22px 0 10px;color:${ok ? '#4ade80' : '#ffb37f'}}p{color:#a8a8b0;line-height:1.7}</style></head><body><div class="card"><div class="mark">atlead.</div><h1>${title}</h1><p>${body}</p></div></body></html>`;
+app.get('/connect-calendar/:token', (req, res) => {
+  const url = require('./src/services/calendarService').googleAuthUrl(String(req.params.token));
+  if (!url) return res.status(410).send(calendarPage(false, 'الرابط منتهي', 'انتهت صلاحية رابط الربط. اطلب رابطاً جديداً من لوحة تحكم atlead.'));
+  res.redirect(url);
+});
+app.get('/oauth/google/callback', async (req, res) => {
+  if (req.query.error) return res.status(400).send(calendarPage(false, 'لم يتم الربط', 'تم إلغاء الموافقة على Google. يمكنك فتح الرابط مرة أخرى والضغط على «السماح».'));
+  try {
+    const { email } = await require('./src/services/calendarService').finishConnect(String(req.query.code || ''), String(req.query.state || ''));
+    res.send(calendarPage(true, 'تم ربط التقويم', `تقويم ${escAttr(email || 'Google')} مربوط الآن بـ atlead. سيحجز المساعد مواعيد الاستشارة فيه تلقائياً في الأوقات المتاحة فقط. يمكنك إغلاق هذه الصفحة.`));
+  } catch (e) {
+    res.status(400).send(calendarPage(false, 'لم يتم الربط', escAttr(e.response?.data?.error_description || e.message)));
+  }
+});
+
 // AI phone line (Twilio). Public, but every request must carry a valid Twilio signature.
 const phoneService = require('./src/services/phoneService');
 const twiml = (res, body) => res.type('text/xml').send(body);

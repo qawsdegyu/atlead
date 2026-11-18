@@ -423,6 +423,11 @@ router.post('/phone/connect', async (req, res) => {
   try { res.json(await require('../services/phoneService').connect()); } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });
 
+// --- AI voice call: can the OpenAI key start a voice session? (admin)
+router.post('/calls/check-key', async (req, res) => {
+  try { res.json(await require('../services/callService').checkKey()); } catch (e) { res.status(500).json({ ok: false, message: e.message }); }
+});
+
 // --- AI voice call (admin side)
 router.get('/calls/:token', (req, res) => {
   const s = require('../services/callService').get(req.params.token);

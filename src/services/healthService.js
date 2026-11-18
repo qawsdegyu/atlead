@@ -306,6 +306,14 @@ class HealthService {
     return r.success ? ok('calendar', label, r.message) : fail('calendar', label, r.message);
   }
 
+  async checkAiCall() {
+    const cs = require('./callService');
+    const label = 'مكالمة الـ AI الصوتية';
+    if (!cs.getConfig().enabled) return warn('ai_call', label, 'متوقفة — لا يعرض البوت رابط المكالمة على العملاء.');
+    const r = await cs.checkKey();
+    return r.ok ? ok('ai_call', label, r.message) : fail('ai_call', label, r.message);
+  }
+
   checkPhone() {
     const p = require('./phoneService');
     const c = p.getConfig();
@@ -329,7 +337,8 @@ class HealthService {
       safe('Gmail', 'email', () => this.checkEmail()),
       safe('التسويق الذكي وتليجرام', 'marketing', () => this.checkMarketing()),
       safe('Google Calendar', 'calendar', () => this.checkCalendar()),
-      safe('الهاتف', 'phone', () => this.checkPhone())
+      safe('الهاتف', 'phone', () => this.checkPhone()),
+      safe('مكالمة الـ AI', 'ai_call', () => this.checkAiCall())
     ]);
     const all = [...results.flat(), ...this.checkBotRules(), ...this.checkSecurity()];
     return {

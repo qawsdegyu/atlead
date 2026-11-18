@@ -206,6 +206,36 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
     ];
   }
 
+  /**
+   * Admin check: can this OpenAI key start a voice session? Returns OpenAI's own reason when not
+   * (never the key). Tries each voice model, newest first.
+   */
+  async checkKey() {
+    const key = this.apiKey();
+    if (!key) return { ok: false, message: 'لا يوجد OpenAI API Key.' };
+    const cfg = this.getConfig();
+    const models = [...new Set([cfg.model, ...FALLBACK_MODELS].filter(Boolean))];
+    const tried = [];
+    for (const model of models) {
+      try {
+        await axios.post('https://api.openai.com/v1/realtime/client_secrets', {
+          expires_after: { anchor: 'created_at', seconds: 10 },
+          session: { type: 'realtime', model, instructions: 'test', audio: { output: { voice: cfg.voice || 'marin' } } }
+        }, { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, timeout: 20000 });
+        if (model !== cfg.model) storageService.updateSettings({ ai_call: { model } }); // remember the model that works
+        return { ok: true, model, message: `مفتاح OpenAI يعمل للمكالمات الصوتية (النموذج ${model}).` };
+      } catch (e) {
+        const status = e.response?.status;
+        const err = e.response?.data?.error || {};
+        tried.push({ model, status, code: err.code || err.type || null, reason: err.message || e.message });
+        if (status === 401) return { ok: false, tried, message: 'مفتاح OpenAI غير صحيح أو محذوف. أنشئ مفتاحاً جديداً من platform.openai.com ← API keys والصقه من جديد.' };
+        if (status === 429 || /quota|billing|insufficient/i.test(err.message || '')) return { ok: false, tried, message: 'حساب OpenAI بدون رصيد. اشحن رصيداً من platform.openai.com ← Settings ← Billing ثم جرّب مرة أخرى.' };
+        if (status === 403) return { ok: false, tried, message: `حساب OpenAI لا يملك صلاحية على نماذج الصوت: ${err.message || ''}` };
+      }
+    }
+    return { ok: false, tried, message: `رفض OpenAI بدء المكالمة: ${tried.map(t => `${t.model}: ${t.reason}`).join(' | ')}` };
+  }
+
   /** Short-lived key for the browser (the OpenAI key itself never leaves the server). */
   async startRealtime(token) {
     const { session, error } = this.usable(token);

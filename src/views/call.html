@@ -3,18 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0a0a0b">
+<meta name="theme-color" content="#070506">
+<link rel="icon" href="/brand/favicon-32.png">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
 <meta name="robots" content="noindex">
 <title>atlead — مكالمة</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root { --bg: #0a0a0b; --ink: #f4f4f5; --muted: #8b8b94; --line: #26262a; --orange: #ff6f20; --red: #ef3b2d; --grad: linear-gradient(90deg, #ef3b2d 0%, #ff6f20 55%, #ffa04d 100%); }
+  :root { --bg: #070506; --ink: #f4f4f5; --muted: #9a8f8c; --line: #2a2223; --orange: #ff6a42; --red: #ff3d33; --grad: linear-gradient(90deg, #ff3d33 0%, #ff6a42 50%, #ff914d 100%); }
+  body { background: radial-gradient(circle at 100% 0%, rgba(253, 131, 1, .22), transparent 40%), radial-gradient(circle at 0% 100%, rgba(195, 62, 0, .28), transparent 42%), var(--bg); }
   * { box-sizing: border-box; margin: 0; }
   html, body { height: 100%; background: var(--bg); color: var(--ink); font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
   body { display: flex; flex-direction: column; min-height: 100dvh; padding: env(safe-area-inset-top) 20px calc(env(safe-area-inset-bottom) + 20px); overflow: hidden; }
   header { display: flex; align-items: center; justify-content: space-between; height: 64px; }
-  .mark { font-size: 26px; font-weight: 700; letter-spacing: -.8px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; direction: ltr; }
+  .mark { width: 112px; height: auto; display: block; }
   .timer { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; direction: ltr; min-width: 48px; text-align: end; }
   main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 28px; }
   h1 { font-size: 26px; font-weight: 700; line-height: 1.35; max-width: 340px; }
@@ -22,10 +25,10 @@
 
   /* The orb: breathes when idle, follows the AI's voice when it speaks */
   .orb-wrap { position: relative; width: 220px; height: 220px; display: grid; place-items: center; }
-  .orb { width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffb37f 0%, #ff6f20 38%, #c2410c 70%, #3a1405 100%);
-    box-shadow: 0 0 60px rgba(255, 111, 32, .35), inset 0 -10px 30px rgba(0, 0, 0, .35); transform: scale(var(--level, 1)); transition: transform .08s linear; }
-  .ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(255, 111, 32, .25); transform: scale(var(--ring, 1)); transition: transform .12s linear, opacity .3s; }
-  .ring.r2 { inset: -18px; border-color: rgba(255, 111, 32, .12); }
+  .orb { width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ffc09b 0%, #ff914d 26%, #ff6a42 50%, #ff3d33 74%, #4a0c06 100%);
+    box-shadow: 0 0 60px rgba(255, 106, 66, .38), inset 0 -10px 30px rgba(0, 0, 0, .35); transform: scale(var(--level, 1)); transition: transform .08s linear; }
+  .ring { position: absolute; inset: 0; border-radius: 50%; border: 1px solid rgba(255, 106, 66, .25); transform: scale(var(--ring, 1)); transition: transform .12s linear, opacity .3s; }
+  .ring.r2 { inset: -18px; border-color: rgba(255, 106, 66, .12); }
   body.idle .orb { animation: breathe 3.2s ease-in-out infinite; }
   body.listening .orb { filter: saturate(.75) brightness(.9); }
   @keyframes breathe { 50% { transform: scale(1.05); } }
@@ -34,7 +37,7 @@
 
   .controls { display: flex; align-items: center; justify-content: center; gap: 22px; }
   .btn { border: 0; cursor: pointer; font: inherit; color: var(--ink); }
-  .call { min-width: 240px; height: 60px; border-radius: 30px; background: var(--orange); color: #160a03; font-size: 18px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(255, 111, 32, .3); }
+  .call { min-width: 240px; height: 60px; border-radius: 30px; background: var(--grad); color: #160a03; font-size: 18px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 10px 30px rgba(255, 106, 66, .32); }
   .call:active { transform: scale(.97); }
   .call[disabled] { opacity: .6; }
   .round { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: #1b1b1e; border: 1px solid var(--line); }
@@ -51,7 +54,7 @@
 </head>
 <body class="idle">
   <header>
-    <span class="mark">atlead.</span>
+    <img class="mark" src="/brand/atlead-logo.png" alt="atlead.">
     <span class="timer" id="timer"></span>
   </header>
 

@@ -67,6 +67,10 @@ app.get('/media/:name', async (req, res) => {
 // Webhooks must stay public (Meta calls them). Everything else = admin dashboard.
 app.use('/webhook', webhookRoutes);
 
+// Brand files (logo, icons, banner) are public: the login page, the call page and link previews use them.
+app.use('/brand', express.static(path.join(__dirname, 'public', 'brand'), { maxAge: '7d' }));
+app.get('/favicon.ico', (req, res) => res.sendFile(path.join(__dirname, 'public', 'brand', 'favicon-32.png'), { dotfiles: 'allow', maxAge: '7d' }));
+
 // The customer's AI voice call page (public; access = the private link token).
 const callRoutes = require('./src/routes/callRoutes');
 app.use('/call', callRoutes.page);
@@ -76,7 +80,7 @@ app.use('/api/call', callRoutes.api);
 const calendarPage = (ok, title, body) => `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>atlead — ${title}</title>
 <style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0b;color:#f4f4f5;font-family:system-ui,Tahoma,sans-serif;padding:24px;text-align:center}
 .card{max-width:420px}.mark{font-size:30px;font-weight:700;background:linear-gradient(90deg,#ef3b2d,#ff6f20,#ffa04d);-webkit-background-clip:text;background-clip:text;color:transparent;direction:ltr}
-h1{font-size:22px;margin:22px 0 10px;color:${ok ? '#4ade80' : '#ffb37f'}}p{color:#a8a8b0;line-height:1.7}</style></head><body><div class="card"><div class="mark">atlead.</div><h1>${title}</h1><p>${body}</p></div></body></html>`;
+h1{font-size:22px;margin:22px 0 10px;color:${ok ? '#4ade80' : '#ffb37f'}}p{color:#a8a8b0;line-height:1.7}</style></head><body><div class="card"><img src="/brand/atlead-logo.png" alt="atlead." style="width:150px;height:auto"><h1>${title}</h1><p>${body}</p></div></body></html>`;
 app.get('/connect-calendar/:token', (req, res) => {
   const url = require('./src/services/calendarService').googleAuthUrl(String(req.params.token));
   if (!url) return res.status(410).send(calendarPage(false, 'الرابط منتهي', 'انتهت صلاحية رابط الربط. اطلب رابطاً جديداً من لوحة تحكم atlead.'));
@@ -131,12 +135,17 @@ const safeNext = (n) => (/^\/(?![/\\])/.test(String(n || '')) ? String(n) : '/')
 const escAttr = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 const loginPage = (error = '', next = '/') => `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>تسجيل الدخول — atlead</title>
-<style>body{font-family:system-ui,sans-serif;background:#f4f5f7;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
-form{background:#fff;padding:32px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);width:300px}
-h1{font-size:1.3rem;margin:0 0 20px}label{display:block;font-size:.9rem;margin:12px 0 4px}
-input{width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:1rem}
-button{margin-top:20px;width:100%;padding:11px;border:0;border-radius:8px;background:#4f46e5;color:#fff;font-size:1rem;cursor:pointer}
-.err{color:#c00;font-size:.9rem;margin-top:10px}</style></head><body>
+<link rel="icon" href="/brand/favicon-32.png"><link rel="apple-touch-icon" href="/brand/apple-touch-icon.png"><meta name="theme-color" content="#070506">
+<style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:24px;
+background:radial-gradient(circle at 100% 0%,rgba(253,131,1,.28),transparent 38%),radial-gradient(circle at 0% 100%,rgba(195,62,0,.35),transparent 40%),#070506;color:#f4f4f5;font-family:'IBM Plex Sans Arabic',system-ui,Tahoma,sans-serif}
+.brand{display:flex;align-items:center;gap:18px;direction:ltr}.brand img{width:170px;height:auto}.brand .sep{width:1px;height:46px;background:rgba(255,255,255,.35)}
+.brand .tag{font-size:13px;letter-spacing:.5px;line-height:1.15;color:#fff;text-align:left}.brand .tag b{display:block;font-size:17px;letter-spacing:.3px}
+form{width:min(340px,100%);background:rgba(20,16,17,.86);border:1px solid #2a2223;padding:28px;border-radius:16px;backdrop-filter:blur(10px)}
+h1{font-size:1.15rem;margin:0 0 18px;font-weight:700}label{display:block;font-size:.85rem;margin:14px 0 6px;color:#b4a9a6}
+input{width:100%;padding:12px;border:1px solid #34292a;border-radius:10px;font-size:16px;background:#0d0a0a;color:#f4f4f5}input:focus{outline:none;border-color:#ff6a42;box-shadow:0 0 0 3px rgba(255,106,66,.25)}
+button{margin-top:22px;width:100%;padding:12px;border:0;border-radius:10px;background:linear-gradient(90deg,#ff3d33,#ff6a42,#ff914d);color:#1a0703;font-size:1rem;font-weight:700;cursor:pointer}
+.err{color:#ffb08a;font-size:.9rem;margin-top:12px}</style></head><body>
+<div class="brand"><img src="/brand/atlead-logo.png" alt="atlead."><span class="sep"></span><span class="tag">FROM LEADS<b>TO REVENUE</b></span></div>
 <form method="post" action="/login"><input type="hidden" name="next" value="${escAttr(next)}"><h1>لوحة تحكم atlead</h1>
 <label>اسم المستخدم</label><input name="username" autocomplete="username" value="admin">
 <label>كلمة السر</label><input name="password" type="password" autocomplete="current-password" autofocus>

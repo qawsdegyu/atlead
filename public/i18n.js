@@ -650,6 +650,7 @@
     ['تم نسخ الكود!', 'Code copied!'],
     ['تم نسخ استعلام SQL!', 'SQL query copied!'],
 
+    ['قائمة المحادثات', 'Conversations'],
     // Reels & keyword rules
     ["الريلز والمنشورات عندك", "Your reels and posts"],
     ["ريلز", "Reels"],

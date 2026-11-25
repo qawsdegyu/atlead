@@ -175,19 +175,50 @@ async function loadConversations(filterChannel = 'all') {
   }
 }
 
+function markRead(conv) {
+  conv.unread_count = 0;
+  conv.unread = false;
+  fetch(`/api/conversations/${encodeURIComponent(conv.id)}/read`, { method: 'POST' }).catch(() => {});
+}
+
+// New messages show up (and the unread number updates) while the inbox is open.
+setInterval(async () => {
+  if (currentTab !== 'inbox' || document.hidden) return;
+  try {
+    const data = await fetch('/api/conversations').then(r => r.json());
+    if (!data.success) return;
+    const before = conversations.find(c => c.id === activeConvId);
+    const beforeCount = before?.messages?.length || 0;
+    conversations = data.conversations;
+    const now = conversations.find(c => c.id === activeConvId);
+    const chatVisible = !isPhone() || document.querySelector('.inbox-layout')?.classList.contains('chat-open');
+    if (now && chatVisible && (now.messages?.length || 0) !== beforeCount) {
+      selectConversation(activeConvId, { open: isPhone() });
+    } else {
+      if (now && chatVisible && Number(now.unread_count) > 0) markRead(now);
+      renderConversationList();
+    }
+  } catch { /* offline: try again next time */ }
+}, 15000);
+
 function renderConversationList(filter) {
   const activeFilter = filter || document.querySelector('.filter-chip.active')?.dataset.filter || 'all';
   conversationList.innerHTML = '';
   const searchVal = document.getElementById('conv-search')?.value.toLowerCase() || '';
 
-  const totalCount = conversations.length;
+  // The number = chats with messages not opened yet; it goes away as they are read.
+  const unreadChats = conversations.filter(c => (Number(c.unread_count) || 0) > 0).length;
   const navBadge = document.getElementById('nav-inbox-count');
   if (navBadge) {
-    navBadge.textContent = String(totalCount);
-    navBadge.style.display = totalCount > 0 ? '' : 'none';
+    navBadge.textContent = String(unreadChats);
+    navBadge.style.display = unreadChats > 0 ? '' : 'none';
   }
   const listCount = document.getElementById('conv-list-count');
-  if (listCount) listCount.textContent = String(totalCount);
+  if (listCount) {
+    listCount.textContent = String(unreadChats);
+    listCount.style.display = unreadChats > 0 ? '' : 'none';
+    listCount.title = tr(`${unreadChats} unread chats`, `${unreadChats} محادثات غير مقروءة`);
+  }
 
   let filtered = conversations.filter(c => {
     const matchSearch = (c.customer_name || '').toLowerCase().includes(searchVal) ||
@@ -280,6 +311,8 @@ function selectConversation(id, { open = false } = {}) {
   activeConvId = id;
   const conv = conversations.find(c => c.id === id);
   if (!conv) return;
+  // Seen on screen (desktop shows the chat; on a phone only when tapped) → mark as read.
+  if ((open || !isPhone()) && Number(conv.unread_count) > 0) markRead(conv);
 
   renderConversationList();
 
@@ -495,9 +528,43 @@ document.getElementById('manual-reply-form').addEventListener('submit', async (e
   }
 });
 
+// Filter row: swipe on a phone, drag with the mouse or scroll the wheel on a computer.
+document.querySelectorAll('.filter-tags').forEach(row => {
+  let startX = 0, startScroll = 0, down = false, moved = false;
+  row.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse') return; // touch already scrolls natively
+    down = true; moved = false; startX = e.clientX; startScroll = row.scrollLeft;
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!down) return;
+    const dx = e.clientX - startX;
+    if (Math.abs(dx) > 4) { moved = true; row.classList.add('dragging'); }
+    row.scrollLeft = startScroll - dx;
+  });
+  window.addEventListener('pointerup', () => { down = false; row.classList.remove('dragging'); });
+  // A drag is not a click on the chip under the mouse.
+  row.addEventListener('click', (e) => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+  row.addEventListener('wheel', (e) => {
+    if (row.scrollWidth <= row.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    e.preventDefault();
+    row.scrollLeft += document.documentElement.dir === 'rtl' ? -e.deltaY : e.deltaY;
+  }, { passive: false });
+  const edges = () => {
+    const max = row.scrollWidth - row.clientWidth;
+    const pos = Math.abs(row.scrollLeft);
+    row.classList.toggle('more-start', pos > 2);
+    row.classList.toggle('more-end', max - pos > 2);
+  };
+  row.addEventListener('scroll', edges, { passive: true });
+  window.addEventListener('resize', edges);
+  window.addEventListener('atlead:langchange', () => setTimeout(edges, 50));
+  setTimeout(edges, 300);
+});
+
 // Filters
 document.querySelectorAll('.filter-chip').forEach(chip => {
   chip.addEventListener('click', () => {
+    chip.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
     document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
     renderConversationList(chip.dataset.filter);

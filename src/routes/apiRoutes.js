@@ -375,7 +375,29 @@ router.get('/conversations', (req, res) => {
     list = list.filter(c => c.lead_stage === stage);
   }
 
-  res.json({ success: true, conversations: list });
+  res.json({ success: true, conversations: list.map(c => ({ ...c, unread_count: unreadCount(c) })) });
+});
+
+// Customer messages the team has not opened yet. Before a chat was ever opened in the
+// dashboard, only the customer's latest messages (after the last reply) count.
+function unreadCount(c) {
+  const msgs = c.messages || [];
+  if (c.last_read_at) {
+    const seen = Date.parse(c.last_read_at);
+    return msgs.filter(m => m.sender === 'customer' && Date.parse(m.created_at || 0) > seen).length;
+  }
+  let n = 0;
+  for (let i = msgs.length - 1; i >= 0 && msgs[i].sender === 'customer'; i--) n++;
+  return n;
+}
+
+// The team opened this chat: its messages are read.
+router.post('/conversations/:id/read', (req, res) => {
+  const conv = storageService.getConversationById(req.params.id);
+  if (!conv) return res.status(404).json({ success: false, message: 'المحادثة غير موجودة' });
+  const saved = storageService.saveConversation({ id: conv.id, last_read_at: new Date().toISOString() });
+  supabaseService.saveConversation(saved).catch(() => {});
+  res.json({ success: true });
 });
 
 router.get('/conversations/:id', (req, res) => {

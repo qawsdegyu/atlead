@@ -50,6 +50,16 @@
   .hidden { display: none !important; }
   .err { color: #ffb37f; }
   footer { text-align: center; font-size: 11.5px; color: #5c5c64; }
+  .caption { font-size: 16px; line-height: 1.7; max-width: 360px; min-height: 28px; color: var(--ink); }
+  .caption.you { color: var(--muted); font-size: 14px; }
+  .typebox { display: flex; gap: 8px; width: 100%; max-width: 360px; }
+  .typebox input { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--ink); background: #141012; border: 1px solid var(--line); border-radius: 22px; padding: 11px 16px; outline: none; }
+  .typebox input:focus { border-color: var(--orange); }
+  .typebox .btn { border-radius: 22px; padding: 0 18px; background: var(--grad); color: #160a03; font-weight: 700; }
+  body.speaking.browser .orb { animation: talk .9s ease-in-out infinite; }
+  body.thinking .orb { animation: breathe 1.4s ease-in-out infinite; filter: saturate(.8); }
+  @keyframes talk { 0%, 100% { transform: scale(1); } 30% { transform: scale(1.12); } 60% { transform: scale(1.04); } }
+
 </style>
 </head>
 <body class="idle">
@@ -66,6 +76,7 @@
       <p class="sub" id="subtitle">نتعرّف على شغلك واحتياجك بصوتك، وإذا كل شي مناسب نحجزلك اجتماع مع المهندس.</p>
     </div>
     <p class="state hidden" id="state"></p>
+    <p class="caption hidden" id="caption" dir="auto"></p>
 
     <div class="controls" id="start-controls">
       <button class="btn call" id="btn-start" disabled>
@@ -89,6 +100,7 @@
       </div>
     </div>
 
+    <form class="typebox hidden" id="typebox" autocomplete="off"><input id="typed" dir="auto" maxlength="600"><button class="btn" type="submit" id="typed-send">إرسال</button></form>
     <p class="note" id="note">تحتاج إذن الميكروفون. المكالمة مسجّلة نصياً لخدمتك بشكل أفضل.</p>
   </main>
   <footer>atlead · From Leads to Revenue</footer>
@@ -105,14 +117,14 @@
     mute: 'Mute', unmute: 'Unmute', end: 'End', note: 'Microphone access is needed. The call is transcribed to serve you better.',
     endedT: 'Thank you!', endedS: 'We have everything we need. You will get a summary in the chat.',
     errors: { not_found: 'This call link is not valid.', expired: 'This call link has expired. Ask us in the chat for a new one.', completed: 'This call has already taken place. Thank you!', disabled: 'Calls are not available right now. Please write to us in the chat.', mic: 'Microphone access was blocked. Allow it in your browser settings and try again.', too_many: 'This link has been used too many times. Ask us in the chat for a new one.', failed: 'The call could not start. Please try again.' },
-    retry: 'Try again', dir: 'ltr'
+    retry: 'Try again', dir: 'ltr', thinking: 'One moment…', typeHint: 'Type your answer', send: 'Send', noVoice: 'Voice is not supported in this browser. You can type your answers.'
   } : {
     title: 'مكالمة قصيرة مع مساعد atlead', sub: 'نتعرّف على شغلك واحتياجك بصوتك، وإذا كل شي مناسب نحجزلك اجتماع مع المهندس.',
     start: 'ابدأ المكالمة', connecting: 'جاري الاتصال…', speaking: '<b>المساعد</b> يتحدث', listening: 'أنا أسمعك…', muted: 'الميكروفون مكتوم',
     mute: 'كتم', unmute: 'إلغاء الكتم', end: 'إنهاء', note: 'تحتاج إذن الميكروفون. المكالمة مسجّلة نصياً لخدمتك بشكل أفضل.',
     endedT: 'شكراً لك!', endedS: 'وصلتنا كل التفاصيل، ورح يوصلك ملخص بالمحادثة.',
     errors: { not_found: 'رابط المكالمة غير صالح.', expired: 'انتهت صلاحية رابط المكالمة. اطلب رابطاً جديداً بالمحادثة.', completed: 'تمت هذه المكالمة سابقاً. شكراً لك!', disabled: 'المكالمات غير متاحة حالياً. اكتب لنا بالمحادثة.', mic: 'تم منع الميكروفون. اسمح به من إعدادات المتصفح وحاول مرة أخرى.', too_many: 'تم استخدام هذا الرابط عدة مرات. اطلب رابطاً جديداً بالمحادثة.', failed: 'تعذّر بدء المكالمة. حاول مرة أخرى.' },
-    retry: 'حاول مرة أخرى', dir: 'rtl'
+    retry: 'حاول مرة أخرى', dir: 'rtl', thinking: 'لحظة…', typeHint: 'اكتب جوابك', send: 'إرسال', noVoice: 'المتصفح لا يدعم الصوت. يمكنك كتابة إجاباتك.'
   };
   let T = PACK(false);
   const $ = (id) => document.getElementById(id);
@@ -188,6 +200,7 @@
       if (!s.ok) { mic.getTracks().forEach(t => t.stop()); return fail(s.error || 'failed'); }
     } catch { mic.getTracks().forEach(t => t.stop()); return fail('failed'); }
     maxMin = s.max_minutes || maxMin;
+    if (s.mode === 'browser') { mic.getTracks().forEach(t => t.stop()); mic = null; return startBrowser(s); }
 
     pc = new RTCPeerConnection();
     pc.ontrack = (e) => { $('remote').srcObject = e.streams[0]; visualise(e.streams[0]); };
@@ -222,6 +235,140 @@
     setInterval(flush, 4000);
   }
 
+  // ---------- Browser voice (no OpenAI): the phone listens and speaks; the server runs the conversation ----------
+  let browserMode = false, rec = null, busy = false, speechLang = 'ar-JO', emptyListens = 0, typing = false;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  function unlockSpeech() {
+    // iOS only lets a page speak after a tap: speak an empty line inside the click.
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
+  }
+
+  function pickVoice(lang) {
+    const voices = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+    const base = lang.slice(0, 2);
+    return voices.find(v => v.lang === lang) || voices.find(v => v.lang && v.lang.toLowerCase().startsWith(base)) || null;
+  }
+
+  function speak(text) {
+    return new Promise((resolve) => {
+      if (!text || !window.speechSynthesis) return resolve();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = speechLang;
+      const v = pickVoice(speechLang);
+      if (v) u.voice = v;
+      u.rate = 1;
+      let done = false;
+      const finish = () => { if (!done) { done = true; clearTimeout(guard); resolve(); } };
+      // Some phones never fire onend: stop waiting after a generous estimate.
+      const guard = setTimeout(finish, 2500 + text.length * 110);
+      u.onend = finish; u.onerror = finish;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    });
+  }
+
+  function showCaption(text, you) {
+    const c = $('caption');
+    c.textContent = text || '';
+    c.classList.toggle('you', !!you);
+    c.classList.toggle('hidden', !text);
+  }
+
+  function useTyping(reason) {
+    typing = true;
+    $('typebox').classList.remove('hidden');
+    $('typed').placeholder = T.typeHint;
+    $('typed-send').textContent = T.send;
+    if (reason) setState(reason);
+  }
+
+  async function startBrowser(s) {
+    browserMode = true;
+    speechLang = s.speech_lang || (en ? 'en-US' : 'ar-JO');
+    document.body.classList.add('browser');
+    $('start-controls').classList.add('hidden');
+    $('live-controls').classList.remove('hidden');
+    started = Date.now();
+    tick = setInterval(() => {
+      const sec = Math.floor((Date.now() - started) / 1000);
+      $('timer').textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+      if (sec >= maxMin * 60) hangup('time_limit');
+    }, 1000);
+    if (!SR) useTyping(T.noVoice);
+    next('');
+  }
+
+  async function next(text) {
+    if (ended) return;
+    busy = true;
+    try { rec && rec.abort(); } catch (e) {}
+    mode('thinking browser'); setState(T.thinking);
+    let r;
+    try {
+      r = await api('/turn', { text });
+    } catch (e) { r = { ok: false }; }
+    if (ended) return;
+    if (!r || !r.ok) {
+      busy = false;
+      if (r && ['expired', 'completed', 'not_found'].includes(r.error)) return fail(r.error);
+      setState(T.errors.failed);
+      return typing ? null : setTimeout(listen, 1500);
+    }
+    if (r.say) {
+      mode('speaking browser'); setState(T.speaking); showCaption(r.say);
+      await speak(r.say);
+    }
+    busy = false;
+    if (r.end) return hangup('assistant');
+    if (typing) { mode('listening browser'); setState(T.typeHint); $('typed').focus(); return; }
+    listen();
+  }
+
+  function listen() {
+    if (ended || busy || !browserMode || typing) return;
+    if (muted) { mode('listening browser'); setState(T.muted); return; }
+    let finalText = '';
+    try {
+      rec = new SR();
+      rec.lang = speechLang;
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.maxAlternatives = 1;
+    } catch (e) { return useTyping(T.noVoice); }
+    rec.onresult = (e) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      showCaption((finalText + ' ' + interim).trim(), true);
+    };
+    rec.onerror = (e) => {
+      if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(e.error)) useTyping(e.error === 'audio-capture' ? T.noVoice : T.errors.mic);
+    };
+    rec.onend = () => {
+      rec = null;
+      if (ended || busy || typing) return;
+      const t = finalText.trim();
+      if (t) { emptyListens = 0; next(t); return; }
+      // Silence: keep listening (offer typing after a long silence).
+      if (++emptyListens >= 6) useTyping(T.typeHint);
+      else setTimeout(listen, 250);
+    };
+    mode('listening browser'); setState(T.listening);
+    try { rec.start(); } catch (e) { setTimeout(listen, 600); }
+  }
+
+  $('typebox').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const t = $('typed').value.trim();
+    if (!t || busy) return;
+    $('typed').value = '';
+    showCaption(t, true);
+    next(t);
+  });
+
   async function onEvent(ev) {
     switch (ev.type) {
       case 'input_audio_buffer.speech_started': mode('listening'); setState(muted ? T.muted : T.listening); break;
@@ -247,6 +394,9 @@
 
   function cleanup() {
     clearInterval(tick); cancelAnimationFrame(raf);
+    browserMode = false;
+    try { rec && rec.abort(); } catch (e) {}
+    try { window.speechSynthesis && speechSynthesis.cancel(); } catch (e) {}
     try { dc && dc.close(); } catch (e) {}
     try { pc && pc.close(); } catch (e) {}
     try { mic && mic.getTracks().forEach(t => t.stop()); } catch (e) {}
@@ -266,11 +416,12 @@
     mode('idle');
   }
 
-  $('btn-start').addEventListener('click', start);
+  $('btn-start').addEventListener('click', () => { unlockSpeech(); start(); });
   $('btn-end').addEventListener('click', () => hangup('customer'));
   $('btn-mute').addEventListener('click', () => {
     muted = !muted;
     mic && mic.getTracks().forEach(t => { t.enabled = !muted; });
+    if (browserMode) { if (muted) { try { rec && rec.abort(); } catch (e) {} } else if (!busy) listen(); }
     $('btn-mute').classList.toggle('on', muted);
     $('mute-label').textContent = muted ? T.unmute : T.mute;
     setState(muted ? T.muted : T.listening);

@@ -37,7 +37,7 @@ const FIELDS = [
 const VOLATILE = new Set(['lastContact', 'nextFollowUp', 'summary', 'requests']);
 
 const CHANNEL = { whatsapp: 'WhatsApp', instagram_dm: 'Instagram', facebook_messenger: 'Facebook Messenger', phone: 'هاتف', website: 'موقع إلكتروني' };
-const STAGE = { new: 'New', discovery: 'Discovery', qualified: 'Qualified', proposal: 'Proposal', hot: 'Hot', handed_off: 'Handoff', deal_closing: 'Handoff', won: 'Won', lost: 'Lost', follow_up: 'Follow-up' };
+const STAGE = { new: 'New', prospect: 'Prospect', discovery: 'Discovery', qualified: 'Qualified', proposal: 'Proposal', hot: 'Hot', handed_off: 'Handoff', deal_closing: 'Handoff', won: 'Won', lost: 'Lost', follow_up: 'Follow-up' };
 const DEAL = { won: 'اشترى', lost: 'لم يشترِ', pending_human: 'محوّل لموظف', not_purchased: 'متابعة' };
 
 function formId(url) {

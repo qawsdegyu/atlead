@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070506">
+<link rel="icon" href="/brand/favicon-32.png">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<meta property="og:title" content="atlead — استشارة مجانية">
+<meta property="og:description" content="عبّي النموذج خلال دقيقة، وفريق atlead بتواصل معك.">
+<meta property="og:image" content="/brand/banner.webp">
+<title>atlead — استشارة مجانية</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #070506; --panel: #120d0d; --ink: #f4f4f5; --muted: #a39793; --line: #2c2324; --orange: #ff6a42; --red: #ff3d33; --grad: linear-gradient(90deg, #ff3d33 0%, #ff6a42 50%, #ff914d 100%); }
+  * { box-sizing: border-box; margin: 0; }
+  html { background: var(--bg); }
+  body { min-height: 100dvh; color: var(--ink); font-family: 'IBM Plex Sans Arabic', system-ui, sans-serif; -webkit-tap-highlight-color: transparent;
+    background: radial-gradient(circle at 100% 0%, rgba(253, 131, 1, .18), transparent 38%), radial-gradient(circle at 0% 100%, rgba(195, 62, 0, .22), transparent 40%), var(--bg);
+    padding: calc(env(safe-area-inset-top) + 18px) 20px calc(env(safe-area-inset-bottom) + 28px); }
+  .wrap { max-width: 460px; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; }
+  .mark { width: 108px; height: auto; display: block; }
+  .lang { background: none; border: 1px solid var(--line); color: var(--muted); font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+  h1 { font-size: 28px; line-height: 1.3; font-weight: 700; }
+  .lede { color: var(--muted); font-size: 15.5px; line-height: 1.75; margin: 10px 0 26px; }
+  .facts { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 26px; }
+  .facts span { display: inline-flex; align-items: center; gap: 6px; }
+  .facts i { width: 7px; height: 7px; border-radius: 50%; background: var(--grad); display: inline-block; }
+  form { display: grid; gap: 16px; }
+  label { display: grid; gap: 7px; font-size: 14px; font-weight: 500; }
+  label small { color: var(--muted); font-weight: 400; }
+  input, textarea { width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; outline: none; transition: border-color .15s; }
+  textarea { min-height: 92px; resize: vertical; line-height: 1.6; }
+  input:focus, textarea:focus { border-color: var(--orange); }
+  input[type="tel"], input[type="email"] { direction: ltr; text-align: start; }
+  [dir="rtl"] input[type="tel"], [dir="rtl"] input[type="email"] { text-align: right; }
+  .bad input, .bad textarea { border-color: #ff7a59; }
+  .hint { display: none; color: #ffb37f; font-size: 12.5px; font-weight: 400; }
+  .bad .hint { display: block; }
+  fieldset { border: 0; padding: 0; display: grid; gap: 9px; }
+  legend { font-size: 14px; font-weight: 500; margin-bottom: 7px; }
+  .needs { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .need { position: relative; }
+  .need input { position: absolute; opacity: 0; pointer-events: none; }
+  .need span { display: flex; align-items: center; min-height: 52px; padding: 10px 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); font-size: 14px; line-height: 1.4; cursor: pointer; transition: border-color .15s, background .15s; }
+  .need input:checked + span { border-color: var(--orange); background: rgba(255, 106, 66, .1); }
+  .need input:focus-visible + span { outline: 2px solid var(--orange); outline-offset: 2px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  button.send { margin-top: 8px; height: 56px; border: 0; border-radius: 28px; background: var(--grad); color: #160a03; font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
+  button.send:active { transform: scale(.98); }
+  button.send[disabled] { opacity: .6; }
+  .err { color: #ffb37f; font-size: 14px; min-height: 20px; }
+  .privacy { color: #6f6563; font-size: 12px; line-height: 1.6; text-align: center; }
+  .done { display: none; text-align: center; padding-top: 40px; }
+  .done .tick { width: 76px; height: 76px; margin: 0 auto 22px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; }
+  .done .tick svg { width: 36px; height: 36px; }
+  .done p { color: var(--muted); line-height: 1.8; margin-top: 10px; }
+  body.sent form, body.sent .intro { display: none; }
+  body.sent .done { display: block; }
+  :focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+  @media (max-width: 360px) { .needs, .row2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img class="mark" src="/brand/atlead-logo.png" alt="atlead.">
+    <button type="button" class="lang" id="lang">English</button>
+  </header>
+
+  <div class="intro">
+    <h1 data-t="title">احجز استشارتك المجانية</h1>
+    <p class="lede" data-t="lede">أخبرنا عن مشروعك خلال دقيقة، وفريق atlead بتواصل معك على واتساب ليقترح الحل الأنسب لك.</p>
+    <div class="facts">
+      <span><i></i><b data-t="f1">مجانية بالكامل</b></span>
+      <span><i></i><b data-t="f2">30 دقيقة أونلاين</b></span>
+      <span><i></i><b data-t="f3">بدون أي التزام</b></span>
+    </div>
+  </div>
+
+  <form id="form" novalidate>
+    <label id="l-name"><span data-t="name">الاسم الكامل</span>
+      <input name="name" autocomplete="name" required maxlength="80">
+      <span class="hint" data-t="nameErr">اكتب اسمك.</span>
+    </label>
+    <label id="l-phone"><span data-t="phone">رقم الهاتف (واتساب)</span>
+      <input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="07X XXX XXXX" required maxlength="30">
+      <span class="hint" data-t="phoneErr">اكتب رقم هاتف صحيح.</span>
+    </label>
+    <label id="l-email"><span><span data-t="email">الإيميل</span> <small data-t="optional">(اختياري)</small></span>
+      <input name="email" type="email" inputmode="email" autocomplete="email" maxlength="120">
+      <span class="hint" data-t="emailErr">الإيميل غير صحيح.</span>
+    </label>
+    <div class="row2">
+      <label><span data-t="company">اسم المشروع</span><input name="company" autocomplete="organization" maxlength="100"></label>
+      <label><span data-t="business">نوع النشاط</span><input name="business" maxlength="100"></label>
+    </div>
+    <fieldset>
+      <legend data-t="need">شو بتحتاج؟</legend>
+      <div class="needs">
+        <label class="need"><input type="radio" name="need" value="chatbot" checked><span data-t="n_chatbot">بوت ذكي للرد على العملاء</span></label>
+        <label class="need"><input type="radio" name="need" value="sales"><span data-t="n_sales">نظام مبيعات و CRM</span></label>
+        <label class="need"><input type="radio" name="need" value="marketing"><span data-t="n_marketing">تسويق ومحتوى</span></label>
+        <label class="need"><input type="radio" name="need" value="voice"><span data-t="n_voice">مساعد مكالمات صوتي</span></label>
+        <label class="need"><input type="radio" name="need" value="other"><span data-t="n_other">غير ذلك</span></label>
+      </div>
+    </fieldset>
+    <label><span><span data-t="message">احكِ لنا باختصار عن مشروعك</span> <small data-t="optional">(اختياري)</small></span>
+      <textarea name="message" maxlength="1200"></textarea>
+    </label>
+    <label><span><span data-t="time">أنسب وقت للتواصل</span> <small data-t="optional">(اختياري)</small></span>
+      <input name="preferred_time" maxlength="120" data-ph="timePh" placeholder="مثلاً: الأحد بعد الساعة 4 العصر">
+    </label>
+    <p class="err" id="err" role="alert"></p>
+    <button class="send" type="submit" id="send" data-t="send">أرسل الطلب</button>
+    <p class="privacy" data-t="privacy">نستخدم بياناتك فقط للتواصل معك بخصوص الاستشارة.</p>
+  </form>
+
+  <div class="done" role="status">
+    <div class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="#160a03" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h1 data-t="doneTitle">وصلنا طلبك</h1>
+    <p data-t="doneText">شكراً لك. فريق atlead رح يتواصل معك على واتساب قريباً لتحديد موعد الاستشارة.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  const T = {
+    ar: {
+      title: 'احجز استشارتك المجانية', lede: 'أخبرنا عن مشروعك خلال دقيقة، وفريق atlead بتواصل معك على واتساب ليقترح الحل الأنسب لك.',
+      f1: 'مجانية بالكامل', f2: '30 دقيقة أونلاين', f3: 'بدون أي التزام',
+      name: 'الاسم الكامل', nameErr: 'اكتب اسمك.', phone: 'رقم الهاتف (واتساب)', phoneErr: 'اكتب رقم هاتف صحيح.',
+      email: 'الإيميل', emailErr: 'الإيميل غير صحيح.', optional: '(اختياري)', company: 'اسم المشروع', business: 'نوع النشاط',
+      need: 'شو بتحتاج؟', n_chatbot: 'بوت ذكي للرد على العملاء', n_sales: 'نظام مبيعات و CRM', n_marketing: 'تسويق ومحتوى', n_voice: 'مساعد مكالمات صوتي', n_other: 'غير ذلك',
+      message: 'احكِ لنا باختصار عن مشروعك', time: 'أنسب وقت للتواصل', timePh: 'مثلاً: الأحد بعد الساعة 4 العصر',
+      send: 'أرسل الطلب', sending: 'جاري الإرسال...', privacy: 'نستخدم بياناتك فقط للتواصل معك بخصوص الاستشارة.',
+      doneTitle: 'وصلنا طلبك', doneText: 'شكراً لك. فريق atlead رح يتواصل معك على واتساب قريباً لتحديد موعد الاستشارة.',
+      fail: 'ما قدرنا نرسل الطلب. تأكد من الإنترنت وجرّب مرة ثانية.', fix: 'صحّح الحقول المعلّمة.', other: 'English', doc: 'atlead — استشارة مجانية'
+    },
+    en: {
+      title: 'Book your free consultation', lede: 'Tell us about your business in a minute, and the atlead team will reach you on WhatsApp with the right solution.',
+      f1: 'Completely free', f2: '30 minutes online', f3: 'No commitment',
+      name: 'Full name', nameErr: 'Enter your name.', phone: 'Phone number (WhatsApp)', phoneErr: 'Enter a valid phone number.',
+      email: 'Email', emailErr: 'This email is not valid.', optional: '(optional)', company: 'Business name', business: 'Industry',
+      need: 'What do you need?', n_chatbot: 'AI chatbot for customer replies', n_sales: 'Sales system & CRM', n_marketing: 'Marketing & content', n_voice: 'AI voice assistant', n_other: 'Something else',
+      message: 'Tell us briefly about your business', time: 'Best time to reach you', timePh: 'e.g. Sunday after 4 PM',
+      send: 'Send request', sending: 'Sending...', privacy: 'We only use your details to contact you about the consultation.',
+      doneTitle: 'Request received', doneText: 'Thank you. The atlead team will contact you on WhatsApp soon to set your consultation time.',
+      fail: 'We could not send your request. Check your connection and try again.', fix: 'Fix the highlighted fields.', other: 'العربية', doc: 'atlead — Free consultation'
+    }
+  };
+  const params = new URLSearchParams(location.search);
+  let lang = params.get('lang') === 'en' || (!params.get('lang') && /^en/i.test(navigator.language || '') && !/^ar/i.test(navigator.language || '')) ? 'en' : 'ar';
+  const $ = (id) => document.getElementById(id);
+  function apply() {
+    const t = T[lang];
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.title = t.doc;
+    document.querySelectorAll('[data-t]').forEach(el => { if (t[el.dataset.t]) el.textContent = t[el.dataset.t]; });
+    document.querySelectorAll('[data-ph]').forEach(el => { el.placeholder = t[el.dataset.ph]; });
+    $('lang').textContent = t.other;
+  }
+  $('lang').addEventListener('click', () => { lang = lang === 'ar' ? 'en' : 'ar'; apply(); });
+  apply();
+
+  const form = $('form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const t = T[lang];
+    const data = Object.fromEntries(new FormData(form).entries());
+    data.ref = params.get('ref') || '';
+    data.lang = lang;
+    ['l-name', 'l-phone', 'l-email'].forEach(id => $(id).classList.remove('bad'));
+    $('err').textContent = '';
+    const btn = $('send');
+    btn.disabled = true; btn.textContent = t.sending;
+    try {
+      const res = await fetch('/api/consult', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      const out = await res.json().catch(() => ({}));
+      if (out.ok) { document.body.classList.add('sent'); window.scrollTo(0, 0); return; }
+      if (out.errors) {
+        Object.keys(out.errors).forEach(k => $(`l-${k}`)?.classList.add('bad'));
+        $('err').textContent = t.fix;
+        form.querySelector('.bad input')?.focus();
+      } else $('err').textContent = t.fail;
+    } catch { $('err').textContent = t.fail; }
+    btn.disabled = false; btn.textContent = t.send;
+  });
+})();
+</script>
+</body>
+</html>

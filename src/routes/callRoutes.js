@@ -26,6 +26,16 @@ api.post('/:token/start', guard, async (req, res) => {
   }
 });
 
+// Browser-voice calls: one conversation turn (customer words in, assistant sentence out).
+api.post('/:token/turn', guard, async (req, res) => {
+  try {
+    res.json({ ok: true, ...(await callService.turn(req.params.token, String(req.body?.text || ''))) });
+  } catch (e) {
+    console.warn('[Call] turn failed:', e.message);
+    res.status(['not_found', 'expired', 'completed'].includes(e.code) ? 400 : 502).json({ ok: false, error: e.code || 'failed' });
+  }
+});
+
 api.post('/:token/transcript', guard, (req, res) => {
   const s = callService.addTranscript(req.params.token, req.body?.lines);
   res.json({ ok: !!s });

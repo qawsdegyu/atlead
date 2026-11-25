@@ -82,6 +82,7 @@ const CHANNEL_LABELS = {
 
 const STAGE_LABELS = {
   new: 'جديد', New: 'جديد',
+  prospect: 'عميل محتمل (نموذج)', Prospect: 'عميل محتمل (نموذج)',
   discovery: 'استكشاف الاحتياج', Discovery: 'استكشاف الاحتياج',
   qualified: 'مؤهل', Qualified: 'مؤهل',
   hot: 'مهتم جداً', Hot: 'مهتم جداً',

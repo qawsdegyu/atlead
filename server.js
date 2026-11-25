@@ -76,6 +76,37 @@ const callRoutes = require('./src/routes/callRoutes');
 app.use('/call', callRoutes.page);
 app.use('/api/call', callRoutes.api);
 
+// Files the owner attached to a comment rule (public: they are sent to commenters in the DM).
+app.get('/files/:name', (req, res) => {
+  const name = String(req.params.name);
+  if (!/^rule_[\w.-]+$/.test(name)) return res.status(404).end();
+  const listed = require('./src/services/commentRules').list().some(r => r.file_url === `/files/${name}`);
+  if (!listed) return res.status(404).end();
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.sendFile(path.join(storageService.getUploadsDir(), name), { dotfiles: 'allow' }, (err) => { if (err && !res.headersSent) res.status(404).end(); });
+});
+
+// Free-consultation form (public; sent in comment DMs). Each submission becomes a Prospect lead.
+const consultHits = new Map();
+app.get('/consult', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'src', 'views', 'consult.html'), { dotfiles: 'allow' });
+});
+app.post('/api/consult', express.json({ limit: '20kb' }), async (req, res) => {
+  const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+  const now = Date.now();
+  const recent = (consultHits.get(ip) || []).filter(t => now - t < 60 * 60 * 1000);
+  if (recent.length >= 8) return res.status(429).json({ ok: false, error: 'too_many' });
+  consultHits.set(ip, [...recent, now]);
+  try {
+    const out = await require('./src/services/consultService').submit(req.body || {});
+    res.status(out.ok ? 200 : 400).json(out);
+  } catch (e) {
+    console.error('[Consult] submit failed:', e.message);
+    res.status(500).json({ ok: false, error: 'failed' });
+  }
+});
+
 // Google Calendar: the engineer signs in with Google once (link from the dashboard). State-protected.
 const calendarPage = (ok, title, body) => `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>atlead — ${title}</title>
 <style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a0b;color:#f4f4f5;font-family:system-ui,Tahoma,sans-serif;padding:24px;text-align:center}

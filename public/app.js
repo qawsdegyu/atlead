@@ -128,6 +128,7 @@ function switchTab(tab) {
     inbox: tr('Unified Inbox', 'صندوق المحادثات الموحد'),
     crm: tr('Deals & CRM', 'إدارة الصفقات والـ CRM'),
     comments: tr('Comments & Auto-DM', 'التعليقات والتحويل للخاص'),
+    reels: tr('Reels & Keywords', 'الريلز والكلمات المفتاحية'),
     knowledge: tr('Knowledge Base & Portfolio', 'قاعدة المعرفة والأعمال السابقة'),
     marketing: tr('Smart Marketing & Scheduling', 'التسويق الذكي وجدولة المنشورات'),
     settings: tr('Integrations & APIs', 'إعدادات الربط والـ APIs')
@@ -137,6 +138,7 @@ function switchTab(tab) {
     inbox: tr('Inbox', 'المحادثات'),
     crm: tr('Customers', 'العملاء'),
     comments: tr('Comments', 'التعليقات'),
+    reels: tr('Reels', 'الريلز'),
     knowledge: tr('Knowledge', 'المعرفة'),
     marketing: tr('Marketing', 'التسويق'),
     settings: tr('Settings', 'الإعدادات')
@@ -153,6 +155,7 @@ function switchTab(tab) {
   if (tab === 'settings') loadSettings();
   if (tab === 'knowledge') loadKnowledge();
   if (tab === 'marketing' && window.mkOpen) window.mkOpen();
+  if (tab === 'reels' && window.rlOpen) window.rlOpen();
 }
 
 // 1. INBOX LOGIC
@@ -556,7 +559,7 @@ function renderLeadsTable(leads) {
       </td>
       <td class="${(l.phone || l.customer_handle) ? 'no-i18n' : ''}" style="direction: ltr; text-align: start;">${escapeHtml(l.phone || l.customer_handle || tr('Not recorded', 'غير مسجل'))}</td>
       <td><span class="badge-pill info" style="font-size: 11px;">${escapeHtml(channelLabel[l.channel] || l.channel)}</span></td>
-      <td class="no-i18n">${escapeHtml(l.lead_stage || 'New')}</td>
+      <td class="no-i18n">${escapeHtml(l.lead_stage === 'prospect' ? tr('Prospect (form)', 'عميل محتمل (نموذج)') : (l.lead_stage || 'New'))}</td>
       <td>
         <span class="badge-pill ${l.classification === 'Hot' ? 'danger' : l.classification === 'Warm' ? 'warning' : 'info'} no-i18n" style="font-size: 11px;">
           ${escapeHtml(l.classification || 'Cold')}

@@ -170,3 +170,58 @@ test('a not-interested caller is never marked ready to buy, even if the model sa
   assert.ok(!c.handoff_at, 'not handed to sales');
   assert.match(c.messages[c.messages.length - 1].content, /إذا عندك أي سؤال/);
 });
+
+test('with only an OpenRouter key the call runs in browser voice: greeting, free times, booking, end', async () => {
+  storage.updateSettings({ ai: { openai_api_key: 'sk-or-v1-abc' } }, { skipDbSync: true });
+  assert.equal(callService.voiceMode(), 'browser');
+  assert.equal(callService.isActive(), true, 'call links still offered');
+  const r = await callService.checkKey();
+  assert.match(r.message, /OpenRouter/);
+  assert.match(r.message, /وضع المتصفح/);
+  const saveRes = await http(app.base, '/api/settings', { method: 'POST', json: { ai: { openai_api_key: 'sk-or-v1-xyz' } } });
+  assert.equal(saveRes.status, 400, 'the wrong key is refused with a clear reason');
+
+  const conv = newConv('سلمى');
+  const s = callService.createSession(conv);
+  const info = await http(app.base, `/api/call/${s.token}`);
+  assert.equal(info.body.ok, true);
+  assert.equal(info.body.mode, 'browser');
+  const start = await http(app.base, `/api/call/${s.token}/start`, { method: 'POST' });
+  assert.equal(start.body.mode, 'browser');
+  assert.equal(start.body.speech_lang, 'ar-JO');
+  assert.ok(!calls.some(c => /api\.openai\.com/.test(c.url)), 'OpenAI not used');
+
+  answers = [{ say: 'أهلاً سلمى، معك مساعد atlead. بسمحلي بكم سؤال سريع؟ https://x.com', tool: null }];
+  const hello = await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: '' } });
+  assert.equal(hello.body.ok, true);
+  assert.match(hello.body.say, /^أهلاً سلمى/);
+  assert.doesNotMatch(hello.body.say, /http/, 'nothing unspeakable');
+
+  answers = [{ say: '', tool: 'get_free_times' }, { say: 'عندي بكرا الساعة 10 الصبح أو 12 الظهر، شو بناسبك؟', tool: null }];
+  const times = await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: 'آه أكيد، بدي أحجز مع المهندس' } });
+  assert.match(times.body.say, /بكرا/);
+  const prompt = calls.filter(c => /openrouter/.test(c.url)).pop().body.messages.slice(-1)[0].content;
+  assert.match(prompt, /نتيجة get_free_times/, 'the free times reached the model');
+
+  answers = [{ say: '', tool: 'book_engineer_meeting', start: `${tomorrow} 10:00` }, { say: 'تم، حجزتلك بكرا الساعة 10.', tool: null }];
+  await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: 'الساعة 10 تمام' } });
+  assert.equal(storage.getConversationById(conv.id).appointment_link, 'https://meet.google.com/eng-meet', 'booked in the calendar');
+
+  answers = [{ say: 'شكراً إلك، مع السلامة.', tool: 'end_call' }];
+  const bye = await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: 'شكراً' } });
+  assert.equal(bye.body.end, true);
+  const saved = callService.get(s.token);
+  assert.equal(saved.mode, 'browser');
+  assert.deepEqual(saved.transcript.map(l => l.role), ['assistant', 'customer', 'assistant', 'customer', 'assistant', 'customer', 'assistant']);
+  storage.updateSettings({ ai: { openai_api_key: 'sk-openai-secret' } }, { skipDbSync: true });
+});
+
+test('a broken OpenAI key falls back to browser voice instead of a dead link', async () => {
+  reset();
+  fake('post', /api\.openai\.com\/v1\/realtime\/client_secrets/, () => ({ __status: 401, data: { error: { message: 'Incorrect API key provided', code: 'invalid_api_key' } } }));
+  const conv = newConv();
+  const s = callService.createSession(conv);
+  const start = await http(app.base, `/api/call/${s.token}/start`, { method: 'POST' });
+  assert.equal(start.body.ok, true);
+  assert.equal(start.body.mode, 'browser');
+});

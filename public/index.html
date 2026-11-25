@@ -71,6 +71,10 @@
               <span class="nav-icon-wrap"><i class="fa-solid fa-comment-dots"></i></span>
               <span class="nav-label">Comments &amp; Auto-DM</span>
             </li>
+            <li class="nav-item" data-tab="reels" title="Reels &amp; Keywords">
+              <span class="nav-icon-wrap"><i class="fa-solid fa-clapperboard"></i></span>
+              <span class="nav-label">Reels &amp; Keywords</span>
+            </li>
           </ul>
         </div>
 
@@ -424,6 +428,10 @@
             <p class="page-lede">The bot replies to comments and messages everyone who is interested.</p>
           </div>
           <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px;">
+            <button class="btn btn-secondary" type="button" onclick="switchTab('reels')">
+              <i class="fa-solid fa-clapperboard"></i>
+              <span>Reels &amp; Keywords</span>
+            </button>
             <button class="btn btn-secondary" data-export="comments">
               <i class="fa-solid fa-file-excel"></i>
               <span>Download Excel</span>
@@ -460,6 +468,47 @@
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <!-- 3b. REELS & KEYWORD RULES -->
+      <section class="view-panel" id="view-reels">
+        <div class="rl-head">
+          <p class="page-lede">When someone comments a keyword on your reel, the bot replies under the comment and sends them your message, link, file or the free consultation form.</p>
+          <div class="rl-head-actions">
+            <button class="btn btn-secondary" type="button" id="rl-refresh"><i class="fa-solid fa-rotate"></i> <span>Refresh</span></button>
+            <button class="btn btn-primary" type="button" id="rl-new"><i class="fa-solid fa-plus"></i> <span>New keyword rule</span></button>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <h4><i class="fa-solid fa-key"></i> Keyword rules</h4>
+          <div id="rl-rules" class="rl-rules"></div>
+          <div class="rl-test">
+            <span class="rl-test-label">Test a comment</span>
+            <select id="rl-test-platform" class="form-control">
+              <option value="instagram">Instagram</option>
+              <option value="facebook">Facebook</option>
+            </select>
+            <input id="rl-test-text" class="form-control" placeholder="Type a comment, e.g. Atlead">
+            <button class="btn btn-secondary" type="button" id="rl-test-btn"><i class="fa-solid fa-flask"></i> <span>Test</span></button>
+          </div>
+          <div id="rl-test-out" class="rl-test-out" hidden></div>
+          <p class="rl-form-link">Consultation form link: <a id="rl-form-url" class="no-i18n" href="/consult" target="_blank" rel="noopener" dir="ltr">/consult</a> — every filled form appears in Deals &amp; CRM as a Prospect.</p>
+        </div>
+
+        <div class="glass-card">
+          <div class="rl-media-head">
+            <h4><i class="fa-solid fa-clapperboard"></i> Your reels</h4>
+            <div class="rl-filters" role="group" aria-label="Filter">
+              <button type="button" class="rl-chip active" data-rl-platform="all">All</button>
+              <button type="button" class="rl-chip" data-rl-platform="instagram"><i class="fa-brands fa-instagram"></i> Instagram</button>
+              <button type="button" class="rl-chip" data-rl-platform="facebook"><i class="fa-brands fa-facebook"></i> Facebook</button>
+              <label class="rl-allposts"><input type="checkbox" id="rl-allposts"> <span>Show posts too</span></label>
+            </div>
+          </div>
+          <div id="rl-notice" class="rl-notice" hidden></div>
+          <div id="rl-grid" class="rl-grid"></div>
         </div>
       </section>
 
@@ -1355,6 +1404,81 @@
   <!-- Toast Notification Container -->
   <div id="toast-container"></div>
 
+  <!-- MODAL: Keyword rule editor (Reels page) -->
+  <div id="modal-rule" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="rl-modal-title">
+    <form class="glass-card modal-dialog rl-editor" id="rl-form" novalidate>
+      <div class="rl-editor-head">
+        <h3 id="rl-modal-title">Keyword rule</h3>
+        <button class="btn btn-secondary btn-sm" type="button" data-rl-close>✕ Close</button>
+      </div>
+      <div class="rl-editor-body">
+        <div id="rl-target" class="rl-target"></div>
+        <div class="form-group">
+          <label for="rl-keywords">Keywords</label>
+          <input id="rl-keywords" class="form-control" placeholder="atlead, price, السعر">
+          <small class="rl-help">Separate with commas. Arabic spellings are matched with or without hamza and taa marbuta.</small>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label for="rl-match">Match</label>
+            <select id="rl-match" class="form-control">
+              <option value="contains">Comment contains the word</option>
+              <option value="exact">Comment is exactly the word</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <span class="rl-label">Platforms</span>
+            <div class="rl-checks">
+              <label><input type="checkbox" id="rl-ig" checked> <i class="fa-brands fa-instagram"></i> Instagram</label>
+              <label><input type="checkbox" id="rl-fb" checked> <i class="fa-brands fa-facebook"></i> Facebook</label>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="rl-public">Public reply under the comment</label>
+          <textarea id="rl-public" class="form-control" rows="3" placeholder="Sent you the details in DM."></textarea>
+          <small class="rl-help">One reply per line. The bot picks one at random so replies don't look repeated.</small>
+        </div>
+        <div class="form-group">
+          <label for="rl-dm">Private message (DM)</label>
+          <textarea id="rl-dm" class="form-control" rows="3" placeholder="Thanks for your comment! Here is what you asked for:"></textarea>
+        </div>
+        <label class="rl-form-toggle"><input type="checkbox" id="rl-sendform"> <span><strong>Add the free consultation form</strong><small>Whoever fills it appears in Deals &amp; CRM as a Prospect.</small></span></label>
+        <div class="grid-2">
+          <div class="form-group">
+            <label for="rl-link">Link (optional)</label>
+            <input id="rl-link" class="form-control" dir="ltr" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label for="rl-link-label">Link title (optional)</label>
+            <input id="rl-link-label" class="form-control" placeholder="Price list">
+          </div>
+        </div>
+        <div class="form-group">
+          <span class="rl-label">File (optional)</span>
+          <div class="rl-file">
+            <span id="rl-file-name" class="rl-file-name">No file</span>
+            <label class="btn btn-secondary btn-sm"><i class="fa-solid fa-paperclip"></i> <span>Upload file</span><input type="file" id="rl-file" hidden></label>
+            <button type="button" class="btn btn-secondary btn-sm btn-danger-ghost" id="rl-file-clear" hidden><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <small class="rl-help">PDF, image or any file up to 25 MB. It is sent as a download link in the DM.</small>
+        </div>
+        <div class="form-group">
+          <label for="rl-name">Rule name</label>
+          <input id="rl-name" class="form-control" placeholder="Free consultation">
+        </div>
+        <div class="rl-preview">
+          <span class="rl-label">What the commenter receives</span>
+          <div id="rl-preview" class="rl-preview-dm no-i18n"></div>
+        </div>
+      </div>
+      <div class="rl-editor-foot">
+        <label class="rl-enabled"><input type="checkbox" id="rl-enabled" checked> <span>Rule is on</span></label>
+        <button type="submit" class="btn btn-primary" id="rl-save"><i class="fa-solid fa-check"></i> <span>Save rule</span></button>
+      </div>
+    </form>
+  </div>
+
   <!-- MODAL: Google Apps Script Code -->
   <div id="modal-script" class="modal-backdrop">
     <div class="glass-card modal-dialog">
@@ -1396,5 +1520,6 @@
   <script src="i18n.js"></script>
   <script src="app.js"></script>
   <script src="marketing.js"></script>
+  <script src="reels.js"></script>
 </body>
 </html>

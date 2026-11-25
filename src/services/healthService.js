@@ -310,7 +310,14 @@ class HealthService {
     const cs = require('./callService');
     const label = 'مكالمة الـ AI الصوتية';
     if (!cs.getConfig().enabled) return warn('ai_call', label, 'متوقفة — لا يعرض البوت رابط المكالمة على العملاء.');
+    if (cs.voiceMode() === 'browser') {
+      const why = cs.keyProblem() || 'لا يوجد مفتاح OpenAI.';
+      return warn('ai_call', label, `تعمل بصوت جهاز العميل (وضع المتصفح) مع الذكاء الاصطناعي الحالي. ${why} للصوت الطبيعي الأفضل أضف مفتاح OpenAI.`);
+    }
     const r = await cs.checkKey();
+    if (!r.ok && require('./aiService').getProviders().some(p => p.key !== cs.apiKey())) {
+      return warn('ai_call', label, `${r.message} المكالمات تعمل حالياً بصوت جهاز العميل (وضع المتصفح).`);
+    }
     return r.ok ? ok('ai_call', label, r.message) : fail('ai_call', label, r.message);
   }
 

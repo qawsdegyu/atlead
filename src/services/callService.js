@@ -54,11 +54,31 @@ class CallService {
   }
 
   apiKey() {
-    return storageService.getSettings().ai?.openai_api_key || process.env.OPENAI_API_KEY || '';
+    const key = storageService.getSettings().ai?.openai_api_key || process.env.OPENAI_API_KEY || '';
+    // An OpenRouter key (sk-or-...) cannot run OpenAI voice calls: treat it as missing,
+    // so the bot never sends call links that would not work.
+    return /^sk-or-/i.test(String(key).trim()) ? '' : key;
+  }
+
+  keyProblem() {
+    const key = String(storageService.getSettings().ai?.openai_api_key || '').trim();
+    if (/^sk-or-/i.test(key)) return 'المفتاح الموجود في خانة OpenAI هو مفتاح OpenRouter (يبدأ بـ sk-or-). المكالمات الصوتية تحتاج مفتاحاً من platform.openai.com ← API keys (يبدأ بـ sk-proj- أو sk-).';
+    return null;
+  }
+
+  /**
+   * How the call runs:
+   *  'realtime' = OpenAI voice (natural voice, needs a real OpenAI key);
+   *  'browser'  = the customer's phone does the listening and speaking, and the chat AI
+   *               (OpenRouter / any configured key) runs the conversation. Works with no OpenAI key.
+   */
+  voiceMode() {
+    if (this.apiKey()) return 'realtime';
+    try { return require('./aiService').getProviders().length ? 'browser' : null; } catch { return null; }
   }
 
   isActive() {
-    return !!(this.getConfig().enabled && this.apiKey());
+    return !!(this.getConfig().enabled && this.voiceMode());
   }
 
   all() { return read(); }
@@ -131,7 +151,8 @@ class CallService {
       error: error || (this.isActive() ? null : 'disabled'),
       name: realName,
       lang: said ? require('./aiService').detectLanguage(said) : 'ar',
-      max_minutes: cfg.max_minutes
+      max_minutes: cfg.max_minutes,
+      mode: this.voiceMode()
     };
   }
 
@@ -211,6 +232,7 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
    * (never the key). Tries each voice model, newest first.
    */
   async checkKey() {
+    if (this.keyProblem()) return { ok: false, mode: this.voiceMode(), message: `${this.keyProblem()}${this.voiceMode() === 'browser' ? ' إلى ذلك الحين تعمل المكالمات بصوت جهاز العميل (وضع المتصفح).' : ''}` };
     const key = this.apiKey();
     if (!key) return { ok: false, message: 'لا يوجد OpenAI API Key.' };
     const cfg = this.getConfig();
@@ -245,6 +267,90 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
     const conv = storageService.getConversationById(session.conversation_id) || {};
     const cfg = this.getConfig();
     const lang = require('./aiService').detectLanguage((conv.messages || []).filter(m => m.sender === 'customer').map(m => m.content).slice(-3).join(' ') || 'مرحبا');
+    if (this.voiceMode() === 'browser') return this.startBrowser(session, conv, lang);
+    try {
+      return await this.startOpenAi(session, conv, lang, cfg);
+    } catch (e) {
+      // A broken OpenAI key/account must not leave the customer with a dead link.
+      const hasChatAi = require('./aiService').getProviders().some(p => p.key !== this.apiKey());
+      if (e.code === 'openai' && hasChatAi) {
+        console.warn('[Call] OpenAI voice unavailable, using browser voice:', e.message);
+        return this.startBrowser(session, conv, lang);
+      }
+      throw e;
+    }
+  }
+
+  /** Browser voice: no OpenAI. The page listens/speaks; each turn goes through turn(). */
+  startBrowser(session, conv, lang) {
+    const cfg = this.getConfig();
+    Object.assign(session, {
+      status: 'in_progress', starts: (session.starts || 0) + 1, mode: 'browser', lang,
+      started_at: session.started_at || new Date().toISOString(), last_activity_at: new Date().toISOString()
+    });
+    this.save(session);
+    if (conv.id && (!conv.ai_call_status || conv.ai_call_status === 'offered')) storageService.saveConversation({ id: conv.id, ai_call_status: 'in_progress' });
+    return { mode: 'browser', lang, speech_lang: lang === 'en' ? 'en-US' : 'ar-JO', max_minutes: cfg.max_minutes };
+  }
+
+  /**
+   * One turn of a browser-voice call: the customer's words in, the assistant's next sentence out.
+   * The model answers in JSON and may ask for a tool first (free times / booking / end).
+   */
+  async turn(token, text) {
+    const { session, error } = this.usable(token);
+    if (error) throw Object.assign(new Error(error), { code: error });
+    if ((session.turns || 0) >= 120) return { say: '', end: true };
+    const said = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 1500);
+    if (said) this.addTranscript(token, [{ role: 'customer', text: said }]);
+    const s = this.get(token);
+    const conv = storageService.getConversationById(s.conversation_id) || {};
+    const lang = s.lang || 'ar';
+    const system = `${this.instructions(s, conv, lang)}
+
+طريقة الرد في هذه المكالمة: صوتك يُقرأ بصوت الجهاز، فأعد JSON فقط بهذا الشكل:
+{"say": "ما ستقوله للعميل الآن", "tool": null, "start": null}
+- say: جملة أو جملتان قصيرتان وطبيعيتان للنطق، بدون روابط أو رموز أو إيموجي أو تعداد.
+- tool: null أو "get_free_times" أو "book_engineer_meeting" أو "end_call".
+- لاستخدام get_free_times أو book_engineer_meeting اترك say فارغاً، وضع في start الوقت بصيغة YYYY-MM-DD HH:MM عند الحجز. ستصلك النتيجة ثم تكمل.
+- end_call: ضع جملة الوداع في say.`;
+    const history = s.transcript.slice(-40, said ? -1 : undefined).map(l => ({ role: l.role === 'assistant' ? 'model' : 'user', text: l.text }));
+    let prompt = said ? `العميل: ${said}` : '(بداية المكالمة: رحّب بالعميل باسمه إن كان معروفاً، عرّف بنفسك، واطلب إذنه بكم سؤال سريع.)';
+    const ai = require('./aiService');
+    let out = { say: '', end: false };
+    for (let step = 0; step < 3; step++) {
+      const { text: raw } = await ai.chatWithFailover(system, history, prompt, { json: true, temperature: 0.5, timeout: 30000 });
+      let r = {};
+      try { r = JSON.parse(String(raw).replace(/^```(json)?|```$/g, '').trim()); } catch { r = { say: String(raw || '').slice(0, 400) }; }
+      const tool = ['get_free_times', 'book_engineer_meeting', 'end_call'].includes(r.tool) ? r.tool : null;
+      if (tool && tool !== 'end_call') {
+        const result = await this.tool(token, tool, { start: r.start || '' });
+        prompt += `\n\n[نتيجة ${tool}]: ${JSON.stringify(result)}\nالآن قل للعميل الرد المناسب (say).`;
+        continue;
+      }
+      out = { say: this.speakable(r.say), end: tool === 'end_call' };
+      if (out.end) await this.tool(token, 'end_call');
+      break;
+    }
+    const after = this.get(token);
+    after.turns = (after.turns || 0) + 1;
+    this.save(after);
+    if (out.say) this.addTranscript(token, [{ role: 'assistant', text: out.say }]);
+    return out;
+  }
+
+  /** Text the phone can read aloud: no links, emoji or markdown. */
+  speakable(text) {
+    return String(text || '')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/[*_#`>|]/g, '')
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 600);
+  }
+
+  async startOpenAi(session, conv, lang, cfg) {
     const models = [...new Set([cfg.model, ...FALLBACK_MODELS].filter(Boolean))];
     let lastErr;
     for (const model of models) {

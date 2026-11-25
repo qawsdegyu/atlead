@@ -706,19 +706,26 @@ class MetaService {
     const comment = storageService.getCommentByCommentId(commentId);
     if (!comment || comment.status === 'done') return;
 
+    // A keyword rule (set by the owner on the Reels page) wins over the AI analysis (and is sent even after a handoff: the customer asked for it).
+    const rules = require('./commentRules');
+    const hit = rules.match({ platform, post_id: comment.post_id, text: comment.comment_text });
     // Customer already handed off to a human → the bot doesn't answer them anywhere.
     const dmChannel = platform === 'instagram' ? 'instagram_dm' : 'facebook_messenger';
     const handedOff = comment.user_id && comment.user_id !== 'unknown' ? storageService.getConversationByChannelUser(dmChannel, comment.user_id) : null;
-    if (handedOff && handedOff.is_bot_active === false) {
+    if (!hit && handedOff && handedOff.is_bot_active === false) {
       const skipped = storageService.saveComment({ comment_id: commentId, status: 'skipped', processed_at: new Date().toISOString(), conversation_id: handedOff.id });
       await supabaseService.saveComment(skipped);
       notificationService.notifyNewMessageAfterHandoff(handedOff, `💬 تعليق على منشور: ${comment.comment_text}`).catch(() => {});
       return skipped;
     }
 
-    const analysis = await aiService.analyzeComment(comment.comment_text, { userName: comment.user_name, platform });
+    const analysis = hit
+      ? { sentiment: 'positive', is_interested: true, public_reply: rules.publicReply(hit.rule), auto_dm: rules.dmText(hit.rule, { commentId }) }
+      : await aiService.analyzeComment(comment.comment_text, { userName: comment.user_name, platform });
+    if (hit) rules.recordHit(hit.rule.id);
     const hasToken = !!cfg.page_access_token;
     const patch = {
+      ...(hit ? { rule_id: hit.rule.id, rule_name: hit.rule.name, rule_keyword: hit.keyword } : {}),
       comment_id: commentId,
       sentiment: analysis.sentiment,
       is_interested: analysis.is_interested,
@@ -728,13 +735,13 @@ class MetaService {
     };
 
     // 1. Public reply under the comment
-    if (cfg.auto_reply_comments !== false && analysis.public_reply) {
+    if ((hit || cfg.auto_reply_comments !== false) && analysis.public_reply) {
       const ok = comment.simulated || !hasToken ? false : await this.replyToCommentPublicly(platform, commentId, analysis.public_reply);
       patch.public_reply_sent = ok;
     }
 
     // 2. Private DM to interested commenters
-    if (analysis.is_interested && cfg.auto_dm_on_interest !== false && analysis.auto_dm) {
+    if (analysis.is_interested && (hit || cfg.auto_dm_on_interest !== false) && analysis.auto_dm) {
       let recipientId = null;
       if (!comment.simulated && hasToken) {
         recipientId = await this.sendPrivateReply(commentId, analysis.auto_dm);

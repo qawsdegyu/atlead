@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const storageService = require('../services/storageService');
 const supabaseService = require('../services/supabaseService');
@@ -89,6 +90,9 @@ router.post('/calendar/test', async (req, res) => {
 router.post('/settings', (req, res) => {
   const body = stripMasked(req.body);
 
+  if (body.ai?.openai_api_key && /^sk-or-/i.test(String(body.ai.openai_api_key).trim())) {
+    return res.status(400).json({ success: false, message: 'هذا مفتاح OpenRouter (يبدأ بـ sk-or-) وليس مفتاح OpenAI. مفتاح OpenRouter مكانه خانة OpenRouter API Key، والمكالمات الصوتية تحتاج مفتاحاً من platform.openai.com ← API keys.' });
+  }
   if (body.google_sheets?.service_account_json) {
     const sa = googleSheetsService.parseServiceAccount(body.google_sheets.service_account_json);
     if (!sa) return res.status(400).json({ success: false, message: 'ملف Service Account غير صالح — الصق محتوى ملف JSON كامل كما هو.' });
@@ -463,7 +467,7 @@ router.post('/conversations/:id/call-link', (req, res) => {
   const callService = require('../services/callService');
   const conv = storageService.getConversationById(req.params.id);
   if (!conv) return res.status(404).json({ success: false, message: 'المحادثة غير موجودة' });
-  if (!callService.isActive()) return res.status(400).json({ success: false, message: 'فعّل مكالمة الـ AI وأضف OpenAI API Key من الإعدادات أولاً.' });
+  if (!callService.isActive()) return res.status(400).json({ success: false, message: 'فعّل مكالمة الـ AI من الإعدادات، وتأكد من وجود مفتاح ذكاء اصطناعي (OpenRouter أو OpenAI).' });
   const s = callService.createSession(conv);
   if (!conv.ai_call_status) storageService.saveConversation({ id: conv.id, ai_call_status: 'offered' });
   res.json({ success: true, url: callService.publicUrl(s.token) });
@@ -555,6 +559,30 @@ router.patch('/leads/:id', async (req, res) => {
 router.get('/comments', (req, res) => {
   const comments = storageService.getComments();
   res.json({ success: true, comments });
+});
+
+// --- REELS & KEYWORD RULES (comment a word → fixed reply + DM with text/link/file/form) ---
+const commentRules = require('../services/commentRules');
+router.get('/reels', async (req, res) => {
+  try {
+    const out = await commentRules.media({ platform: String(req.query.platform || 'all'), reelsOnly: req.query.all !== '1' });
+    res.json({ success: true, ...out, rules: commentRules.list(), form_url: commentRules.formUrl() });
+  } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+});
+router.get('/comment-rules', (req, res) => res.json({ success: true, rules: commentRules.list(), form_url: commentRules.formUrl() }));
+router.post('/comment-rules', (req, res) => {
+  try { res.json({ success: true, rule: commentRules.save(req.body || {}) }); } catch (e) { res.status(400).json({ success: false, message: e.message }); }
+});
+router.delete('/comment-rules/:id', (req, res) => res.json({ success: commentRules.remove(req.params.id) }));
+router.post('/comment-rules/test', (req, res) => res.json({ success: true, ...commentRules.test(req.body || {}) }));
+router.post('/comment-rules/file', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, message: 'لم يصل أي ملف.' });
+  // Public link name: short and URL-safe. The original (Arabic) name is kept as the label.
+  const original = Buffer.from(req.file.originalname || 'file', 'latin1').toString('utf8');
+  const ext = (path.extname(original).toLowerCase().match(/^\.[a-z0-9]{1,8}$/) || [''])[0];
+  const name = `rule_${Date.now()}_${crypto.randomBytes(4).toString('hex')}${ext}`;
+  try { fs.renameSync(req.file.path, path.join(uploadDir, name)); } catch (e) { return res.status(500).json({ success: false, message: e.message }); }
+  res.json({ success: true, file_url: `/files/${name}`, file_name: original });
 });
 
 router.post('/comments/simulate', async (req, res) => {

@@ -3,6 +3,82 @@ let currentTab = 'inbox';
 let conversations = [];
 let activeConvId = null;
 let currentLead = null;
+let lastSettings = null;
+let lastLeads = null;
+let lastComments = null;
+let lastKnowledge = null;
+
+const tr = (en, ar) => (window.atleadI18n?.lang === 'ar' ? ar : en);
+const uiLocale = () => (window.atleadI18n?.lang === 'ar' ? 'ar-JO' : 'en-US');
+
+function getInitials(name) {
+  const cleaned = String(name || '').replace(/[^\p{L}\p{N}\s]/gu, ' ').trim();
+  if (!cleaned) return 'C';
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+// Collapsible desktop sidebar
+const sidebarCollapseBtn = document.getElementById('sidebar-collapse-btn');
+if (sidebarCollapseBtn) {
+  const syncCollapseTooltip = () => {
+    const collapsed = document.body.classList.contains('sidebar-collapsed');
+    sidebarCollapseBtn.title = collapsed ? tr('Expand sidebar', 'توسيع القائمة') : tr('Collapse sidebar', 'طي القائمة');
+    sidebarCollapseBtn.setAttribute('aria-label', sidebarCollapseBtn.title);
+  };
+  syncCollapseTooltip();
+  sidebarCollapseBtn.addEventListener('click', () => {
+    document.body.classList.toggle('sidebar-collapsed');
+    localStorage.setItem('atlead_sidebar_collapsed', document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
+    syncCollapseTooltip();
+  });
+  window.addEventListener('atlead:langchange', syncCollapseTooltip);
+}
+
+// Color theme toggle (Light low-glare <-> Midnight Dark SaaS)
+(function initThemeToggle() {
+  const toggle = document.getElementById('theme-toggle');
+  const getTheme = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+
+  const syncThemeUI = (theme) => {
+    const isDark = theme === 'dark';
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) metaTheme.setAttribute('content', isDark ? '#16171A' : '#ECEFF4');
+    const metaBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (metaBar) metaBar.setAttribute('content', isDark ? 'black-translucent' : 'default');
+
+    if (toggle) {
+      toggle.querySelectorAll('.theme-seg').forEach((btn) => {
+        const active = btn.dataset.themeChoice === theme;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+    }
+  };
+
+  const applyTheme = (next) => {
+    const theme = next === 'dark' ? 'dark' : 'light';
+    if (theme === 'dark') document.documentElement.dataset.theme = 'dark';
+    else delete document.documentElement.dataset.theme;
+    localStorage.setItem('atlead_theme', theme);
+    syncThemeUI(theme);
+    window.dispatchEvent(new CustomEvent('atlead:themechange', { detail: { theme } }));
+  };
+
+  syncThemeUI(getTheme());
+  if (toggle) {
+    toggle.addEventListener('click', (e) => {
+      const seg = e.target.closest('.theme-seg');
+      if (seg && seg.dataset.themeChoice) {
+        const target = seg.dataset.themeChoice;
+        applyTheme(target === getTheme() ? (target === 'dark' ? 'light' : 'dark') : target);
+      } else {
+        applyTheme(getTheme() === 'dark' ? 'light' : 'dark');
+      }
+    });
+  }
+})();
 
 // DOM Elements
 const conversationList = document.getElementById('conversation-list');
@@ -49,15 +125,22 @@ function switchTab(tab) {
   document.getElementById(`view-${tab}`)?.classList.add('active');
 
   const titles = {
-    inbox: 'صندوق المحادثات الموحد',
-    crm: 'إدارة الصفقات والـ CRM',
-    comments: 'التعليقات والتحويل للخاص',
-    knowledge: 'قاعدة المعرفة والأعمال السابقة',
-    marketing: 'التسويق الذكي وجدولة المنشورات',
-    settings: 'إعدادات الربط والـ APIs'
+    inbox: tr('Unified Inbox', 'صندوق المحادثات الموحد'),
+    crm: tr('Deals & CRM', 'إدارة الصفقات والـ CRM'),
+    comments: tr('Comments & Auto-DM', 'التعليقات والتحويل للخاص'),
+    knowledge: tr('Knowledge Base & Portfolio', 'قاعدة المعرفة والأعمال السابقة'),
+    marketing: tr('Smart Marketing & Scheduling', 'التسويق الذكي وجدولة المنشورات'),
+    settings: tr('Integrations & APIs', 'إعدادات الربط والـ APIs')
   };
   // Phones get short titles (same words as the tab bar).
-  const short = { inbox: 'المحادثات', crm: 'العملاء', comments: 'التعليقات', knowledge: 'المعرفة', marketing: 'التسويق', settings: 'الإعدادات' };
+  const short = {
+    inbox: tr('Inbox', 'المحادثات'),
+    crm: tr('Customers', 'العملاء'),
+    comments: tr('Comments', 'التعليقات'),
+    knowledge: tr('Knowledge', 'المعرفة'),
+    marketing: tr('Marketing', 'التسويق'),
+    settings: tr('Settings', 'الإعدادات')
+  };
   document.getElementById('current-tab-title').textContent = (isPhone() ? short[tab] : titles[tab]) || '';
   document.querySelectorAll('.tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.body.dataset.tab = tab;
@@ -89,23 +172,33 @@ async function loadConversations(filterChannel = 'all') {
   }
 }
 
-function renderConversationList(filter = 'all') {
+function renderConversationList(filter) {
+  const activeFilter = filter || document.querySelector('.filter-chip.active')?.dataset.filter || 'all';
   conversationList.innerHTML = '';
   const searchVal = document.getElementById('conv-search')?.value.toLowerCase() || '';
+
+  const totalCount = conversations.length;
+  const navBadge = document.getElementById('nav-inbox-count');
+  if (navBadge) {
+    navBadge.textContent = String(totalCount);
+    navBadge.style.display = totalCount > 0 ? '' : 'none';
+  }
+  const listCount = document.getElementById('conv-list-count');
+  if (listCount) listCount.textContent = String(totalCount);
 
   let filtered = conversations.filter(c => {
     const matchSearch = (c.customer_name || '').toLowerCase().includes(searchVal) ||
                         (c.customer_phone || '').toLowerCase().includes(searchVal);
     if (!matchSearch) return false;
-    if (filter === 'all') return true;
-    if (filter === 'deal_closing') return c.lead_stage === 'deal_closing' || c.lead_stage === 'handed_off';
-    return c.channel === filter;
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'deal_closing') return c.lead_stage === 'deal_closing' || c.lead_stage === 'handed_off';
+    return c.channel === activeFilter;
   });
 
   if (filtered.length === 0) {
     conversationList.innerHTML = `
-      <li style="text-align: center; padding: 30px 10px; color: var(--text-muted); font-size: 13px;">
-        لا توجد محادثات مطابقة
+      <li class="conv-empty">
+        ${escapeHtml(tr('No matching conversations', 'لا توجد محادثات مطابقة'))}
       </li>
     `;
     return;
@@ -113,7 +206,9 @@ function renderConversationList(filter = 'all') {
 
   filtered.forEach(c => {
     const li = document.createElement('li');
-    li.className = `conv-item ${c.id === activeConvId ? 'active' : ''}`;
+    const unreadCount = Number(c.unread_count) || 0;
+    const isUnread = unreadCount > 0 || c.unread === true;
+    li.className = `conv-item ${c.id === activeConvId ? 'active' : ''}${isUnread ? ' is-unread' : ''}`;
     li.onclick = () => selectConversation(c.id, { open: true });
 
     const channelIcon = {
@@ -124,34 +219,47 @@ function renderConversationList(filter = 'all') {
       phone: 'fa-solid fa-phone'
     }[c.channel] || 'fa-solid fa-comments';
 
-    const lastMsg = escapeHtml(c.messages && c.messages.length > 0 ? c.messages[c.messages.length - 1].content : 'محادثة جديدة');
+    const hasMsgs = c.messages && c.messages.length > 0;
+    const lastMsg = hasMsgs
+      ? escapeHtml(c.messages[c.messages.length - 1].content)
+      : escapeHtml(tr('New conversation', 'محادثة جديدة'));
+    const hasName = Boolean(c.customer_name);
+    const displayName = escapeHtml(c.customer_name || tr('Potential customer', 'عميل محتمل'));
+    const initials = escapeHtml(getInitials(c.customer_name || c.customer_phone || 'C'));
     const isBotOff = c.is_bot_active === false;
+    const cls = c.classification || 'Cold';
+    const clsClass = cls === 'Hot' ? 'hot' : cls === 'Warm' ? 'warm' : '';
 
     li.innerHTML = `
-      <div class="channel-avatar ${c.channel}">
-        <i class="${channelIcon}"></i>
+      <div class="conv-avatar-wrap">
+        <div class="conv-initials no-i18n">${initials}</div>
+        <div class="conv-channel-mini ${c.channel}"><i class="${channelIcon}"></i></div>
       </div>
       <div class="conv-details">
         <div class="conv-top">
-          <span class="conv-name">${escapeHtml(c.customer_name || 'عميل محتمل')}</span>
+          <div class="conv-name-wrap">
+            ${unreadCount > 0 ? `<span class="unread-count-pill no-i18n">${unreadCount}</span>` : isUnread ? '<span class="unread-dot"></span>' : ''}
+            <span class="conv-name bidi-text ${hasName ? 'no-i18n' : ''}">${displayName}</span>
+          </div>
           <span class="conv-time">${formatTime(c.last_message_at || c.created_at)}</span>
         </div>
-        <div class="conv-preview">${lastMsg}</div>
+        <div class="conv-preview bidi-text ${hasMsgs ? 'no-i18n' : ''}">${lastMsg}</div>
         <div class="conv-meta">
-          <span class="badge-pill ${c.classification === 'Hot' ? 'danger' : c.classification === 'Warm' ? 'warning' : 'info'}" style="padding: 2px 8px; font-size: 10px;">
-            ${c.classification || 'Cold'} (${c.interest_score || 20}%)
+          <span class="meta-tag ${clsClass} no-i18n">
+            <span class="meta-tag-dot"></span>
+            ${escapeHtml(cls)} · ${c.interest_score || 20}%
           </span>
           ${isBotOff && c.pause_reason === 'human_reply' ? `
-            <span class="badge-pill warning" style="padding: 2px 8px; font-size: 10px;">
-              <i class="fa-solid fa-user-pen"></i> موظف يتابع
+            <span class="meta-tag bot-human">
+              <i class="fa-solid fa-user-pen"></i> ${escapeHtml(tr('Agent active', 'موظف يتابع'))}
             </span>
           ` : isBotOff ? `
-            <span class="badge-pill danger" style="padding: 2px 8px; font-size: 10px;">
-              <i class="fa-solid fa-hand-holding-hand"></i> محول للبشري
+            <span class="meta-tag bot-handoff">
+              <i class="fa-solid fa-hand-holding-hand"></i> ${escapeHtml(tr('Handed to human', 'محول للبشري'))}
             </span>
           ` : `
-            <span class="badge-pill success" style="padding: 2px 8px; font-size: 10px;">
-              <i class="fa-solid fa-robot"></i> بوت مفعل
+            <span class="meta-tag bot-on">
+              <i class="fa-solid fa-robot"></i> ${escapeHtml(tr('Bot active', 'بوت مفعل'))}
             </span>
           `}
         </div>
@@ -173,14 +281,18 @@ function selectConversation(id, { open = false } = {}) {
   renderConversationList();
 
   // Header update
-  activeChatName.textContent = conv.customer_name || 'عميل محتمل';
+  activeChatName.textContent = conv.customer_name || tr('Potential customer', 'عميل محتمل');
+  activeChatName.classList.toggle('no-i18n', Boolean(conv.customer_name));
+  activeChatName.classList.add('bidi-text');
+  activeChatChannel.classList.add('no-i18n');
   activeChatChannel.textContent = `${conv.channel} • ${conv.customer_phone || conv.customer_handle || conv.external_user_id}`;
-  
+
   const iconClass = {
     whatsapp: 'fa-brands fa-whatsapp',
     instagram_dm: 'fa-brands fa-instagram',
     facebook_messenger: 'fa-brands fa-facebook-messenger',
-    simulator: 'fa-solid fa-flask'
+    simulator: 'fa-solid fa-flask',
+    phone: 'fa-solid fa-phone'
   }[conv.channel] || 'fa-solid fa-comments';
 
   activeChatAvatar.className = `channel-avatar ${conv.channel}`;
@@ -191,43 +303,65 @@ function selectConversation(id, { open = false } = {}) {
   const offLabel = botOffLabel(conv);
   const waitingRep = !isOff && !!conv.handoff_at;
   activeChatBadgeArea.innerHTML = isOff
-    ? `<span class="badge-pill ${conv.pause_reason === 'human_reply' ? 'warning' : 'danger'}"><i class="fa-solid ${conv.pause_reason === 'human_reply' ? 'fa-user-pen' : 'fa-lock'}"></i> ${escapeHtml(offLabel)}</span>`
+    ? `<span class="badge-pill ${conv.pause_reason === 'human_reply' ? 'warning' : 'danger'}"><i class="fa-solid ${conv.pause_reason === 'human_reply' ? 'fa-user-pen' : 'fa-lock'}"></i> <span class="no-i18n">${escapeHtml(offLabel)}</span></span>`
     : waitingRep
-      ? '<span class="badge-pill warning"><i class="fa-solid fa-user-clock"></i> بانتظار موظف المبيعات — الرد الآلي مستمر</span>'
-      : `<span class="badge-pill success"><i class="fa-solid fa-bolt"></i> الرد الآلي للبوت نشط</span>`;
+      ? `<span class="badge-pill warning"><i class="fa-solid fa-user-clock"></i> ${escapeHtml(tr('Waiting for sales rep — auto-reply active', 'بانتظار موظف المبيعات — الرد الآلي مستمر'))}</span>`
+      : `<span class="badge-pill success"><i class="fa-solid fa-bolt"></i> ${escapeHtml(tr('Bot auto-reply is active', 'الرد الآلي للبوت نشط'))}</span>`;
 
   // Side Panel
-  botStatusLabel.textContent = isOff ? offLabel : 'مفعل ويعمل';
+  const toggleCard = document.getElementById('bot-toggle-card');
+  if (toggleCard) {
+    toggleCard.classList.toggle('active', !isOff);
+    toggleCard.classList.toggle('stopped', isOff);
+  }
+  botStatusLabel.classList.toggle('no-i18n', isOff);
+  botStatusLabel.textContent = isOff ? offLabel : tr('On and running', 'مفعل ويعمل');
   btnToggleBot.className = isOff ? 'btn btn-success btn-sm' : 'btn btn-danger btn-sm';
-  btnToggleBot.innerHTML = isOff ? '<i class="fa-solid fa-play"></i> إعادة تفعيل البوت' : '<i class="fa-solid fa-pause"></i> إيقاف البوت';
+  btnToggleBot.innerHTML = isOff
+    ? `<i class="fa-solid fa-play"></i> ${escapeHtml(tr('Resume bot', 'إعادة تفعيل البوت'))}`
+    : `<i class="fa-solid fa-pause"></i> ${escapeHtml(tr('Pause bot', 'إيقاف البوت'))}`;
   handoffAlertBox.style.display = isOff || waitingRep ? 'block' : 'none';
   if (waitingRep) {
-    handoffAlertBox.innerHTML = `<i class="fa-solid fa-user-clock"></i> العميل جاهز وتم تحويله إلى موظف المبيعات. يواصل الرد الآلي الإجابة عن أسئلته إلى أن يرد الموظف، ثم يتوقف تلقائياً.${conv.assigned_to_name ? '<br>الموظف المسؤول: <b>' + escapeHtml(conv.assigned_to_name) + '</b>' : ''}${conv.handoff_reason ? '<br>السبب: ' + escapeHtml(conv.handoff_reason) : ''}`;
+    handoffAlertBox.innerHTML = `<i class="fa-solid fa-user-clock"></i> ${escapeHtml(tr(
+      'Customer is ready and handed to the sales team. Auto-reply keeps answering until an agent replies, then stops automatically.',
+      'العميل جاهز وتم تحويله إلى موظف المبيعات. يواصل الرد الآلي الإجابة عن أسئلته إلى أن يرد الموظف، ثم يتوقف تلقائياً.'
+    ))}${conv.assigned_to_name ? `<br>${escapeHtml(tr('Assigned agent:', 'الموظف المسؤول:'))} <b class="no-i18n">${escapeHtml(conv.assigned_to_name)}</b>` : ''}${conv.handoff_reason ? `<br>${escapeHtml(tr('Reason:', 'السبب:'))} <span class="no-i18n">${escapeHtml(conv.handoff_reason)}</span>` : ''}`;
   }
   if (isOff) {
     handoffAlertBox.innerHTML = conv.pause_reason === 'human_reply'
-      ? `<i class="fa-solid fa-user-pen"></i> موظف رد على هذا العميل${conv.pause_source ? ' (' + escapeHtml(conv.pause_source) + ')' : ''}، فتوقف البوت حتى لا يتدخل في المحادثة.${conv.bot_paused_until ? ' يعود للرد بعد انتهاء المدة.' : ' اضغط "إعادة تفعيل البوت" عند انتهائها.'}`
+      ? `<i class="fa-solid fa-user-pen"></i> ${escapeHtml(tr('An agent replied to this customer', 'موظف رد على هذا العميل'))}${conv.pause_source ? ` (<span class="no-i18n">${escapeHtml(conv.pause_source)}</span>)` : ''}${escapeHtml(tr(', so the bot paused to avoid interrupting.', '، فتوقف البوت حتى لا يتدخل في المحادثة.'))}${conv.bot_paused_until ? ` ${escapeHtml(tr('Auto-resumes after the pause period.', 'يعود للرد بعد انتهاء المدة.'))}` : ` ${escapeHtml(tr('Click "Resume bot" when you are done.', 'اضغط "إعادة تفعيل البوت" عند انتهائها.'))}`}`
       : conv.pause_reason === 'manual'
-        ? '<i class="fa-solid fa-pause"></i> تم إيقاف البوت يدوياً لهذا العميل.'
-        : `<i class="fa-solid fa-bell"></i> وصل العميل إلى مرحلة الشراء وحُوّل إلى الموظف، ولن يرد عليه البوت.${conv.assigned_to_name ? '<br>الموظف المسؤول: <b>' + escapeHtml(conv.assigned_to_name) + '</b>' : ''}${conv.handoff_reason ? '<br>السبب: ' + escapeHtml(conv.handoff_reason) : ''}`;
+        ? `<i class="fa-solid fa-pause"></i> ${escapeHtml(tr('The bot was paused manually for this customer.', 'تم إيقاف البوت يدوياً لهذا العميل.'))}`
+        : `<i class="fa-solid fa-bell"></i> ${escapeHtml(tr('The customer reached the buying stage and was handed to staff; the bot will not reply.', 'وصل العميل إلى مرحلة الشراء وحُوّل إلى الموظف، ولن يرد عليه البوت.'))}${conv.assigned_to_name ? `<br>${escapeHtml(tr('Assigned agent:', 'الموظف المسؤول:'))} <b class="no-i18n">${escapeHtml(conv.assigned_to_name)}</b>` : ''}${conv.handoff_reason ? `<br>${escapeHtml(tr('Reason:', 'السبب:'))} <span class="no-i18n">${escapeHtml(conv.handoff_reason)}</span>` : ''}`;
   }
 
+  document.getElementById('side-lead-stage').classList.add('no-i18n');
   document.getElementById('side-lead-stage').textContent = conv.lead_stage || 'new';
-  document.getElementById('side-lead-class').textContent = conv.classification || 'Cold';
+  const clsEl = document.getElementById('side-lead-class');
+  const clsVal = conv.classification || 'Cold';
+  clsEl.className = `badge-pill no-i18n ${clsVal === 'Hot' ? 'danger' : clsVal === 'Warm' ? 'warning' : 'info'}`;
+  clsEl.textContent = clsVal;
   document.getElementById('side-lead-score').textContent = `${conv.interest_score || 20}%`;
   document.getElementById('side-score-bar').style.width = `${conv.interest_score || 20}%`;
-  document.getElementById('side-lead-problem').textContent = conv.identified_problem || 'لم تحدد بعد';
-  document.getElementById('side-lead-solution').textContent = conv.proposed_solution || 'لم يحدد بعد';
+
+  const probEl = document.getElementById('side-lead-problem');
+  probEl.classList.toggle('no-i18n', Boolean(conv.identified_problem));
+  probEl.textContent = conv.identified_problem || tr('Not set yet', 'لم تحدد بعد');
+
+  const solEl = document.getElementById('side-lead-solution');
+  solEl.classList.toggle('no-i18n', Boolean(conv.proposed_solution));
+  solEl.textContent = conv.proposed_solution || tr('Not set yet', 'لم يحدد بعد');
+
   renderAiCall(conv);
   const apptBox = document.getElementById('side-lead-appointment-box');
   if (apptBox && !conv.appointment_at && conv.requested_meeting_time) {
     apptBox.style.display = '';
-    document.getElementById('side-lead-appointment').textContent = `الوقت المطلوب (يحتاج تأكيد): ${conv.requested_meeting_time}`;
+    document.getElementById('side-lead-appointment').innerHTML = `${escapeHtml(tr('Requested time (needs confirmation):', 'الوقت المطلوب (يحتاج تأكيد):'))} <span class="no-i18n">${escapeHtml(conv.requested_meeting_time)}</span>`;
   } else if (apptBox) {
     apptBox.style.display = conv.appointment_at ? '' : 'none';
     if (conv.appointment_at) {
-      document.getElementById('side-lead-appointment').innerHTML = escapeHtml(conv.appointment_label || new Date(conv.appointment_at).toLocaleString('ar'))
-        + (conv.appointment_link ? ` — <a href="${escapeHtml(conv.appointment_link)}" target="_blank" rel="noopener">رابط الاجتماع</a>` : '');
+      document.getElementById('side-lead-appointment').innerHTML = `<span class="no-i18n">${escapeHtml(conv.appointment_label || new Date(conv.appointment_at).toLocaleString(uiLocale()))}</span>`
+        + (conv.appointment_link ? ` — <a href="${escapeHtml(conv.appointment_link)}" target="_blank" rel="noopener">${escapeHtml(tr('Meeting link', 'رابط الاجتماع'))}</a>` : '');
     }
   }
 
@@ -238,7 +372,11 @@ function selectConversation(id, { open = false } = {}) {
 function renderMessages(messages) {
   chatMessages.innerHTML = '';
   if (messages.length === 0) {
-    chatMessages.innerHTML = '<div style="text-align: center; color: var(--text-muted); margin-top: 50px;">لا توجد رسائل سابقة في هذه المحادثة</div>';
+    chatMessages.innerHTML = `
+      <div class="chat-empty-state">
+        <div class="chat-empty-icon"><i class="fa-regular fa-comment-dots"></i></div>
+        <p>${escapeHtml(tr('No messages in this conversation yet', 'لا توجد رسائل سابقة في هذه المحادثة'))}</p>
+      </div>`;
     return;
   }
 
@@ -246,33 +384,43 @@ function renderMessages(messages) {
     const row = document.createElement('div');
     row.className = `msg-row ${m.sender}`;
 
-    let contentHtml = escapeHtml(m.content);
+    let contentHtml = `<span class="msg-text no-i18n bidi-text">${escapeHtml(m.content)}</span>`;
 
     if (m.media_type === 'image' && m.media_url) {
-      contentHtml = `<a href="${escapeHtml(m.media_url)}" target="_blank" rel="noopener"><img src="${escapeHtml(m.media_url)}" alt="صورة" style="max-width: 220px; max-height: 220px; border-radius: 8px; display: block; margin-bottom: 6px;"></a>${escapeHtml(m.content)}`;
+      contentHtml = `<a href="${escapeHtml(m.media_url)}" target="_blank" rel="noopener"><img class="msg-media-img" src="${escapeHtml(m.media_url)}" alt="${escapeHtml(tr('Image', 'صورة'))}"></a><span class="msg-text no-i18n bidi-text">${escapeHtml(m.content)}</span>`;
     }
 
     if (m.is_voice) {
       contentHtml = `
         <div class="voice-badge">
-          <i class="fa-solid fa-microphone"></i> رسالة صوتية
+          <i class="fa-solid fa-microphone"></i> ${escapeHtml(tr('Voice note', 'رسالة صوتية'))}
         </div>
         ${m.media_url ? `<audio controls src="${m.media_url}" style="width: 100%; height: 32px; margin-bottom: 6px;"></audio>` : ''}
-        <div style="font-size: 13px; color: #f8fafc; font-style: italic;">
+        <div class="msg-voice-transcript no-i18n bidi-text">
           "${escapeHtml(m.voice_transcript || m.content)}"
         </div>
       `;
     }
 
-    const senderLabel = m.sender === 'customer' ? 'العميل' : m.sender === 'bot' ? 'مساعد atlead الذكي' : 'الموظف البشري';
+    const senderLabel = m.sender === 'customer'
+      ? tr('Customer', 'العميل')
+      : m.sender === 'bot'
+        ? tr('atlead AI assistant', 'مساعد atlead الذكي')
+        : tr('Human agent', 'الموظف البشري');
 
     let quoteHtml = '';
     if (m.reply_to_content) {
-      const qLabel = m.reply_to_sender === 'customer' ? 'العميل' : m.reply_to_sender === 'comment' ? 'تعليق' : m.reply_to_sender === 'bot' ? 'البوت' : 'الموظف';
-      quoteHtml = `<div class="msg-quote"><span class="msg-quote-author">${qLabel}</span>${escapeHtml(String(m.reply_to_content).slice(0, 160))}</div>`;
+      const qLabel = m.reply_to_sender === 'customer' ? tr('Customer', 'العميل')
+        : m.reply_to_sender === 'comment' ? tr('Comment', 'تعليق')
+        : m.reply_to_sender === 'bot' ? tr('Bot', 'البوت')
+        : tr('Agent', 'الموظف');
+      quoteHtml = `<div class="msg-quote"><span class="msg-quote-author">${escapeHtml(qLabel)}</span><span class="no-i18n bidi-text">${escapeHtml(String(m.reply_to_content).slice(0, 160))}</span></div>`;
     }
-    const statusIcon = m.delivery_status === 'failed' ? ' <i class="fa-solid fa-circle-exclamation" title="فشل الإرسال للمنصة" style="color:#f87171"></i>'
-      : m.delivery_status === 'simulated' ? ' <i class="fa-solid fa-flask" title="محاكاة — القناة غير مربوطة" style="color:#fbbf24"></i>' : '';
+    const statusIcon = m.delivery_status === 'failed'
+      ? ` <i class="fa-solid fa-circle-exclamation" title="${escapeHtml(tr('Failed to send to the platform', 'فشل الإرسال للمنصة'))}" style="color:var(--status-danger-ink)"></i>`
+      : m.delivery_status === 'simulated'
+        ? ` <i class="fa-solid fa-flask" title="${escapeHtml(tr('Simulated — channel not connected', 'محاكاة — القناة غير مربوطة'))}" style="color:var(--status-warning-ink)"></i>`
+        : '';
 
     row.innerHTML = `
       <div class="msg-bubble">
@@ -280,7 +428,7 @@ function renderMessages(messages) {
         ${contentHtml}
       </div>
       <div class="msg-info">
-        <span>${senderLabel}</span>
+        <span>${escapeHtml(senderLabel)}</span>
         <span>•</span>
         <span>${formatTime(m.created_at)}</span>${statusIcon}
       </div>
@@ -311,7 +459,7 @@ btnToggleBot.addEventListener('click', async () => {
       selectConversation(activeConvId);
     }
   } catch (err) {
-    showToast('حدث خطأ أثناء تبديل حالة البوت', 'error');
+    showToast(tr('Error while switching the bot state', 'حدث خطأ أثناء تبديل حالة البوت'), 'error');
   }
 });
 
@@ -337,10 +485,10 @@ document.getElementById('manual-reply-form').addEventListener('submit', async (e
         conv.messages.push(data.data);
         renderMessages(conv.messages);
       }
-      showToast('تم إرسال الرد بنجاح!', 'success');
+      showToast(tr('Reply sent!', 'تم إرسال الرد بنجاح!'), 'success');
     }
   } catch (err) {
-    showToast('فشل إرسال الرد اليدوي', 'error');
+    showToast(tr('Failed to send the manual reply', 'فشل إرسال الرد اليدوي'), 'error');
   }
 });
 
@@ -374,36 +522,43 @@ async function loadLeads() {
 }
 
 function renderLeadsTable(leads) {
+  lastLeads = leads;
   const tbody = document.getElementById('crm-leads-table-body');
   tbody.innerHTML = '';
 
   if (leads.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: var(--text-muted); padding: 30px;">لا يوجد عملاء مسجلين بعد</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: var(--text-muted); padding: 30px;">${escapeHtml(tr('No registered customers yet', 'لا يوجد عملاء مسجلين بعد'))}</td></tr>`;
     return;
   }
 
-  const channelLabel = { whatsapp: 'واتساب', instagram_dm: 'إنستغرام', facebook_messenger: 'ماسنجر', simulator: 'محاكي', phone: 'هاتف' };
+  const channelLabel = {
+    whatsapp: tr('WhatsApp', 'واتساب'),
+    instagram_dm: tr('Instagram', 'إنستغرام'),
+    facebook_messenger: tr('Messenger', 'ماسنجر'),
+    simulator: tr('Simulator', 'محاكي'),
+    phone: tr('Phone', 'هاتف')
+  };
   const purchaseOptions = [
-    ['not_purchased', 'لم يشترِ بعد'],
-    ['pending_human', 'بانتظار الموظف'],
-    ['won', 'اشترى'],
-    ['lost', 'لم يشترِ']
+    ['not_purchased', tr('Not purchased yet', 'لم يشترِ بعد')],
+    ['pending_human', tr('Waiting for agent', 'بانتظار الموظف')],
+    ['won', tr('Purchased', 'اشترى')],
+    ['lost', tr('Did not buy', 'لم يشترِ')]
   ];
 
   leads.forEach(l => {
-    const tr = document.createElement('tr');
+    const trRow = document.createElement('tr');
     const prob = Number(l.buying_probability) || 0;
     const status = l.purchase_status || (l.deal_status === 'won' ? 'won' : l.deal_status === 'lost' ? 'lost' : (l.deal_status === 'agreed' || l.deal_status === 'handed_off') ? 'pending_human' : 'not_purchased');
-    tr.innerHTML = `
+    trRow.innerHTML = `
       <td>
-        <strong>${escapeHtml(l.name || 'عميل محتمل')}</strong>
-        ${l.customer_summary ? `<div style="font-size: 11px; color: var(--text-muted); max-width: 220px; margin-top: 4px;" title="${escapeHtml(l.customer_summary)}">${escapeHtml(l.customer_summary.slice(0, 90))}${l.customer_summary.length > 90 ? '…' : ''}</div>` : ''}
+        <strong class="bidi-text ${l.name ? 'no-i18n' : ''}">${escapeHtml(l.name || tr('Potential customer', 'عميل محتمل'))}</strong>
+        ${l.customer_summary ? `<div class="no-i18n bidi-text" style="font-size: 11px; color: var(--text-muted); max-width: 220px; margin-top: 4px;" title="${escapeHtml(l.customer_summary)}">${escapeHtml(l.customer_summary.slice(0, 90))}${l.customer_summary.length > 90 ? '…' : ''}</div>` : ''}
       </td>
-      <td style="direction: ltr; text-align: right;">${escapeHtml(l.phone || l.customer_handle || 'غير مسجل')}</td>
+      <td class="${(l.phone || l.customer_handle) ? 'no-i18n' : ''}" style="direction: ltr; text-align: start;">${escapeHtml(l.phone || l.customer_handle || tr('Not recorded', 'غير مسجل'))}</td>
       <td><span class="badge-pill info" style="font-size: 11px;">${escapeHtml(channelLabel[l.channel] || l.channel)}</span></td>
-      <td>${escapeHtml(l.lead_stage || 'New')}</td>
+      <td class="no-i18n">${escapeHtml(l.lead_stage || 'New')}</td>
       <td>
-        <span class="badge-pill ${l.classification === 'Hot' ? 'danger' : l.classification === 'Warm' ? 'warning' : 'info'}" style="font-size: 11px;">
+        <span class="badge-pill ${l.classification === 'Hot' ? 'danger' : l.classification === 'Warm' ? 'warning' : 'info'} no-i18n" style="font-size: 11px;">
           ${escapeHtml(l.classification || 'Cold')}
         </span>
       </td>
@@ -415,45 +570,45 @@ function renderLeadsTable(leads) {
           </div>
         </div>
       </td>
-      <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(l.customer_requests || l.identified_problem || '')}">${escapeHtml(l.customer_requests || l.identified_problem || '-')}</td>
-      <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #38bdf8;">${escapeHtml(l.proposed_solution || '-')}</td>
+      <td class="bidi-text ${(l.customer_requests || l.identified_problem) ? 'no-i18n' : ''}" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(l.customer_requests || l.identified_problem || '')}">${escapeHtml(l.customer_requests || l.identified_problem || '-')}</td>
+      <td class="bidi-text ${l.proposed_solution ? 'no-i18n' : ''}" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary);">${escapeHtml(l.proposed_solution || '-')}</td>
       <td>
         <select class="form-control purchase-select" data-lead="${escapeHtml(l.id)}" style="font-size: 12px; padding: 4px 6px; min-width: 130px;">
           ${purchaseOptions.map(([v, t]) => `<option value="${v}" ${v === status ? 'selected' : ''}>${t}</option>`).join('')}
         </select>
-        ${l.human_notified_at ? '<div style="font-size: 10.5px; color: #34d399; margin-top: 3px;"><i class="fa-solid fa-envelope-circle-check"></i> تم إبلاغ الموظف</div>' : ''}
+        ${l.human_notified_at ? `<div style="font-size: 10.5px; color: var(--status-success-ink); margin-top: 3px;"><i class="fa-solid fa-envelope-circle-check"></i> ${escapeHtml(tr('Agent notified', 'تم إبلاغ الموظف'))}</div>` : ''}
       </td>
       <td>
         ${crmTeam.length ? `<select class="form-control assign-select" data-lead="${escapeHtml(l.id)}" style="font-size: 12px; padding: 4px 6px; min-width: 110px;">
-          <option value="">${l.assigned_to_name ? escapeHtml(l.assigned_to_name) : '— غير مُسند —'}</option>
-          ${crmTeam.filter(m => m.name !== l.assigned_to_name).map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join('')}
-        </select>` : escapeHtml(l.assigned_to_name || '-')}
+          <option value="" class="${l.assigned_to_name ? 'no-i18n' : ''}">${l.assigned_to_name ? escapeHtml(l.assigned_to_name) : escapeHtml(tr('— unassigned —', '— غير مُسند —'))}</option>
+          ${crmTeam.filter(m => m.name !== l.assigned_to_name).map(m => `<option value="${escapeHtml(m.id)}" class="no-i18n">${escapeHtml(m.name)}</option>`).join('')}
+        </select>` : `<span class="${l.assigned_to_name ? 'no-i18n' : ''}">${escapeHtml(l.assigned_to_name || '-')}</span>`}
       </td>
       <td>
         ${l.google_sheet_synced ? `
-          <span class="badge-pill success" style="font-size: 11px;"><i class="fa-solid fa-check"></i> مرحل</span>
+          <span class="badge-pill success" style="font-size: 11px;"><i class="fa-solid fa-check"></i> ${escapeHtml(tr('Synced', 'مرحل'))}</span>
         ` : `
-          <span class="badge-pill warning" style="font-size: 11px;"><i class="fa-solid fa-clock"></i> قيد الانتظار</span>
+          <span class="badge-pill warning" style="font-size: 11px;"><i class="fa-solid fa-clock"></i> ${escapeHtml(tr('Pending', 'قيد الانتظار'))}</span>
         `}
       </td>
       <td>
-        <button class="btn btn-secondary btn-sm" onclick="syncLeadToSheet('${escapeHtml(l.id)}')" title="مزامنة فورية مع Google Sheet">
+        <button class="btn btn-secondary btn-sm" onclick="syncLeadToSheet('${escapeHtml(l.id)}')" title="${escapeHtml(tr('Sync to Google Sheet now', 'مزامنة فورية مع Google Sheet'))}">
           <i class="fa-solid fa-cloud-arrow-up"></i>
         </button>
-        <button class="btn btn-secondary btn-sm" onclick="notifyLead('${escapeHtml(l.id)}')" title="إرسال تفاصيل العميل للموظف بالإيميل">
+        <button class="btn btn-secondary btn-sm" onclick="notifyLead('${escapeHtml(l.id)}')" title="${escapeHtml(tr('Email customer details to the agent', 'إرسال تفاصيل العميل للموظف بالإيميل'))}">
           <i class="fa-solid fa-envelope"></i>
         </button>
-        <button class="btn btn-secondary btn-sm btn-danger-ghost" data-del-lead="${escapeHtml(l.id)}" data-name="${escapeHtml(l.name || '')}" title="حذف العميل">
+        <button class="btn btn-secondary btn-sm btn-danger-ghost" data-del-lead="${escapeHtml(l.id)}" data-name="${escapeHtml(l.name || '')}" title="${escapeHtml(tr('Delete customer', 'حذف العميل'))}">
           <i class="fa-solid fa-trash"></i>
         </button>
       </td>
     `;
-    tbody.appendChild(tr);
+    tbody.appendChild(trRow);
   });
 
   tbody.querySelectorAll('[data-del-lead]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm(`حذف العميل «${btn.dataset.name}» ومحادثته نهائياً؟ لا يمكن التراجع عن الحذف.`)) return;
+      if (!confirm(tr(`Delete customer "${btn.dataset.name}" and their conversation permanently? This cannot be undone.`, `حذف العميل «${btn.dataset.name}» ومحادثته نهائياً؟ لا يمكن التراجع عن الحذف.`))) return;
       await deleteItem(`/api/leads/${encodeURIComponent(btn.dataset.delLead)}`);
       if (activeConvId && !conversations.some(c => c.id === activeConvId)) activeConvId = null;
       loadLeads(); loadConversations();
@@ -488,7 +643,7 @@ function renderLeadsTable(leads) {
 
 async function syncLeadToSheet(leadId) {
   try {
-    showToast('جاري الترحيل إلى Google Sheets...', 'info');
+    showToast(tr('Pushing to Google Sheets...', 'جاري الترحيل إلى Google Sheets...'), 'info');
     const res = await fetch(`/api/leads/${leadId}/sync-sheet`, { method: 'POST' });
     const data = await res.json();
     if (data.success) {
@@ -499,13 +654,13 @@ async function syncLeadToSheet(leadId) {
       showToast(data.message, 'error');
     }
   } catch (err) {
-    showToast('فشل الترحيل إلى جوجل شيت', 'error');
+    showToast(tr('Failed to push to Google Sheets', 'فشل الترحيل إلى جوجل شيت'), 'error');
   }
 }
 
 // Sync all
 document.getElementById('btn-sync-all-sheets')?.addEventListener('click', async () => {
-  showToast('جاري مزامنة كل العملاء مع Google Sheets...', 'info');
+  showToast(tr('Syncing all customers to Google Sheets...', 'جاري مزامنة كل العملاء مع Google Sheets...'), 'info');
   const res = await fetch('/api/leads/sync-all', { method: 'POST' });
   const data = await res.json();
   showToast(data.message, data.success ? 'success' : 'error');
@@ -543,121 +698,141 @@ async function loadComments() {
 }
 
 function renderCommentsTable(comments) {
+  lastComments = comments;
   const tbody = document.getElementById('comments-table-body');
   tbody.innerHTML = '';
 
   if (comments.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">لا توجد تعليقات مسجلة بعد</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">${escapeHtml(tr('No recorded comments yet', 'لا توجد تعليقات مسجلة بعد'))}</td></tr>`;
     return;
   }
 
   comments.forEach(c => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
+    const trRow = document.createElement('tr');
+    trRow.innerHTML = `
       <td>
-        <span class="badge-pill ${c.platform === 'facebook' ? 'info' : 'warning'}" style="font-size: 11px;">
-          <i class="fa-brands fa-${c.platform}"></i> ${c.platform}
+        <span class="badge-pill ${c.platform === 'facebook' ? 'info' : 'warning'} no-i18n" style="font-size: 11px;">
+          <i class="fa-brands fa-${escapeHtml(c.platform)}"></i> ${escapeHtml(c.platform)}
         </span>
       </td>
-      <td><strong>${escapeHtml(c.user_name || 'متابع')}</strong></td>
-      <td style="max-width: 200px;">"${escapeHtml(c.comment_text)}"</td>
+      <td><strong class="bidi-text ${c.user_name ? 'no-i18n' : ''}">${escapeHtml(c.user_name || tr('Follower', 'متابع'))}</strong></td>
+      <td class="no-i18n bidi-text" style="max-width: 200px;">"${escapeHtml(c.comment_text)}"</td>
       <td>
         <span class="badge-pill ${c.is_interested ? 'danger' : 'info'}" style="font-size: 11px;">
-          ${c.is_interested ? 'مهتم بالشراء / استفسار' : 'تفاعل عام'}
+          ${escapeHtml(c.is_interested ? tr('Interested / inquiry', 'مهتم بالشراء / استفسار') : tr('General engagement', 'تفاعل عام'))}
         </span>
       </td>
-      <td style="max-width: 220px; color: #38bdf8;">${c.status === 'pending' ? 'بانتظار الرد...' : c.status === 'skipped' ? 'محوّل إلى موظف — لم يرد البوت' : escapeHtml(c.bot_reply_text || '-')}</td>
+      <td style="max-width: 220px; color: var(--text-primary);">${
+        c.status === 'pending'
+          ? escapeHtml(tr('Waiting to reply...', 'بانتظار الرد...'))
+          : c.status === 'skipped'
+            ? escapeHtml(tr('Handed to agent — bot did not reply', 'محوّل إلى موظف — لم يرد البوت'))
+            : `<span class="no-i18n bidi-text">${escapeHtml(c.bot_reply_text || '-')}</span>`
+      }</td>
       <td>
         ${c.dm_triggered ? `
-          <span class="badge-pill success" style="font-size: 11px;"><i class="fa-solid fa-paper-plane"></i> تم إرسال DM خاص</span>
-          ${c.dm_text ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 4px; max-width: 250px;">"${escapeHtml(c.dm_text)}"</div>` : ''}
+          <span class="badge-pill success" style="font-size: 11px;"><i class="fa-solid fa-paper-plane"></i> ${escapeHtml(tr('DM sent', 'تم إرسال DM خاص'))}</span>
+          ${c.dm_text ? `<div class="no-i18n bidi-text" style="font-size: 11.5px; color: var(--text-secondary); margin-top: 4px; max-width: 250px;">"${escapeHtml(c.dm_text)}"</div>` : ''}
         ` : `
-          <span style="color: var(--text-muted); font-size: 11px;">غير مطلوب</span>
+          <span style="color: var(--text-muted); font-size: 11.5px;">${escapeHtml(tr('Not needed', 'غير مطلوب'))}</span>
         `}
       </td>
-      <td style="font-size: 11px; color: var(--text-muted);">${formatTime(c.created_at)}</td>
-      <td><button class="btn btn-secondary btn-sm btn-danger-ghost" data-del-comment="${escapeHtml(c.comment_id)}" title="حذف التعليق"><i class="fa-solid fa-trash"></i></button></td>
+      <td style="font-size: 11.5px; color: var(--text-muted);">${formatTime(c.created_at)}</td>
+      <td><button class="btn btn-secondary btn-sm btn-danger-ghost" data-del-comment="${escapeHtml(c.comment_id)}" title="${escapeHtml(tr('Delete comment', 'حذف التعليق'))}"><i class="fa-solid fa-trash"></i></button></td>
     `;
-    tbody.appendChild(tr);
+    tbody.appendChild(trRow);
   });
 }
 
 // Simulate comment button
 document.getElementById('btn-simulate-comment-modal')?.addEventListener('click', async () => {
-  const text = prompt('أدخل نص التعليق الذي ترغب بمحاكاته على فيسبوك أو إنستغرام:', 'كم سعر النظام لو سمحت وبدي تفاصيل؟');
+  const text = prompt(
+    tr('Enter the comment text to simulate on Facebook or Instagram:', 'أدخل نص التعليق الذي ترغب بمحاكاته على فيسبوك أو إنستغرام:'),
+    'كم سعر النظام لو سمحت وبدي تفاصيل؟'
+  );
   if (!text) return;
 
   try {
-    showToast('جاري فحص التعليق وتطبيق الرد والرسالة الخاصة...', 'info');
+    showToast(tr('Analysing the comment and sending the reply and DM...', 'جاري فحص التعليق وتطبيق الرد والرسالة الخاصة...'), 'info');
     const res = await fetch('/api/comments/simulate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, platform: 'facebook', user_name: 'عميل تجريبي' })
+      body: JSON.stringify({ message: text, platform: 'facebook', user_name: tr('Test customer', 'عميل تجريبي') })
     });
     const data = await res.json();
     if (data.success) {
-      showToast(`تم استلام التعليق، وسيرد البوت بعد ${data.delay_seconds ?? 10} ثواني`, 'success');
+      showToast(tr(`Comment received — bot will reply in ${data.delay_seconds ?? 10}s`, `تم استلام التعليق، وسيرد البوت بعد ${data.delay_seconds ?? 10} ثواني`), 'success');
       loadComments();
       setTimeout(loadComments, ((data.delay_seconds ?? 10) + 4) * 1000);
     }
   } catch (err) {
-    showToast('فشل محاكاة التعليق', 'error');
+    showToast(tr('Comment simulation failed', 'فشل محاكاة التعليق'), 'error');
   }
 });
 
 // 5. KNOWLEDGE BASE TAB
+function renderKnowledge(data) {
+  lastKnowledge = data;
+  document.getElementById('kb-system-prompt-preview').value = data.system_prompt || '';
+  const extra = document.getElementById('kb-extra-text');
+  if (extra) extra.value = data.extra_text || '';
+  const status = document.getElementById('kb-docs-status');
+  if (status) {
+    const docSummary = (data.documents || [])
+      .map(d => `${d.title} (${Number(d.chars || 0).toLocaleString()} ${tr('chars', 'حرف')})`)
+      .join(' • ');
+    status.classList.add('no-i18n');
+    status.textContent = tr(
+      `Loaded from Supabase: ${docSummary} • ${data.faq_count} verified FAQs`,
+      `محمّل من Supabase: ${docSummary} • ${data.faq_count} سؤال شائع بأجوبة معتمدة`
+    );
+  }
+  const editor = document.getElementById('kb-documents-editor');
+  if (editor) {
+    editor.innerHTML = (data.documents || []).map(doc => `
+      <div class="glass-card" data-kb-doc="${escapeHtml(doc.id)}" style="padding: 16px; margin-bottom: 0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px;">
+          <strong class="${doc.title ? 'no-i18n' : ''}">${escapeHtml(doc.title || tr('Document', 'وثيقة'))}</strong>
+          <span class="form-hint no-i18n">${escapeHtml(doc.doc_type || 'text')} • ${Number(doc.chars || 0).toLocaleString()} ${escapeHtml(tr('chars', 'حرف'))}</span>
+        </div>
+        <input class="form-control kb-doc-title no-i18n" value="${escapeHtml(doc.title || '')}" style="margin-bottom:8px;" aria-label="${escapeHtml(tr('Document title', 'عنوان الوثيقة'))}">
+        ${doc.hint ? `<div class="form-hint no-i18n" style="margin-bottom:6px;">${escapeHtml(doc.hint)}</div>` : ''}
+        <textarea class="form-control kb-doc-content no-i18n" rows="10" aria-label="${escapeHtml(tr('Document content', 'محتوى الوثيقة'))}">${escapeHtml(doc.content || '')}</textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; gap:12px; flex-wrap:wrap;">
+          <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer;">
+            <input type="checkbox" class="kb-doc-active" ${doc.is_active !== false ? 'checked' : ''}>
+            <span>${escapeHtml(tr('The bot answers from this document', 'يجيب البوت من هذه الوثيقة'))}</span>
+          </label>
+          <button type="button" class="btn btn-primary kb-doc-save"><i class="fa-solid fa-floppy-disk"></i> ${escapeHtml(tr('Save document', 'حفظ الوثيقة'))}</button>
+        </div>
+      </div>`).join('');
+    editor.querySelectorAll('.kb-doc-save').forEach(btn => btn.addEventListener('click', async () => {
+      const card = btn.closest('[data-kb-doc]');
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/knowledge/${encodeURIComponent(card.dataset.kbDoc)}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: card.querySelector('.kb-doc-title').value,
+            content: card.querySelector('.kb-doc-content').value,
+            is_active: card.querySelector('.kb-doc-active').checked
+          })
+        });
+        const result = await res.json();
+        showToast(result.message || (result.success ? tr('Saved', 'تم الحفظ') : tr('Save failed', 'فشل الحفظ')), result.success ? 'success' : 'error');
+        if (result.success) loadKnowledge();
+      } catch (err) {
+        showToast(tr('Failed to save document: ', 'فشل حفظ الوثيقة: ') + err.message, 'error');
+      } finally { btn.disabled = false; }
+    }));
+  }
+}
+
 async function loadKnowledge() {
   try {
     const res = await fetch('/api/knowledge');
     const data = await res.json();
-    if (data.success) {
-      document.getElementById('kb-system-prompt-preview').value = data.system_prompt || '';
-      const extra = document.getElementById('kb-extra-text');
-      if (extra) extra.value = data.extra_text || '';
-      const status = document.getElementById('kb-docs-status');
-      if (status) {
-        status.textContent = `محمّل من Supabase: ${data.documents.map(d => `${d.title} (${d.chars.toLocaleString()} حرف)`).join(' • ')} • ${data.faq_count} سؤال شائع بأجوبة معتمدة`;
-      }
-      const editor = document.getElementById('kb-documents-editor');
-      if (editor) {
-        editor.innerHTML = (data.documents || []).map(doc => `
-          <div class="glass-card" data-kb-doc="${escapeHtml(doc.id)}" style="padding: 14px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px;">
-              <strong>${escapeHtml(doc.title || 'وثيقة')}</strong>
-              <span class="form-hint">${escapeHtml(doc.doc_type || 'text')} • ${Number(doc.chars || 0).toLocaleString()} حرف</span>
-            </div>
-            <input class="form-control kb-doc-title" value="${escapeHtml(doc.title || '')}" style="margin-bottom:8px;" aria-label="عنوان الوثيقة">
-            ${doc.hint ? `<div class="form-hint" style="margin-bottom:6px;">${escapeHtml(doc.hint)}</div>` : ''}
-            <textarea class="form-control kb-doc-content" rows="10" aria-label="محتوى الوثيقة">${escapeHtml(doc.content || '')}</textarea>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px;">
-              <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer;">
-                <input type="checkbox" class="kb-doc-active" ${doc.is_active !== false ? 'checked' : ''}>
-                <span>يجيب البوت من هذه الوثيقة</span>
-              </label>
-              <button type="button" class="btn btn-primary kb-doc-save"><i class="fa-solid fa-floppy-disk"></i> حفظ الوثيقة</button>
-            </div>
-          </div>`).join('');
-        editor.querySelectorAll('.kb-doc-save').forEach(btn => btn.addEventListener('click', async () => {
-          const card = btn.closest('[data-kb-doc]');
-          btn.disabled = true;
-          try {
-            const res = await fetch(`/api/knowledge/${encodeURIComponent(card.dataset.kbDoc)}`, {
-              method: 'PUT', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                title: card.querySelector('.kb-doc-title').value,
-                content: card.querySelector('.kb-doc-content').value,
-                is_active: card.querySelector('.kb-doc-active').checked
-              })
-            });
-            const result = await res.json();
-            showToast(result.message || (result.success ? 'تم الحفظ' : 'فشل الحفظ'), result.success ? 'success' : 'error');
-            if (result.success) loadKnowledge();
-          } catch (err) {
-            showToast('فشل حفظ الوثيقة: ' + err.message, 'error');
-          } finally { btn.disabled = false; }
-        }));
-      }
-    }
+    if (data.success) renderKnowledge(data);
   } catch (err) {
     console.error('Error kb:', err);
   }
@@ -667,7 +842,7 @@ document.getElementById('kb-new-doc-save')?.addEventListener('click', async () =
   const btn = document.getElementById('kb-new-doc-save');
   const title = document.getElementById('kb-new-doc-title').value.trim();
   const content = document.getElementById('kb-new-doc-content').value.trim();
-  if (!title || !content) return showToast('اكتب عنوان ومحتوى للوثيقة', 'error');
+  if (!title || !content) return showToast(tr('Enter a title and content', 'اكتب عنوان ومحتوى للوثيقة'), 'error');
   btn.disabled = true;
   try {
     const res = await fetch('/api/knowledge/docs', {
@@ -675,14 +850,14 @@ document.getElementById('kb-new-doc-save')?.addEventListener('click', async () =
       body: JSON.stringify({ title, content })
     });
     const data = await res.json();
-    showToast(data.message || (data.success ? 'تمت الإضافة' : 'فشلت الإضافة'), data.success ? 'success' : 'error');
+    showToast(data.message || (data.success ? tr('Added', 'تمت الإضافة') : tr('Add failed', 'فشلت الإضافة')), data.success ? 'success' : 'error');
     if (data.success) {
       document.getElementById('kb-new-doc-title').value = '';
       document.getElementById('kb-new-doc-content').value = '';
       loadKnowledge();
     }
   } catch (err) {
-    showToast('فشلت الإضافة: ' + err.message, 'error');
+    showToast(tr('Add failed: ', 'فشلت الإضافة: ') + err.message, 'error');
   } finally {
     btn.disabled = false;
   }
@@ -698,10 +873,10 @@ document.getElementById('kb-extra-save')?.addEventListener('click', async () => 
       body: JSON.stringify({ extra_text: document.getElementById('kb-extra-text').value })
     });
     const data = await res.json();
-    showToast(data.message || (data.success ? 'تم الحفظ' : 'فشل الحفظ'), data.success ? 'success' : 'error');
+    showToast(data.message || (data.success ? tr('Saved', 'تم الحفظ') : tr('Save failed', 'فشل الحفظ')), data.success ? 'success' : 'error');
     if (data.success) loadKnowledge();
   } catch (err) {
-    showToast('فشل الحفظ: ' + err.message, 'error');
+    showToast(tr('Save failed: ', 'فشل الحفظ: ') + err.message, 'error');
   } finally {
     btn.disabled = false;
   }
@@ -848,6 +1023,7 @@ async function loadSettings() {
       document.getElementById('wa-webhook-url-display').value = `${origin}/webhook/whatsapp`;
 
       updateNavbarPills(s);
+      lastSettings = s;
     }
   } catch (err) {
     console.error('Error settings:', err);
@@ -988,13 +1164,13 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
     });
     const data = await res.json();
     if (data.success) {
-      showToast('تم حفظ وتحديث الإعدادات بنجاح!', 'success');
+      showToast(tr('Settings saved!', 'تم حفظ وتحديث الإعدادات بنجاح!'), 'success');
       loadSettings();
     } else {
-      showToast(data.message || 'فشل حفظ الإعدادات', 'error');
+      showToast(data.message || tr('Failed to save settings', 'فشل حفظ الإعدادات'), 'error');
     }
   } catch (err) {
-    showToast('فشل حفظ الإعدادات', 'error');
+    showToast(tr('Failed to save settings', 'فشل حفظ الإعدادات'), 'error');
   }
 });
 
@@ -1008,17 +1184,18 @@ async function loadMetaOauthInfo() {
     metaAppManaged = !!d.managed;
     document.querySelectorAll('.meta-dev-only').forEach(el => { el.style.display = d.managed ? 'none' : ''; });
     const btn = document.getElementById('btn-meta-oauth');
-    btn.innerHTML = `<i class="fa-brands fa-facebook"></i> ${d.connected ? 'إعادة تسجيل الدخول بفيسبوك' : 'سجّل دخول بفيسبوك وإنستغرام'}`;
+    btn.innerHTML = `<i class="fa-brands fa-facebook"></i> ${escapeHtml(d.connected ? tr('Re-sign in with Facebook', 'إعادة تسجيل الدخول بفيسبوك') : tr('Sign in with Facebook and Instagram', 'سجّل دخول بفيسبوك وإنستغرام'))}`;
     const who = document.getElementById('meta-connected-as');
     who.style.display = d.connected ? 'block' : 'none';
+    who.classList.add('no-i18n');
     who.innerHTML = d.connected
-      ? `مربوط: ${escapeHtml(d.page_name || 'صفحة فيسبوك')}${d.instagram_username ? ` + إنستغرام @${escapeHtml(d.instagram_username)}` : ''}${d.granted?.length ? ` — ${d.granted.length} صلاحية` : ''}`
+      ? `${escapeHtml(tr('Connected:', 'مربوط:'))} ${escapeHtml(d.page_name || tr('Facebook Page', 'صفحة فيسبوك'))}${d.instagram_username ? ` + Instagram @${escapeHtml(d.instagram_username)}` : ''}${d.granted?.length ? ` — ${d.granted.length} ${escapeHtml(tr('permissions', 'صلاحية'))}` : ''}`
       : '';
     if (!document.getElementById('meta-app-id').value && d.app_id) document.getElementById('meta-app-id').value = d.app_id;
     const granted = new Set(d.granted || []);
     document.getElementById('meta-scopes-list').innerHTML = Object.entries(d.scopes).map(([k, label]) =>
-      `<div>${granted.size ? (granted.has(k) ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>') : '•'} <code>${escapeHtml(k)}</code> — ${escapeHtml(label)}</div>`).join('') +
-      (d.connected_at ? `<div style="margin-top:4px;">آخر ربط: ${escapeHtml(new Date(d.connected_at).toLocaleString('en-GB'))}</div>` : '');
+      `<div>${granted.size ? (granted.has(k) ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>') : '•'} <code>${escapeHtml(k)}</code> — <span class="no-i18n">${escapeHtml(label)}</span></div>`).join('') +
+      (d.connected_at ? `<div style="margin-top:4px;">${escapeHtml(tr('Last connected:', 'آخر ربط:'))} ${escapeHtml(new Date(d.connected_at).toLocaleString('en-GB'))}</div>` : '');
   } catch { /* optional */ }
 }
 
@@ -1030,7 +1207,7 @@ document.getElementById('btn-meta-oauth')?.addEventListener('click', async (e) =
   const secret = document.getElementById('meta-app-secret').value.trim();
   if (!appId || !secret) {
     e.preventDefault();
-    showToast('اكتب App ID و App Secret أولاً', 'error');
+    showToast(tr('Enter App ID and App Secret first', 'اكتب App ID و App Secret أولاً'), 'error');
     return;
   }
   e.preventDefault();
@@ -1048,10 +1225,10 @@ window.addEventListener('DOMContentLoaded', () => {
   const r = q.get('meta_oauth');
   if (!r) return;
   switchTab('settings');
-  showToast(q.get('msg') || (r === 'ok' ? 'تم الربط' : 'فشل الربط'), r === 'ok' ? 'success' : 'error');
+  showToast(q.get('msg') || (r === 'ok' ? tr('Connected', 'تم الربط') : tr('Connection failed', 'فشل الربط')), r === 'ok' ? 'success' : 'error');
   const box = document.getElementById('meta-diagnose-result');
   box.style.display = 'block';
-  box.innerHTML = `${r === 'ok' ? '<i class="fa-solid fa-circle-check st-ok"></i>' : r === 'partial' ? '<i class="fa-solid fa-triangle-exclamation st-warn"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} ${escapeHtml(q.get('msg') || '')}`;
+  box.innerHTML = `${r === 'ok' ? '<i class="fa-solid fa-circle-check st-ok"></i>' : r === 'partial' ? '<i class="fa-solid fa-triangle-exclamation st-warn"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} <span class="no-i18n">${escapeHtml(q.get('msg') || '')}</span>`;
   history.replaceState(null, '', '/?tab=settings');
 });
 
@@ -1061,22 +1238,22 @@ document.getElementById('btn-meta-diagnose')?.addEventListener('click', async ()
   const box = document.getElementById('meta-diagnose-result');
   btn.disabled = true;
   box.style.display = 'block';
-  box.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الاستعلام من Meta مباشرة...';
+  box.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${escapeHtml(tr('Asking Meta directly...', 'جاري الاستعلام من Meta مباشرة...'))}`;
   try {
     const data = await (await fetch('/api/meta/diagnose')).json();
     if (!data.success) throw new Error(data.message);
     const rows = data.checks.map(c => `
       <div style="padding: 6px 0; border-bottom: 1px solid var(--border-color);">
-        ${c.ok ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} <strong>${escapeHtml(c.label)}:</strong> ${escapeHtml(c.detail || '')}
-        ${!c.ok && c.fix ? `<div style="color: var(--accent-amber); font-size: 12px;">${escapeHtml(c.fix)}</div>` : ''}
+        ${c.ok ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} <strong class="no-i18n">${escapeHtml(c.label)}:</strong> <span class="no-i18n">${escapeHtml(c.detail || '')}</span>
+        ${!c.ok && c.fix ? `<div class="no-i18n" style="color: var(--status-warning-ink); font-size: 12px;">${escapeHtml(c.fix)}</div>` : ''}
       </div>`).join('');
     const log = (data.webhook_log || []).slice(0, 15).map(e =>
-      `<div>${escapeHtml(new Date(e.at).toLocaleTimeString())} — <strong>${escapeHtml(e.object)}</strong> ${escapeHtml(e.kind)} ${escapeHtml(e.detail || '')}</div>`).join('');
+      `<div class="no-i18n">${escapeHtml(new Date(e.at).toLocaleTimeString(uiLocale()))} — <strong>${escapeHtml(e.object)}</strong> ${escapeHtml(e.kind)} ${escapeHtml(e.detail || '')}</div>`).join('');
     box.innerHTML = rows + `
-      <div style="margin-top: 10px;"><strong>آخر أحداث وصلت من Meta (منذ آخر تشغيل للسيرفر):</strong></div>
-      ${log || '<div style="color: var(--text-muted);">لا توجد أحداث حتى الآن — أرسل رسالة أو تعليقاً تجريبياً ثم اضغط الزر مرة أخرى.</div>'}`;
+      <div style="margin-top: 10px;"><strong>${escapeHtml(tr('Recent events from Meta (since last server start):', 'آخر أحداث وصلت من Meta (منذ آخر تشغيل للسيرفر):'))}</strong></div>
+      ${log || `<div style="color: var(--text-muted);">${escapeHtml(tr('No events yet — send a test message or comment and click the button again.', 'لا توجد أحداث حتى الآن — أرسل رسالة أو تعليقاً تجريبياً ثم اضغط الزر مرة أخرى.'))}</div>`}`;
   } catch (err) {
-    box.innerHTML = `${escapeHtml(err.message)}`;
+    box.innerHTML = `<span class="no-i18n">${escapeHtml(err.message)}</span>`;
   } finally {
     btn.disabled = false;
   }
@@ -1084,7 +1261,7 @@ document.getElementById('btn-meta-diagnose')?.addEventListener('click', async ()
 
 document.getElementById('btn-test-meta-conn')?.addEventListener('click', async () => {
   const token = document.getElementById('meta-access-token').value;
-  showToast('جاري فحص اتصال Meta API...', 'info');
+  showToast(tr('Testing the Meta API connection...', 'جاري فحص اتصال Meta API...'), 'info');
   const res = await fetch('/api/settings/test-meta', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1097,7 +1274,7 @@ document.getElementById('btn-test-meta-conn')?.addEventListener('click', async (
 document.getElementById('btn-test-whatsapp-conn')?.addEventListener('click', async () => {
   const phoneId = document.getElementById('wa-phone-id').value;
   const token = document.getElementById('wa-token').value;
-  showToast('جاري فحص اتصال WhatsApp API...', 'info');
+  showToast(tr('Testing the WhatsApp API connection...', 'جاري فحص اتصال WhatsApp API...'), 'info');
   const res = await fetch('/api/settings/test-whatsapp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1110,7 +1287,7 @@ document.getElementById('btn-test-whatsapp-conn')?.addEventListener('click', asy
 document.getElementById('btn-test-supabase-conn')?.addEventListener('click', async () => {
   const url = document.getElementById('supa-url').value;
   const key = document.getElementById('supa-key').value;
-  showToast('جاري فحص اتصال Supabase...', 'info');
+  showToast(tr('Testing Supabase...', 'جاري فحص اتصال Supabase...'), 'info');
   const res = await fetch('/api/settings/test-supabase', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1121,7 +1298,7 @@ document.getElementById('btn-test-supabase-conn')?.addEventListener('click', asy
 });
 
 document.getElementById('btn-test-sheet-conn')?.addEventListener('click', async () => {
-  showToast('جاري فحص الربط مع Google Sheets...', 'info');
+  showToast(tr('Testing Google Sheets...', 'جاري فحص الربط مع Google Sheets...'), 'info');
   const res = await fetch('/api/settings/test-google-sheets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1163,7 +1340,7 @@ document.getElementById('btn-sync-current-lead')?.addEventListener('click', asyn
   if (lead) {
     await syncLeadToSheet(lead.id);
   } else {
-    showToast('هذه المحادثة لم تصل بعد لمرحلة تأهيل العميل كـ Lead مسجل', 'info');
+    showToast(tr('This conversation has not been qualified as a lead yet', 'هذه المحادثة لم تصل بعد لمرحلة تأهيل العميل كـ Lead مسجل'), 'info');
   }
 });
 
@@ -1171,7 +1348,7 @@ document.getElementById('btn-sync-current-lead')?.addEventListener('click', asyn
 function formatTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  return d.toLocaleTimeString('ar-JO', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' });
 }
 
 function escapeHtml(text) {
@@ -1185,46 +1362,47 @@ function escapeHtml(text) {
 }
 
 function updateNavbarPills(s) {
+  if (!s) return;
   const metaPill = document.getElementById('pill-meta');
   const waPill = document.getElementById('pill-whatsapp');
   const supaPill = document.getElementById('pill-supabase');
   const sheetsPill = document.getElementById('pill-sheets');
 
   if (s.meta?.page_access_token) {
-    metaPill.className = 'badge-pill success';
-    metaPill.innerHTML = '<i class="fa-brands fa-meta"></i> <span>Meta متصل</span>';
+    metaPill.className = 'status-chip success';
+    metaPill.innerHTML = `<span class="status-indicator"></span><i class="fa-brands fa-meta"></i> <span>${escapeHtml(tr('Meta connected', 'Meta متصل'))}</span>`;
   } else {
-    metaPill.className = 'badge-pill warning';
-    metaPill.innerHTML = '<i class="fa-brands fa-meta"></i> <span>Meta جاهز للربط</span>';
+    metaPill.className = 'status-chip warning';
+    metaPill.innerHTML = `<span class="status-indicator"></span><i class="fa-brands fa-meta"></i> <span>${escapeHtml(tr('Meta ready to connect', 'Meta جاهز للربط'))}</span>`;
   }
 
   if ((s.whatsapp?.mode || 'qr') === 'qr') {
-    waPill.className = s.whatsapp?.qr_connected_number ? 'badge-pill success' : 'badge-pill warning';
+    waPill.className = s.whatsapp?.qr_connected_number ? 'status-chip success' : 'status-chip warning';
     waPill.innerHTML = s.whatsapp?.qr_connected_number
-      ? `<i class="fa-brands fa-whatsapp"></i> <span>WhatsApp +${escapeHtml(s.whatsapp.qr_connected_number)}</span>`
-      : '<i class="fa-brands fa-whatsapp"></i> <span>WhatsApp غير مربوط</span>';
+      ? `<span class="status-indicator"></span><i class="fa-brands fa-whatsapp"></i> <span class="no-i18n">WhatsApp +${escapeHtml(s.whatsapp.qr_connected_number)}</span>`
+      : `<span class="status-indicator"></span><i class="fa-brands fa-whatsapp"></i> <span>${escapeHtml(tr('WhatsApp not connected', 'WhatsApp غير مربوط'))}</span>`;
   } else if (s.whatsapp?.phone_number_id && s.whatsapp?.access_token) {
-    waPill.className = 'badge-pill success';
-    waPill.innerHTML = '<i class="fa-brands fa-whatsapp"></i> <span>WhatsApp متصل</span>';
+    waPill.className = 'status-chip success';
+    waPill.innerHTML = `<span class="status-indicator"></span><i class="fa-brands fa-whatsapp"></i> <span>${escapeHtml(tr('WhatsApp connected', 'WhatsApp متصل'))}</span>`;
   } else {
-    waPill.className = 'badge-pill info';
-    waPill.innerHTML = '<i class="fa-brands fa-whatsapp"></i> <span>WhatsApp جاهز</span>';
+    waPill.className = 'status-chip info';
+    waPill.innerHTML = `<span class="status-indicator"></span><i class="fa-brands fa-whatsapp"></i> <span>${escapeHtml(tr('WhatsApp ready', 'WhatsApp جاهز'))}</span>`;
   }
 
   if (s.supabase?.url && (s.supabase?.service_role_key || s.supabase?.anon_key)) {
-    supaPill.className = 'badge-pill success';
-    supaPill.innerHTML = '<i class="fa-solid fa-database"></i> <span>Supabase متصل</span>';
+    supaPill.className = 'status-chip success';
+    supaPill.innerHTML = `<span class="status-indicator"></span><i class="fa-solid fa-database"></i> <span>${escapeHtml(tr('Supabase connected', 'Supabase متصل'))}</span>`;
   } else {
-    supaPill.className = 'badge-pill info';
-    supaPill.innerHTML = '<i class="fa-solid fa-database"></i> <span>Supabase محلي/نشط</span>';
+    supaPill.className = 'status-chip info';
+    supaPill.innerHTML = `<span class="status-indicator"></span><i class="fa-solid fa-database"></i> <span>${escapeHtml(tr('Supabase local/active', 'Supabase محلي/نشط'))}</span>`;
   }
 
   if (s.google_sheets?.webhook_url || s.google_sheets?.sheet_id) {
-    sheetsPill.className = 'badge-pill success';
-    sheetsPill.innerHTML = '<i class="fa-solid fa-table"></i> <span>Sheets متزامن</span>';
+    sheetsPill.className = 'status-chip success';
+    sheetsPill.innerHTML = `<span class="status-indicator"></span><i class="fa-solid fa-table"></i> <span>${escapeHtml(tr('Sheets synced', 'Sheets متزامن'))}</span>`;
   } else {
-    sheetsPill.className = 'badge-pill warning';
-    sheetsPill.innerHTML = '<i class="fa-solid fa-table"></i> <span>Sheets بانتظار الرابط</span>';
+    sheetsPill.className = 'status-chip warning';
+    sheetsPill.innerHTML = `<span class="status-indicator"></span><i class="fa-solid fa-table"></i> <span>${escapeHtml(tr('Sheets not linked', 'Sheets بانتظار الرابط'))}</span>`;
   }
 }
 
@@ -1282,22 +1460,22 @@ function renderWaStatus(st) {
 
   if (st.status === 'connected') {
     statusEl.classList.add('ok');
-    statusEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> مربوط بالرقم +${escapeHtml(st.connected_number || '')}${st.connected_name ? ' — ' + escapeHtml(st.connected_name) : ''}`;
+    statusEl.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span class="no-i18n">${escapeHtml(tr('Connected to', 'مربوط بالرقم'))} +${escapeHtml(st.connected_number || '')}${st.connected_name ? ' — ' + escapeHtml(st.connected_name) : ''}</span>`;
     if (st.number_mismatch) {
-      statusEl.innerHTML += `<div style="color:#fbbf24; font-size:12px; margin-top:6px;">الرقم المربوط مختلف عن الرقم المدخل (${escapeHtml(st.expected_number)})</div>`;
+      statusEl.innerHTML += `<div style="color:var(--status-warning-ink); font-size:12px; margin-top:6px;">${escapeHtml(tr(`Connected number differs from entered number (${st.expected_number})`, `الرقم المربوط مختلف عن الرقم المدخل (${st.expected_number})`))}</div>`;
     }
     btnConnect.style.display = 'none'; btnPair.style.display = 'none'; btnLogout.style.display = '';
   } else if (st.status === 'qr') {
-    statusEl.innerHTML = 'امسح الكود من هاتفك';
+    statusEl.innerHTML = escapeHtml(tr('Scan the code with your phone', 'امسح الكود من هاتفك'));
     if (st.qr) { img.src = st.qr; img.style.display = ''; }
     if (st.pairing_code) { code.textContent = st.pairing_code; code.style.display = ''; }
     help.style.display = '';
     btnConnect.style.display = 'none';
   } else if (st.status === 'connecting') {
-    statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الاتصال...';
+    statusEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${escapeHtml(tr('Connecting...', 'جاري الاتصال...'))}`;
     btnConnect.style.display = 'none';
   } else {
-    statusEl.innerHTML = 'غير مربوط — اضغط "توليد QR"';
+    statusEl.innerHTML = escapeHtml(tr('Not connected — click "Generate QR"', 'غير مربوط — اضغط "توليد QR"'));
   }
 }
 
@@ -1313,22 +1491,22 @@ document.getElementById('btn-wa-connect')?.addEventListener('click', async () =>
 
 document.getElementById('btn-wa-pair')?.addEventListener('click', async () => {
   const phone = document.getElementById('wa-linked-phone').value;
-  showToast('جاري توليد كود الربط...', 'info');
+  showToast(tr('Generating the link code...', 'جاري توليد كود الربط...'), 'info');
   const res = await fetch('/api/whatsapp/pairing-code', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone })
   });
   const data = await res.json();
   if (data.success) {
-    showToast('واتساب ← الأجهزة المرتبطة ← ربط جهاز ← الربط برقم الهاتف، وأدخل الكود', 'success');
+    showToast(tr('WhatsApp → Linked devices → Link a device → Link with phone number, then enter the code', 'واتساب ← الأجهزة المرتبطة ← ربط جهاز ← الربط برقم الهاتف، وأدخل الكود'), 'success');
     refreshWaStatus();
   } else showToast(data.message, 'error');
 });
 
 document.getElementById('btn-wa-logout')?.addEventListener('click', async () => {
-  if (!confirm('هل تريد فصل رقم واتساب عن البوت؟')) return;
+  if (!confirm(tr('Disconnect this WhatsApp number from the bot?', 'هل تريد فصل رقم واتساب عن البوت؟'))) return;
   const res = await fetch('/api/whatsapp/logout', { method: 'POST' });
   const data = await res.json();
-  showToast(data.message || 'تم الفصل', 'info');
+  showToast(data.message || tr('Disconnected', 'تم الفصل'), 'info');
   renderWaStatus(data);
 });
 
@@ -1340,27 +1518,27 @@ function renderNotifyRecipients() {
   const box = document.getElementById('notify-email-list');
   if (!box) return;
   box.innerHTML = notifyRecipients.length
-    ? notifyRecipients.map((e, i) => `<span class="email-chip">${escapeHtml(e)} <button type="button" data-i="${i}" title="حذف">×</button></span>`).join('')
-    : '<span style="font-size: 12px; color: var(--text-muted);">لا يوجد إيميلات بعد</span>';
+    ? notifyRecipients.map((e, i) => `<span class="email-chip no-i18n">${escapeHtml(e)} <button type="button" data-i="${i}" title="${escapeHtml(tr('Delete', 'حذف'))}">×</button></span>`).join('')
+    : `<span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(tr('No emails yet', 'لا يوجد إيميلات بعد'))}</span>`;
   box.querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', () => {
     notifyRecipients.splice(Number(b.dataset.i), 1);
     renderNotifyRecipients();
-    showToast('اضغط "حفظ وتحديث الإعدادات" لتثبيت التغيير', 'info');
+    showToast(tr('Click "Save settings" to apply', 'اضغط "حفظ وتحديث الإعدادات" لتثبيت التغيير'), 'info');
   }));
 }
 
 document.getElementById('btn-add-notify-email')?.addEventListener('click', () => {
   const input = document.getElementById('notify-email-input');
   const email = input.value.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showToast('اكتب إيميل صحيح', 'error');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showToast(tr('Enter a valid email', 'اكتب إيميل صحيح'), 'error');
   if (!notifyRecipients.includes(email)) notifyRecipients.push(email);
   input.value = '';
   renderNotifyRecipients();
-  showToast('تمت الإضافة — اضغط "حفظ وتحديث الإعدادات" لتثبيتها', 'info');
+  showToast(tr('Added — click "Save settings" to apply', 'تمت الإضافة — اضغط "حفظ وتحديث الإعدادات" لتثبيتها'), 'info');
 });
 
 document.getElementById('btn-test-email')?.addEventListener('click', async () => {
-  showToast('جاري إرسال بريد تجريبي... (احفظ الإعدادات أولاً إذا عدّلت شيئاً)', 'info');
+  showToast(tr('Sending a test email... (save settings first if you changed something)', 'جاري إرسال بريد تجريبي... (احفظ الإعدادات أولاً إذا عدّلت شيئاً)'), 'info');
   const res = await fetch('/api/notifications/test', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1381,10 +1559,10 @@ async function loadNotifyLog() {
     box.innerHTML = items.length ? items.map(n => `
       <div class="notify-log-item">
         <span>${n.status === 'sent' ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'}</span>
-        <span>${escapeHtml(n.subject || n.type)}</span>
+        <span class="no-i18n">${escapeHtml(n.subject || n.type)}</span>
         <span style="color: var(--text-muted);">${formatTime(n.created_at)}</span>
-        ${n.error ? `<div style="color:#f87171; font-size: 11px; width: 100%;">${escapeHtml(n.error)}</div>` : ''}
-      </div>`).join('') : '<span style="color: var(--text-muted);">لا يوجد إشعارات بعد</span>';
+        ${n.error ? `<div class="no-i18n" style="color:var(--status-danger-ink); font-size: 11px; width: 100%;">${escapeHtml(n.error)}</div>` : ''}
+      </div>`).join('') : `<span style="color: var(--text-muted);">${escapeHtml(tr('No notifications yet', 'لا يوجد إشعارات بعد'))}</span>`;
   } catch (e) { /* ignore */ }
 }
 
@@ -1403,7 +1581,7 @@ document.getElementById('sheet-sa-json')?.addEventListener('input', (e) => {
 });
 
 async function notifyLead(leadId) {
-  showToast('جاري إرسال تفاصيل العميل بالإيميل...', 'info');
+  showToast(tr('Emailing customer details...', 'جاري إرسال تفاصيل العميل بالإيميل...'), 'info');
   const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/notify`, { method: 'POST' });
   const data = await res.json();
   showToast(data.message, data.success ? 'success' : 'error');
@@ -1415,24 +1593,24 @@ document.getElementById('btn-run-health')?.addEventListener('click', async () =>
   const box = document.getElementById('health-results');
   const btn = document.getElementById('btn-run-health');
   btn.disabled = true;
-  box.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;"><i class="fa-solid fa-spinner fa-spin"></i> جاري الفحص... (حتى 25 ثانية)</div>';
+  box.innerHTML = `<div style="color: var(--text-muted); font-size: 13px;"><i class="fa-solid fa-spinner fa-spin"></i> ${escapeHtml(tr('Checking... (up to 25 seconds)', 'جاري الفحص... (حتى 25 ثانية)'))}</div>`;
   try {
     const res = await fetch('/api/health');
     const data = await res.json();
     const icon = { ok: '<i class="fa-solid fa-circle-check st-ok"></i>', warn: '<i class="fa-solid fa-triangle-exclamation st-warn"></i>', error: '<i class="fa-solid fa-circle-xmark st-bad"></i>' };
     box.innerHTML = `
       <div class="health-summary">
-        <span class="badge-pill success">${data.summary.ok} يعمل</span>
-        <span class="badge-pill warning">${data.summary.warn} تنبيه</span>
-        <span class="badge-pill danger">${data.summary.error} مشكلة</span>
+        <span class="badge-pill success">${data.summary.ok} ${escapeHtml(tr('healthy', 'يعمل'))}</span>
+        <span class="badge-pill warning">${data.summary.warn} ${escapeHtml(tr('warnings', 'تنبيه'))}</span>
+        <span class="badge-pill danger">${data.summary.error} ${escapeHtml(tr('issues', 'مشكلة'))}</span>
       </div>
       ${data.results.map(r => `
         <div class="health-row ${r.status}">
           <span class="health-icon">${icon[r.status]}</span>
-          <div><strong>${escapeHtml(r.label)}</strong><div class="health-msg">${escapeHtml(r.message)}</div></div>
+          <div><strong class="no-i18n">${escapeHtml(r.label)}</strong><div class="health-msg no-i18n">${escapeHtml(r.message)}</div></div>
         </div>`).join('')}`;
   } catch (e) {
-    box.innerHTML = '<div style="color:#f87171">تعذر تشغيل الفحص</div>';
+    box.innerHTML = `<div style="color:var(--status-danger-ink)">${escapeHtml(tr('Could not run the check', 'تعذر تشغيل الفحص'))}</div>`;
   } finally {
     btn.disabled = false;
   }
@@ -1441,11 +1619,19 @@ document.getElementById('btn-run-health')?.addEventListener('click', async () =>
 // Why is the bot off for this customer?
 function botOffLabel(conv) {
   if (conv.pause_reason === 'human_reply') {
-    const until = conv.bot_paused_until ? ` لغاية ${new Date(conv.bot_paused_until).toLocaleString('ar-JO', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}` : ' حتى إعادة تشغيله';
-    return `موقوف — موظف رد${conv.pause_source ? ' من ' + conv.pause_source : ''}${until}`;
+    const until = conv.bot_paused_until
+      ? tr(
+          ` until ${new Date(conv.bot_paused_until).toLocaleString(uiLocale(), { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}`,
+          ` لغاية ${new Date(conv.bot_paused_until).toLocaleString(uiLocale(), { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}`
+        )
+      : tr(' until you resume it', ' حتى إعادة تشغيله');
+    return tr(
+      `Paused — agent replied${conv.pause_source ? ' from ' + conv.pause_source : ''}${until}`,
+      `موقوف — موظف رد${conv.pause_source ? ' من ' + conv.pause_source : ''}${until}`
+    );
   }
-  if (conv.pause_reason === 'manual') return 'موقوف يدوياً';
-  return 'محوّل إلى الموظف — البوت لا يرد';
+  if (conv.pause_reason === 'manual') return tr('Paused manually', 'موقوف يدوياً');
+  return tr('Handed to an agent — bot is off', 'محوّل إلى الموظف — البوت لا يرد');
 }
 
 // 10. SALES TEAM / FOLLOW-UPS / REPORT / BACKUP
@@ -1456,39 +1642,43 @@ function renderTeam() {
   if (!box) return;
   box.innerHTML = teamMembers.length ? teamMembers.map((m, i) => `
     <div class="team-row">
-      <label title="مفعّل"><input type="checkbox" data-active="${i}" ${m.active !== false ? 'checked' : ''}></label>
-      <strong>${escapeHtml(m.name)}</strong>
-      <span style="direction: ltr; color: var(--text-muted);">${escapeHtml(m.email)}</span>
-      <button type="button" class="btn btn-secondary btn-sm" data-remove="${i}" title="حذف"><i class="fa-solid fa-trash"></i></button>
-    </div>`).join('') : '<span style="font-size: 12px; color: var(--text-muted);">لا يوجد موظفون — تُرسل الرسائل إلى بريد الإدارة.</span>';
-  box.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => { teamMembers.splice(Number(b.dataset.remove), 1); renderTeam(); showToast('اضغط "حفظ وتحديث الإعدادات" للتثبيت', 'info'); }));
+      <label title="${escapeHtml(tr('Active', 'مفعّل'))}"><input type="checkbox" data-active="${i}" ${m.active !== false ? 'checked' : ''}></label>
+      <strong class="no-i18n">${escapeHtml(m.name)}</strong>
+      <span class="no-i18n" style="direction: ltr; color: var(--text-muted);">${escapeHtml(m.email)}</span>
+      <button type="button" class="btn btn-secondary btn-sm btn-danger-ghost" data-remove="${i}" title="${escapeHtml(tr('Delete', 'حذف'))}"><i class="fa-solid fa-trash"></i></button>
+    </div>`).join('') : `<span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(tr('No agents — emails go to the admins.', 'لا يوجد موظفون — تُرسل الرسائل إلى بريد الإدارة.'))}</span>`;
+  box.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => { teamMembers.splice(Number(b.dataset.remove), 1); renderTeam(); showToast(tr('Click "Save settings" to apply', 'اضغط "حفظ وتحديث الإعدادات" للتثبيت'), 'info'); }));
   box.querySelectorAll('[data-active]').forEach(cb => cb.addEventListener('change', () => { teamMembers[Number(cb.dataset.active)].active = cb.checked; }));
 }
 
 document.getElementById('btn-add-team')?.addEventListener('click', () => {
   const name = document.getElementById('team-new-name').value.trim();
   const email = document.getElementById('team-new-email').value.trim().toLowerCase();
-  if (!name) return showToast('اكتب اسم الموظف', 'error');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showToast('اكتب إيميل صحيح', 'error');
-  if (teamMembers.some(m => m.email === email)) return showToast('البريد مضاف مسبقاً', 'error');
+  if (!name) return showToast(tr("Enter the agent's name", 'اكتب اسم الموظف'), 'error');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showToast(tr('Enter a valid email', 'اكتب إيميل صحيح'), 'error');
+  if (teamMembers.some(m => m.email === email)) return showToast(tr('Email already added', 'البريد مضاف مسبقاً'), 'error');
   teamMembers.push({ id: email, name, email, active: true });
   document.getElementById('team-new-name').value = '';
   document.getElementById('team-new-email').value = '';
   renderTeam();
-  showToast('تمت الإضافة — اضغط "حفظ وتحديث الإعدادات"', 'info');
+  showToast(tr('Added — click "Save settings"', 'تمت الإضافة — اضغط "حفظ وتحديث الإعدادات"'), 'info');
 });
 
 document.getElementById('btn-followup-preview')?.addEventListener('click', async () => {
   const data = await (await fetch('/api/follow-ups/preview')).json();
   const box = document.getElementById('fu-preview');
-  const labels = { whatsapp: 'واتساب', instagram_dm: 'إنستغرام', facebook_messenger: 'ماسنجر' };
+  const labels = {
+    whatsapp: tr('WhatsApp', 'واتساب'),
+    instagram_dm: tr('Instagram', 'إنستغرام'),
+    facebook_messenger: tr('Messenger', 'ماسنجر')
+  };
   box.innerHTML = data.candidates.length
-    ? '<div style="margin-top:8px;">ستُرسل متابعة إلى:</div>' + data.candidates.map(c => `<div>• ${escapeHtml(c.name)} (${labels[c.channel] || c.channel}، ${c.score}%، منقطع منذ ${c.silent_hours} ساعة)</div>`).join('')
-    : '<div style="margin-top:8px; color: var(--text-muted);">لا يوجد عملاء بحاجة إلى متابعة حالياً.</div>';
+    ? `<div style="margin-top:8px;">${escapeHtml(tr('Follow-ups will go to:', 'ستُرسل متابعة إلى:'))}</div>` + data.candidates.map(c => `<div class="no-i18n">• ${escapeHtml(c.name)} (${escapeHtml(labels[c.channel] || c.channel)}, ${c.score}%, ${escapeHtml(tr(`silent for ${c.silent_hours}h`, `منقطع منذ ${c.silent_hours} ساعة`))})</div>`).join('')
+    : `<div style="margin-top:8px; color: var(--text-muted);">${escapeHtml(tr('No customers need a follow-up right now.', 'لا يوجد عملاء بحاجة إلى متابعة حالياً.'))}</div>`;
 });
 
 document.getElementById('btn-report-now')?.addEventListener('click', async () => {
-  showToast('جاري إرسال التقرير...', 'info');
+  showToast(tr('Sending the report...', 'جاري إرسال التقرير...'), 'info');
   const data = await (await fetch('/api/reports/daily/send', { method: 'POST' })).json();
   showToast(data.message, data.success ? 'success' : 'error');
   loadNotifyLog();
@@ -1498,7 +1688,12 @@ async function loadBackupInfo() {
   try {
     const data = await (await fetch('/api/backup/list')).json();
     const el = document.getElementById('bk-last');
-    if (el) el.textContent = data.last ? `آخر نسخة: ${formatTime(data.last.at)} — backups/${data.last.folder} (عدد النسخ: ${data.backups.length})` : 'لا توجد نسخ احتياطية بعد.';
+    if (el) {
+      el.classList.toggle('no-i18n', Boolean(data.last));
+      el.textContent = data.last
+        ? tr(`Last backup: ${formatTime(data.last.at)} — backups/${data.last.folder} (${data.backups.length} backups)`, `آخر نسخة: ${formatTime(data.last.at)} — backups/${data.last.folder} (عدد النسخ: ${data.backups.length})`)
+        : tr('No backups yet.', 'لا توجد نسخ احتياطية بعد.');
+    }
   } catch (e) { /* ignore */ }
 }
 
@@ -1515,26 +1710,31 @@ async function loadSupabaseSyncStatus() {
   try {
     const s = await (await fetch('/api/supabase/status')).json();
     if (!s.enabled) {
-      box.innerHTML = 'Supabase غير مربوط — المحادثات محفوظة على الخادم فقط. عند الربط تُرفع جميع البيانات السابقة تلقائياً.';
+      box.innerHTML = escapeHtml(tr(
+        'Supabase is not connected — conversations are only on the server. Once connected, all old data is uploaded automatically.',
+        'Supabase غير مربوط — المحادثات محفوظة على الخادم فقط. عند الربط تُرفع جميع البيانات السابقة تلقائياً.'
+      ));
       return;
     }
     const r = s.remote || {};
-    const row = (label, local, remote) => `<div>${label}: <b>${remote ?? '?'}</b> محفوظ بـ Supabase من أصل ${local}</div>`;
+    const row = (label, local, remote) => `<div>${escapeHtml(label)}: <b>${remote ?? '?'}</b> ${escapeHtml(tr(`saved in Supabase of ${local}`, `محفوظ بـ Supabase من أصل ${local}`))}</div>`;
     box.innerHTML =
-      row('المحادثات', s.local.conversations, r.conversations) +
-      row('الرسائل', s.local.messages, r.messages) +
-      row('العملاء', s.local.leads, r.leads) +
-      row('التعليقات', s.local.comments, r.comments) +
-      (s.pending ? `<div style="color:#fbbf24;">${s.pending} تغيير بانتظار الحفظ (تُعاد المحاولة تلقائياً)</div>` : '<div style="color:#34d399;">يُحفظ كل تغيير تلقائياً خلال ثانيتين</div>') +
-      (s.last_full_sync ? `<div>آخر فحص كامل: ${formatTime(s.last_full_sync)}</div>` : '') +
-      (s.last_error ? `<div style="color:#f87171;">${escapeHtml(s.last_error.message)}</div>` : '');
+      row(tr('Conversations', 'المحادثات'), s.local.conversations, r.conversations) +
+      row(tr('Messages', 'الرسائل'), s.local.messages, r.messages) +
+      row(tr('Customers', 'العملاء'), s.local.leads, r.leads) +
+      row(tr('Comments', 'التعليقات'), s.local.comments, r.comments) +
+      (s.pending
+        ? `<div style="color:var(--status-warning-ink);">${s.pending} ${escapeHtml(tr('changes waiting to sync (auto-retrying)', 'تغيير بانتظار الحفظ (تُعاد المحاولة تلقائياً)'))}</div>`
+        : `<div style="color:var(--status-success-ink);">${escapeHtml(tr('Every change is saved automatically within 2 seconds', 'يُحفظ كل تغيير تلقائياً خلال ثانيتين'))}</div>`) +
+      (s.last_full_sync ? `<div>${escapeHtml(tr('Last full check:', 'آخر فحص كامل:'))} ${formatTime(s.last_full_sync)}</div>` : '') +
+      (s.last_error ? `<div class="no-i18n" style="color:var(--status-danger-ink);">${escapeHtml(s.last_error.message)}</div>` : '');
   } catch (e) {
-    box.textContent = 'تعذر قراءة حالة المزامنة';
+    box.textContent = tr('Could not read the sync status', 'تعذر قراءة حالة المزامنة');
   }
 }
 
 document.getElementById('btn-supabase-sync')?.addEventListener('click', async () => {
-  showToast('جاري حفظ كل البيانات بـ Supabase...', 'info');
+  showToast(tr('Saving all data to Supabase...', 'جاري حفظ كل البيانات بـ Supabase...'), 'info');
   const data = await (await fetch('/api/supabase/sync', { method: 'POST' })).json();
   showToast(data.message, data.success ? 'success' : 'error');
   loadSupabaseSyncStatus();
@@ -1552,13 +1752,13 @@ document.getElementById('cal-all-day')?.addEventListener('change', (e) => {
 });
 document.getElementById('btn-calendar-test')?.addEventListener('click', async () => {
   const box = document.getElementById('calendar-test-result');
-  box.innerHTML = '<span style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> جاري فحص التقويم... (احفظ الإعدادات أولاً إذا عدّلتها)</span>';
+  box.innerHTML = `<span style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> ${escapeHtml(tr('Checking the calendar... (save the settings first if you changed them)', 'جاري فحص التقويم... (احفظ الإعدادات أولاً إذا عدّلتها)'))}</span>`;
   try {
     const r = await (await fetch('/api/calendar/test', { method: 'POST' })).json();
-    box.innerHTML = `${r.success ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} ${escapeHtml(r.message || '')}`
-      + (r.service_account_email ? `<div class="form-hint" style="margin-top: 6px;">حساب الخدمة: <code dir="ltr">${escapeHtml(r.service_account_email)}</code></div>` : '');
+    box.innerHTML = `${r.success ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} <span class="no-i18n">${escapeHtml(r.message || '')}</span>`
+      + (r.service_account_email ? `<div class="form-hint" style="margin-top: 6px;">${escapeHtml(tr('Service account:', 'حساب الخدمة:'))} <code dir="ltr">${escapeHtml(r.service_account_email)}</code></div>` : '');
   } catch (err) {
-    box.innerHTML = `<i class="fa-solid fa-circle-xmark st-bad"></i> ${escapeHtml(err.message)}`;
+    box.innerHTML = `<i class="fa-solid fa-circle-xmark st-bad"></i> <span class="no-i18n">${escapeHtml(err.message)}</span>`;
   }
 });
 
@@ -1566,10 +1766,10 @@ document.getElementById('btn-calendar-test')?.addEventListener('click', async ()
 async function deleteItem(url) {
   try {
     const data = await (await fetch(url, { method: 'DELETE' })).json();
-    showToast(data.message || (data.success ? 'تم الحذف' : 'فشل الحذف'), data.success ? 'success' : 'error');
+    showToast(data.message || (data.success ? tr('Deleted', 'تم الحذف') : tr('Delete failed', 'فشل الحذف')), data.success ? 'success' : 'error');
     return data.success;
   } catch (err) {
-    showToast('فشل الحذف', 'error');
+    showToast(tr('Delete failed', 'فشل الحذف'), 'error');
     return false;
   }
 }
@@ -1577,28 +1777,35 @@ async function deleteItem(url) {
 document.getElementById('btn-delete-chat')?.addEventListener('click', async () => {
   const conv = conversations.find(c => c.id === activeConvId);
   if (!conv) return;
-  if (!confirm(`حذف محادثة «${conv.customer_name || 'العميل'}» وكل رسائلها وبياناتها نهائياً؟ لا يمكن التراجع عن الحذف.`)) return;
+  const cname = conv.customer_name || tr('Customer', 'العميل');
+  if (!confirm(tr(`Delete conversation with "${cname}" and all its messages permanently? This cannot be undone.`, `حذف محادثة «${cname}» وكل رسائلها وبياناتها نهائياً؟ لا يمكن التراجع عن الحذف.`))) return;
   if (!(await deleteItem(`/api/conversations/${encodeURIComponent(conv.id)}`))) return;
   activeConvId = null;
   document.querySelector('.inbox-layout')?.classList.remove('chat-open');
   document.getElementById('btn-delete-chat').style.display = 'none';
-  document.getElementById('active-chat-name').textContent = 'اختر محادثة لعرضها';
+  document.getElementById('active-chat-name').classList.remove('no-i18n');
+  document.getElementById('active-chat-name').textContent = tr('Select a conversation', 'اختر محادثة لعرضها');
   document.getElementById('active-chat-channel').textContent = '-';
   document.getElementById('active-chat-badge-area').innerHTML = '';
-  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('chat-messages').innerHTML = `
+    <div class="chat-empty-state">
+      <div class="chat-empty-icon"><i class="fa-regular fa-comments"></i></div>
+      <h4>${escapeHtml(tr('Select a conversation', 'اختر محادثة لعرضها'))}</h4>
+      <p>${escapeHtml(tr('Pick a conversation from the list to view messages and qualification details.', 'اختر محادثة من القائمة للبدء أو اختبار النظام'))}</p>
+    </div>`;
   loadConversations();
 });
 
 document.addEventListener('click', async (e) => {
   const del = e.target.closest('[data-del-comment]');
   if (del) {
-    if (!confirm('حذف هذا التعليق من السجل نهائياً؟')) return;
+    if (!confirm(tr('Delete this comment from the log permanently?', 'حذف هذا التعليق من السجل نهائياً؟'))) return;
     if (await deleteItem(`/api/comments/${encodeURIComponent(del.dataset.delComment)}`)) loadComments();
     return;
   }
   const exp = e.target.closest('[data-export]');
   if (exp) {
-    const lang = localStorage.getItem('atlead_lang') === 'en' ? 'en' : 'ar';
+    const lang = window.atleadI18n?.lang || (localStorage.getItem('atlead_lang') === 'ar' ? 'ar' : 'en');
     const link = document.createElement('a');
     link.href = `/api/export?scope=${encodeURIComponent(exp.dataset.export)}&lang=${lang}`;
     link.download = '';
@@ -1624,8 +1831,8 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet
 // Tables become cards on phones: every cell carries its column name.
 function labelTable(table) {
   const heads = [...table.querySelectorAll('thead th')].map(th => th.textContent.trim());
-  table.querySelectorAll('tbody tr').forEach(tr => {
-    [...tr.children].forEach((td, i) => { if (heads[i] && td.tagName === 'TD') td.dataset.label = heads[i]; });
+  table.querySelectorAll('tbody tr').forEach(trRow => {
+    [...trRow.children].forEach((td, i) => { if (heads[i] && td.tagName === 'TD') td.dataset.label = heads[i]; });
   });
 }
 document.querySelectorAll('table.data-table').forEach(table => {
@@ -1645,18 +1852,30 @@ function renderAiCall(conv) {
   if (!box) return;
   box.style.display = conv.ai_call_status ? '' : 'none';
   if (!conv.ai_call_status) return;
-  const status = { offered: 'أُرسل الرابط للعميل', in_progress: 'المكالمة جارية', completed: 'تمت المكالمة' }[conv.ai_call_status] || conv.ai_call_status;
+  const status = {
+    offered: tr('Link sent to the customer', 'أُرسل الرابط للعميل'),
+    in_progress: tr('Call in progress', 'المكالمة جارية'),
+    completed: tr('Call completed', 'تمت المكالمة')
+  }[conv.ai_call_status] || conv.ai_call_status;
   const facts = [
-    ['الشركة', conv.company_name], ['المسمى', conv.job_title], ['المدينة', conv.location], ['حجم الفريق', conv.team_size],
-    ['الحجم الشهري', conv.monthly_volume], ['القنوات', conv.channels_used], ['الأدوات الحالية', conv.current_tools], ['الأهداف', conv.goals],
-    ['الميزانية', conv.budget], ['الإطار الزمني', conv.timeline], ['صاحب القرار', conv.decision_maker]
+    [tr('Company', 'الشركة'), conv.company_name],
+    [tr('Role', 'المسمى'), conv.job_title],
+    [tr('City', 'المدينة'), conv.location],
+    [tr('Team size', 'حجم الفريق'), conv.team_size],
+    [tr('Monthly volume', 'الحجم الشهري'), conv.monthly_volume],
+    [tr('Channels', 'القنوات'), conv.channels_used],
+    [tr('Current tools', 'الأدوات الحالية'), conv.current_tools],
+    [tr('Goals', 'الأهداف'), conv.goals],
+    [tr('Budget', 'الميزانية'), conv.budget],
+    [tr('Timeline', 'الإطار الزمني'), conv.timeline],
+    [tr('Decision maker', 'صاحب القرار'), conv.decision_maker]
   ].filter(([, v]) => v);
   document.getElementById('side-ai-call').innerHTML = `
-    <div class="ai-call-head"><strong>${escapeHtml(status)}</strong>${conv.ai_call_qualified === true ? '<span class="badge-pill success">مؤهل للشراء</span>' : conv.ai_call_qualified === false ? '<span class="badge-pill warning">غير مؤهل حالياً</span>' : ''}</div>
-    ${conv.ai_call_summary ? `<p>${escapeHtml(conv.ai_call_summary)}</p>` : ''}
-    ${conv.ai_call_next_step ? `<p><span class="muted">الخطوة التالية:</span> ${escapeHtml(conv.ai_call_next_step)}</p>` : ''}
-    ${facts.length ? `<dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>` : ''}
-    ${conv.ai_call_token && conv.ai_call_status === 'completed' ? `<details data-call="${escapeHtml(conv.ai_call_token)}"><summary>نص المكالمة</summary><div class="ai-call-transcript">جاري التحميل...</div></details>` : ''}`;
+    <div class="ai-call-head"><strong>${escapeHtml(status)}</strong>${conv.ai_call_qualified === true ? `<span class="badge-pill success">${escapeHtml(tr('Qualified to buy', 'مؤهل للشراء'))}</span>` : conv.ai_call_qualified === false ? `<span class="badge-pill warning">${escapeHtml(tr('Not qualified yet', 'غير مؤهل حالياً'))}</span>` : ''}</div>
+    ${conv.ai_call_summary ? `<p class="no-i18n bidi-text">${escapeHtml(conv.ai_call_summary)}</p>` : ''}
+    ${conv.ai_call_next_step ? `<p><span class="muted">${escapeHtml(tr('Next step:', 'الخطوة التالية:'))}</span> <span class="no-i18n bidi-text">${escapeHtml(conv.ai_call_next_step)}</span></p>` : ''}
+    ${facts.length ? `<dl>${facts.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd class="no-i18n bidi-text">${escapeHtml(v)}</dd>`).join('')}</dl>` : ''}
+    ${conv.ai_call_token && conv.ai_call_status === 'completed' ? `<details data-call="${escapeHtml(conv.ai_call_token)}"><summary>${escapeHtml(tr('Call transcript', 'نص المكالمة'))}</summary><div class="ai-call-transcript">${escapeHtml(tr('Loading...', 'جاري التحميل...'))}</div></details>` : ''}`;
   document.querySelector('#side-ai-call details')?.addEventListener('toggle', async (e) => {
     const d = e.target;
     if (!d.open || d.dataset.loaded) return;
@@ -1664,8 +1883,8 @@ function renderAiCall(conv) {
     try {
       const r = await (await fetch(`/api/calls/${encodeURIComponent(d.dataset.call)}`)).json();
       d.querySelector('.ai-call-transcript').innerHTML = (r.call?.transcript || []).map(l =>
-        `<p><b>${l.role === 'assistant' ? 'المساعد' : 'العميل'}:</b> ${escapeHtml(l.text)}</p>`).join('') || 'لا يوجد نص.';
-    } catch { d.querySelector('.ai-call-transcript').textContent = 'تعذّر تحميل النص.'; }
+        `<p><b>${escapeHtml(l.role === 'assistant' ? tr('Assistant', 'المساعد') : tr('Customer', 'العميل'))}:</b> <span class="no-i18n bidi-text">${escapeHtml(l.text)}</span></p>`).join('') || escapeHtml(tr('No transcript.', 'لا يوجد نص.'));
+    } catch { d.querySelector('.ai-call-transcript').textContent = tr('Could not load transcript.', 'تعذّر تحميل النص.'); }
   });
 }
 
@@ -1673,16 +1892,16 @@ document.getElementById('btn-call-link')?.addEventListener('click', async () => 
   if (!activeConvId) return;
   try {
     const r = await (await fetch(`/api/conversations/${encodeURIComponent(activeConvId)}/call-link`, { method: 'POST' })).json();
-    if (!r.success) return showToast(r.message || 'تعذّر إنشاء الرابط', 'error');
-    try { await navigator.clipboard.writeText(r.url); showToast('تم نسخ رابط المكالمة', 'success'); }
-    catch { prompt('رابط المكالمة:', r.url); }
-  } catch { showToast('تعذّر إنشاء الرابط', 'error'); }
+    if (!r.success) return showToast(r.message || tr('Could not create link', 'تعذّر إنشاء الرابط'), 'error');
+    try { await navigator.clipboard.writeText(r.url); showToast(tr('Call link copied', 'تم نسخ رابط المكالمة'), 'success'); }
+    catch { prompt(tr('Call link:', 'رابط المكالمة:'), r.url); }
+  } catch { showToast(tr('Could not create link', 'تعذّر إنشاء الرابط'), 'error'); }
 });
 
 // AI phone line: save first, then check Twilio and show the carrier forwarding codes.
 document.getElementById('btn-phone-connect')?.addEventListener('click', async () => {
   const box = document.getElementById('phone-result');
-  box.innerHTML = '<span style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> جاري الحفظ والربط...</span>';
+  box.innerHTML = `<span style="color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> ${escapeHtml(tr('Saving and connecting...', 'جاري الحفظ والربط...'))}</span>`;
   try {
     // Save just this card first (the token stays untouched if it is still the masked value).
     await fetch('/api/settings', {
@@ -1703,14 +1922,14 @@ document.getElementById('btn-phone-connect')?.addEventListener('click', async ()
   try {
     const r = await (await fetch('/api/phone/connect', { method: 'POST' })).json();
     const c = r.codes;
-    const row = (x) => `<div><span>${escapeHtml(x.label)}</span><code dir="ltr">${escapeHtml(x.code)}</code></div>`;
-    box.innerHTML = `${r.success ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} ${escapeHtml(r.message || '')}`
-      + (c ? `<div class="phone-codes"><p>اطلب هذا الكود من هاتفك (الخط الأردني) واضغط اتصال لتفعيل التحويل:</p>
+    const row = (x) => `<div><span class="no-i18n">${escapeHtml(x.label)}</span><code dir="ltr">${escapeHtml(x.code)}</code></div>`;
+    box.innerHTML = `${r.success ? '<i class="fa-solid fa-circle-check st-ok"></i>' : '<i class="fa-solid fa-circle-xmark st-bad"></i>'} <span class="no-i18n">${escapeHtml(r.message || '')}</span>`
+      + (c ? `<div class="phone-codes"><p>${escapeHtml(tr('Dial this code from your phone (Jordanian line) and press call to turn on forwarding:', 'اطلب هذا الكود من هاتفك (الخط الأردني) واضغط اتصال لتفعيل التحويل:'))}</p>
         ${row(c.main)}
-        ${c.alternatives.length ? `<p style="margin-top: 6px;">أو كل حالة على حدة:</p>${c.alternatives.map(row).join('')}` : ''}
+        ${c.alternatives.length ? `<p style="margin-top: 6px;">${escapeHtml(tr('Or one case at a time:', 'أو كل حالة على حدة:'))}</p>${c.alternatives.map(row).join('')}` : ''}
         ${row(c.cancel)}</div>` : '');
   } catch (err) {
-    box.innerHTML = `<i class="fa-solid fa-circle-xmark st-bad"></i> ${escapeHtml(err.message)}`;
+    box.innerHTML = `<i class="fa-solid fa-circle-xmark st-bad"></i> <span class="no-i18n">${escapeHtml(err.message)}</span>`;
   }
 });
 
@@ -1720,8 +1939,8 @@ function renderCalendarConnect(cal) {
   if (!box) return;
   const connected = !!cal.oauth_email;
   box.innerHTML = connected
-    ? `<i class="fa-solid fa-circle-check st-ok"></i> مربوط بحساب <b dir="ltr">${escapeHtml(cal.oauth_email)}</b>${cal.oauth_connected_at ? ` منذ ${escapeHtml(new Date(cal.oauth_connected_at).toLocaleDateString('ar'))}` : ''}`
-    : '<i class="fa-solid fa-circle-xmark st-bad"></i> غير مربوط';
+    ? `<i class="fa-solid fa-circle-check st-ok"></i> ${escapeHtml(tr('Connected to', 'مربوط بحساب'))} <b dir="ltr" class="no-i18n">${escapeHtml(cal.oauth_email)}</b>${cal.oauth_connected_at ? ` ${escapeHtml(tr('since', 'منذ'))} ${escapeHtml(new Date(cal.oauth_connected_at).toLocaleDateString(uiLocale()))}` : ''}`
+    : `<i class="fa-solid fa-circle-xmark st-bad"></i> ${escapeHtml(tr('Not connected', 'غير مربوط'))}`;
   document.getElementById('btn-cal-disconnect').style.display = connected ? '' : 'none';
 }
 
@@ -1740,7 +1959,7 @@ async function calendarConnectLink() {
     body: JSON.stringify({ email: document.getElementById('cal-id').value.trim() })
   })).json();
   if (!r.success) {
-    showToast(r.message || 'تعذّر إنشاء رابط الربط', 'error');
+    showToast(r.message || tr('Could not create connect link', 'تعذّر إنشاء رابط الربط'), 'error');
     document.querySelector('.cal-oauth-setup')?.setAttribute('open', '');
     return null;
   }
@@ -1749,19 +1968,39 @@ async function calendarConnectLink() {
 
 document.getElementById('btn-cal-connect')?.addEventListener('click', async () => {
   const link = await calendarConnectLink();
-  if (link) { window.open(link, '_blank', 'noopener'); showToast('سجّل الدخول بحساب المهندس واضغط «السماح»، ثم ارجع هنا.', 'info'); }
+  if (link) { window.open(link, '_blank', 'noopener'); showToast(tr('Sign in with the engineer account and click "Allow", then come back here.', 'سجّل الدخول بحساب المهندس واضغط «السماح»، ثم ارجع هنا.'), 'info'); }
 });
 document.getElementById('btn-cal-link')?.addEventListener('click', async () => {
   const link = await calendarConnectLink();
   if (!link) return;
-  try { await navigator.clipboard.writeText(link); showToast('تم نسخ رابط الربط — أرسله للمهندس (صالح لمدة ساعتين)', 'success'); }
-  catch { prompt('رابط الربط:', link); }
+  try { await navigator.clipboard.writeText(link); showToast(tr('Connect link copied — send it to the engineer (valid for 2 hours)', 'تم نسخ رابط الربط — أرسله للمهندس (صالح لمدة ساعتين)'), 'success'); }
+  catch { prompt(tr('Connect link:', 'رابط الربط:'), link); }
 });
 document.getElementById('btn-cal-disconnect')?.addEventListener('click', async () => {
-  if (!confirm('فصل تقويم المهندس؟ سيتوقف الحجز التلقائي حتى يُربط من جديد.')) return;
+  if (!confirm(tr('Disconnect engineer calendar? Auto-booking will stop until reconnected.', 'فصل تقويم المهندس؟ سيتوقف الحجز التلقائي حتى يُربط من جديد.'))) return;
   await fetch('/api/calendar/disconnect', { method: 'POST' });
-  showToast('تم فصل التقويم', 'success');
+  showToast(tr('Calendar disconnected', 'تم فصل التقويم'), 'success');
   loadSettings();
 });
 // Coming back to the tab after connecting → refresh the status.
 document.addEventListener('visibilitychange', () => { if (!document.hidden && currentTab === 'settings') loadSettings(); });
+
+// Re-render dynamic views seamlessly when switching EN ⇄ AR.
+window.addEventListener('atlead:langchange', () => {
+  if (lastSettings) updateNavbarPills(lastSettings);
+  if (currentTab === 'inbox') {
+    renderConversationList();
+    if (activeConvId) selectConversation(activeConvId);
+  }
+  if (lastLeads && currentTab === 'crm') renderLeadsTable(lastLeads);
+  if (lastComments && currentTab === 'comments') renderCommentsTable(lastComments);
+  if (lastKnowledge && currentTab === 'knowledge') renderKnowledge(lastKnowledge);
+  if (lastSettings && currentTab === 'settings') {
+    renderNotifyRecipients();
+    renderTeam();
+    renderCalendarConnect(lastSettings.calendar || {});
+    loadBackupInfo();
+    loadSupabaseSyncStatus();
+  }
+  document.querySelectorAll('table.data-table').forEach(labelTable);
+});

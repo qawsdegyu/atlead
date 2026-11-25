@@ -565,7 +565,7 @@ router.get('/comments', (req, res) => {
 const commentRules = require('../services/commentRules');
 router.get('/reels', async (req, res) => {
   try {
-    const out = await commentRules.media({ platform: String(req.query.platform || 'all'), reelsOnly: req.query.all !== '1' });
+    const out = await commentRules.media({ platform: String(req.query.platform || 'all'), reelsOnly: req.query.reels === '1' });
     res.json({ success: true, ...out, rules: commentRules.list(), form_url: commentRules.formUrl() });
   } catch (e) { res.status(500).json({ success: false, message: e.message }); }
 });

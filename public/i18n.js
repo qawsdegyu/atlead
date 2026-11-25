@@ -651,6 +651,15 @@
     ['تم نسخ استعلام SQL!', 'SQL query copied!'],
 
     // Reels & keyword rules
+    ["الريلز والمنشورات عندك", "Your reels and posts"],
+    ["ريلز", "Reels"],
+    ["منشورات", "Posts"],
+    ["الاثنين", "Both"],
+    ["النوع", "Type"],
+    ["المنصة", "Platform"],
+    ["ابحث في الوصف", "Search captions"],
+    ["اكتب كلمة أو جملة ثم Enter", "Type a word or phrase, then Enter"],
+    ["أضف كلمات مفتاحية بقدر ما تريد. الكلمة المفتاحية ممكن تكون كلمة واحدة أو عدة كلمات (مثل \"كم السعر\")، والكلمات المتعددة تطابق أيضاً إذا وردت كل كلماتها في التعليق. الكلمات العربية تُطابق مع الهمزة وبدونها، ومع التاء المربوطة والهاء.", "Add as many keywords as you want. A keyword can be one word or several words (e.g. \"how much\"); a several-word keyword also matches when all its words are in the comment. Arabic spellings are matched with or without hamza and taa marbuta."],
     ['الريلز والكلمات المفتاحية', 'Reels & Keywords'],
     ['الريلز', 'Reels'],
     ['عندما يعلّق أحد بكلمة مفتاحية على الريل، يرد البوت تحت التعليق ويرسل له رسالتك أو رابطك أو ملفك أو نموذج الاستشارة المجانية.', 'When someone comments a keyword on your reel, the bot replies under the comment and sends them your message, link, file or the free consultation form.'],

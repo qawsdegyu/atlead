@@ -12,7 +12,10 @@
   let media = [];
   let formUrl = '/consult';
   let platform = 'all';
+  let kind = 'all';
+  let search = '';
   let editing = null; // rule being edited
+  let keywords = [];  // chips in the editor
   let loadedOnce = false;
 
   async function api(url, opts = {}) {
@@ -28,7 +31,9 @@
     return d.toLocaleDateString(window.atleadI18n?.lang === 'ar' ? 'ar-JO' : 'en-GB', { day: 'numeric', month: 'short' });
   };
   const platformIcon = (p) => `<i class="fa-brands fa-${p === 'facebook' ? 'facebook' : 'instagram'}"></i>`;
-  const rulesFor = (item) => rules.filter(r => r.media_ids?.some(m => m === item.id || String(m).endsWith(`_${item.id}`)));
+  const idsOf = (item) => item.ids?.length ? item.ids : [item.id];
+  const rulesFor = (item) => rules.filter(r => r.media_ids?.some(m => idsOf(item).some(id => m === id || String(m).endsWith(`_${id}`))));
+  const mediaFor = (id) => media.find(x => idsOf(x).includes(id));
   const generalRules = () => rules.filter(r => !r.media_ids?.length);
 
   // ---------- Rules list ----------
@@ -43,10 +48,13 @@
 
   function scope(r) {
     if (!r.media_ids?.length) return tr('All reels and posts', 'كل الريلز والمنشورات');
-    const known = r.media_ids.map(id => media.find(m => m.id === id)).filter(Boolean);
-    if (known.length === 1) return `${tr('Reel', 'ريل')}: ${(known[0].caption || '').slice(0, 40) || known[0].id}`;
-    if (r.media_ids.length === 1) return tr('One reel', 'ريل واحد');
-    return tr(`${r.media_ids.length} reels`, `${r.media_ids.length} ريلز`);
+    const known = [...new Set(r.media_ids.map(mediaFor).filter(Boolean))];
+    if (known.length === 1) {
+      const k = known[0];
+      return `${k.kind === 'post' ? tr('Post', 'منشور') : tr('Reel', 'ريل')}: ${(k.caption || '').slice(0, 40) || k.id}`;
+    }
+    if (known.length > 1) return tr(`${known.length} reels/posts`, `${known.length} ريلز/منشورات`);
+    return tr('One reel or post', 'ريل أو منشور واحد');
   }
 
   function renderRules() {
@@ -81,20 +89,28 @@
     notice.hidden = !msgs.length;
     notice.innerHTML = msgs.map(m => `<div>${esc(m)}</div>`).join('');
 
-    const list = media.filter(m => platform === 'all' || m.platform === platform);
+    const q = search.trim().toLowerCase();
+    const list = media.filter(m => (platform === 'all' || m.platform === platform)
+      && (kind === 'all' || m.kind === kind)
+      && (!q || String(m.caption || '').toLowerCase().includes(q)));
+    const reelsN = media.filter(m => m.kind === 'reel').length;
+    $('rl-total').textContent = media.length ? `(${tr(`${reelsN} reels, ${media.length - reelsN} posts`, `${reelsN} ريلز، ${media.length - reelsN} منشورات`)})` : '';
     const grid = $('rl-grid');
     if (!list.length) {
-      grid.innerHTML = connected ? `<div class="rl-empty">${esc(tr('No reels found on this account yet.', 'لا توجد ريلز على هذا الحساب بعد.'))}</div>` : '';
+      grid.innerHTML = connected ? `<div class="rl-empty">${esc(media.length ? tr('Nothing matches this filter.', 'لا شيء يطابق هذا الفلتر.') : tr('No reels or posts found on this account yet.', 'لا توجد ريلز أو منشورات على هذا الحساب بعد.'))}</div>` : '';
       return;
     }
     const general = generalRules().filter(r => r.enabled !== false);
     grid.innerHTML = list.map(m => {
       const own = rulesFor(m);
-      const words = [...own, ...general.filter(r => r.platforms?.includes(m.platform))].flatMap(r => r.keywords || []).slice(0, 4);
+      const ownWords = own.filter(r => r.enabled !== false).flatMap(r => r.keywords || []);
+      const generalWords = general.filter(r => r.platforms?.includes(m.platform)).flatMap(r => r.keywords || []).filter(w => !ownWords.includes(w));
+      const words = [...ownWords.map(w => `<span class="rl-word sm">${esc(w)}</span>`), ...generalWords.slice(0, 3).map(w => `<span class="rl-word sm general" title="${esc(tr('From a rule for all reels and posts', 'من قاعدة لكل الريلز والمنشورات'))}">${esc(w)}</span>`)];
+      const isPost = m.kind === 'post';
       return `
       <article class="rl-card">
         <a class="rl-thumb" href="${esc(m.permalink || '#')}" target="_blank" rel="noopener" title="${esc(tr('Open on', 'افتح على'))} ${m.platform}">
-          ${m.thumbnail ? `<img src="${esc(m.thumbnail)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="rl-thumb-empty"><i class="fa-solid fa-film"></i></span>`}
+          ${m.thumbnail ? `<img src="${esc(m.thumbnail)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="rl-thumb-empty"><i class="fa-${m.kind === 'post' ? 'regular fa-image' : 'solid fa-film'}"></i></span>`}
           <span class="rl-badge">${platformIcon(m.platform)} ${m.kind === 'reel' ? 'Reel' : 'Post'}</span>
         </a>
         <div class="rl-card-body">
@@ -104,10 +120,10 @@
             ${m.comments != null ? `<span><i class="fa-regular fa-comment"></i> ${m.comments}</span>` : ''}
             ${m.rule_hits ? `<span class="rl-hit"><i class="fa-solid fa-paper-plane"></i> ${m.rule_hits} ${esc(tr('DMs', 'رسائل'))}</span>` : ''}
           </div>
-          <div class="rl-card-words no-i18n">${words.length ? words.map(w => `<span class="rl-word sm">${esc(w)}</span>`).join('') : ''}</div>
+          <div class="rl-card-words no-i18n">${words.join('')}</div>
           <div class="rl-card-actions">
-            ${own.map(r => `<button type="button" class="btn btn-secondary btn-sm" data-rl-edit="${esc(r.id)}"><i class="fa-solid fa-pen"></i> <span class="no-i18n">${esc(r.name)}</span></button>`).join('')}
-            <button type="button" class="btn btn-primary btn-sm" data-rl-add="${esc(m.id)}" data-rl-add-platform="${esc(m.platform)}"><i class="fa-solid fa-plus"></i> ${esc(tr('Keyword for this reel', 'كلمة لهذا الريل'))}</button>
+            ${own.map(r => `<button type="button" class="btn btn-secondary btn-sm" data-rl-edit="${esc(r.id)}"><i class="fa-solid fa-pen"></i> <span class="no-i18n">${esc(r.name)}</span>${r.enabled === false ? ` (${esc(tr('off', 'متوقفة'))})` : ''}</button>`).join('')}
+            <button type="button" class="btn btn-primary btn-sm" data-rl-add="${esc(m.id)}"><i class="fa-solid fa-plus"></i> ${esc(isPost ? tr('Keywords for this post', 'كلمات لهذا المنشور') : tr('Keywords for this reel', 'كلمات لهذا الريل'))}</button>
           </div>
         </div>
       </article>`;
@@ -116,9 +132,9 @@
 
   // ---------- Load ----------
   async function load() {
-    $('rl-grid').innerHTML = `<div class="rl-empty">${esc(tr('Loading your reels...', 'جاري تحميل الريلز...'))}</div>`;
+    $('rl-grid').innerHTML = `<div class="rl-empty">${esc(tr('Loading your reels and posts...', 'جاري تحميل الريلز والمنشورات...'))}</div>`;
     try {
-      const data = await api(`/api/reels?all=${$('rl-allposts').checked ? 1 : 0}`);
+      const data = await api('/api/reels');
       rules = data.rules || [];
       media = data.items || [];
       formUrl = data.form_url || formUrl;
@@ -148,21 +164,34 @@
       <div class="rl-bubble dm" dir="auto"><small>DM</small>${lines.join('<br><br>') || `<span class="rl-muted">${esc(tr('Nothing to send yet', 'لا يوجد شيء للإرسال بعد'))}</span>`}</div>`;
   }
 
+  // ---------- Keyword chips (one word or a phrase each) ----------
+  function renderKeywords() {
+    $('rl-kwlist').innerHTML = keywords.map((k, i) => `<span class="rl-kw" dir="auto">${esc(k)}<button type="button" data-rl-kwdel="${i}" aria-label="${esc(tr('Remove', 'حذف'))}">×</button></span>`).join('');
+  }
+  function addKeywords(text) {
+    const parts = String(text || '').split(/[,،\n]/).map(s => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    for (const p of parts) if (!keywords.some(k => k.toLowerCase() === p.toLowerCase())) keywords.push(p);
+    renderKeywords();
+  }
+
   function openEditor(rule, target) {
     editing = rule ? { ...rule } : {
       name: '', keywords: [], match: 'contains', platforms: target ? [target.platform] : ['instagram', 'facebook'],
-      media_ids: target ? [target.id] : [], public_replies: [tr('Sent you the details in DM.', 'أرسلنا لك التفاصيل على الخاص.')],
+      media_ids: target ? idsOf(target) : [], public_replies: [tr('Sent you the details in DM.', 'أرسلنا لك التفاصيل على الخاص.')],
       dm_text: '', link_url: '', link_label: '', file_url: '', file_name: '', send_form: true, enabled: true
     };
-    $('rl-modal-title').textContent = rule ? tr('Edit keyword rule', 'تعديل قاعدة الكلمة المفتاحية') : tr('New keyword rule', 'قاعدة كلمة مفتاحية جديدة');
-    const m = editing.media_ids?.length ? media.find(x => x.id === editing.media_ids[0]) : null;
+    $('rl-modal-title').textContent = rule?.id ? tr('Edit keyword rule', 'تعديل قاعدة الكلمة المفتاحية') : tr('New keyword rule', 'قاعدة كلمة مفتاحية جديدة');
+    const m = editing.media_ids?.length ? mediaFor(editing.media_ids[0]) : null;
+    const onlyLabel = m?.kind === 'post' ? tr('Only on this post', 'على هذا المنشور فقط') : tr('Only on this reel', 'على هذا الريل فقط');
     $('rl-target').innerHTML = editing.media_ids?.length
-      ? `${m?.thumbnail ? `<img src="${esc(m.thumbnail)}" alt="" referrerpolicy="no-referrer">` : ''}<div><b>${esc(tr('Only on this reel', 'على هذا الريل فقط'))}</b><span class="no-i18n">${esc((m?.caption || editing.media_ids.join(', ')).slice(0, 90))}</span>
-         <button type="button" class="rl-linkbtn" id="rl-make-general">${esc(tr('Apply to all reels instead', 'طبّقها على كل الريلز بدلاً من ذلك'))}</button></div>`
+      ? `${m?.thumbnail ? `<img src="${esc(m.thumbnail)}" alt="" referrerpolicy="no-referrer">` : ''}<div><b>${esc(onlyLabel)}</b><span class="no-i18n" dir="auto">${esc((m?.caption || editing.media_ids.join(', ')).slice(0, 90))}</span>
+         <button type="button" class="rl-linkbtn" id="rl-make-general">${esc(tr('Apply to all reels and posts instead', 'طبّقها على كل الريلز والمنشورات بدلاً من ذلك'))}</button></div>`
       : `<div><b>${esc(tr('All reels and posts', 'كل الريلز والمنشورات'))}</b><span>${esc(tr('Any comment with the keyword, on any reel or post.', 'أي تعليق فيه الكلمة على أي ريل أو منشور.'))}</span></div>`;
     $('rl-target').classList.toggle('specific', !!editing.media_ids?.length);
     $('rl-name').value = editing.name || '';
-    $('rl-keywords').value = (editing.keywords || []).join(', ');
+    keywords = [...(editing.keywords || [])];
+    $('rl-kw-input').value = '';
+    renderKeywords();
     $('rl-match').value = editing.match || 'contains';
     $('rl-ig').checked = (editing.platforms || []).includes('instagram');
     $('rl-fb').checked = (editing.platforms || []).includes('facebook');
@@ -175,7 +204,7 @@
     showFile();
     previewDm();
     $('modal-rule').style.display = 'flex';
-    setTimeout(() => $('rl-keywords').focus(), 30);
+    setTimeout(() => $('rl-kw-input').focus(), 30);
   }
 
   function showFile() {
@@ -192,7 +221,7 @@
     const body = {
       ...(editing.id ? { id: editing.id } : {}),
       name: $('rl-name').value.trim(),
-      keywords: $('rl-keywords').value,
+      keywords: (addKeywords($('rl-kw-input').value), $('rl-kw-input').value = '', keywords),
       match: $('rl-match').value,
       platforms,
       media_ids: editing.media_ids || [],
@@ -270,24 +299,39 @@
 
   // ---------- Events ----------
   document.addEventListener('click', (e) => {
-    const el = e.target.closest('[data-rl-edit],[data-rl-del],[data-rl-add],[data-rl-platform],[data-rl-close],#rl-make-general');
+    const el = e.target.closest('[data-rl-edit],[data-rl-del],[data-rl-add],[data-rl-platform],[data-rl-kind],[data-rl-kwdel],[data-rl-close],#rl-make-general');
     if (!el) return;
     if (el.dataset.rlEdit) openEditor(rules.find(r => r.id === el.dataset.rlEdit));
     else if (el.dataset.rlDel) deleteRule(el.dataset.rlDel);
-    else if (el.dataset.rlAdd) openEditor(null, { id: el.dataset.rlAdd, platform: el.dataset.rlAddPlatform });
+    else if (el.dataset.rlAdd) { const m = mediaFor(el.dataset.rlAdd); openEditor(null, m || { id: el.dataset.rlAdd, platform: 'instagram' }); }
+    else if (el.dataset.rlKwdel !== undefined) { keywords.splice(Number(el.dataset.rlKwdel), 1); renderKeywords(); $('rl-kw-input').focus(); }
+    else if (el.dataset.rlKind) {
+      kind = el.dataset.rlKind;
+      document.querySelectorAll('[data-rl-kind]').forEach(b => b.classList.toggle('active', b === el));
+      renderMedia([], true);
+    }
     else if (el.dataset.rlPlatform) {
       platform = el.dataset.rlPlatform;
       document.querySelectorAll('[data-rl-platform]').forEach(b => b.classList.toggle('active', b === el));
       renderMedia([], true);
     } else if (el.hasAttribute('data-rl-close')) closeEditor();
-    else if (el.id === 'rl-make-general' && editing) { editing.media_ids = []; openEditor(editing.id ? editing : null); }
+    else if (el.id === 'rl-make-general' && editing) openEditor({ ...editing, keywords: [...keywords], media_ids: [] });
   });
   document.addEventListener('change', (e) => {
     if (e.target.matches('[data-rl-toggle]')) toggleRule(e.target.dataset.rlToggle, e.target.checked);
   });
   $('rl-new')?.addEventListener('click', () => openEditor(null));
   $('rl-refresh')?.addEventListener('click', load);
-  $('rl-allposts')?.addEventListener('change', load);
+  $('rl-search')?.addEventListener('input', (e) => { search = e.target.value; renderMedia([], true); });
+  $('rl-kwbox')?.addEventListener('click', () => $('rl-kw-input').focus());
+  $('rl-kw-input')?.addEventListener('keydown', (e) => {
+    const input = e.target;
+    if ((e.key === 'Enter' || e.key === ',' || e.key === '،') && input.value.trim()) { e.preventDefault(); addKeywords(input.value); input.value = ''; }
+    else if (e.key === 'Enter') e.preventDefault();
+    else if (e.key === 'Backspace' && !input.value && keywords.length) { keywords.pop(); renderKeywords(); }
+  });
+  $('rl-kw-input')?.addEventListener('blur', (e) => { if (e.target.value.trim()) { addKeywords(e.target.value); e.target.value = ''; } });
+  $('rl-kw-input')?.addEventListener('paste', (e) => { const t = e.clipboardData?.getData('text') || ''; if (/[,،\n]/.test(t)) { e.preventDefault(); addKeywords(t); } });
   $('rl-form')?.addEventListener('submit', saveEditor);
   $('rl-form')?.addEventListener('input', previewDm);
   $('rl-file')?.addEventListener('change', (e) => { uploadFile(e.target.files[0]); e.target.value = ''; });

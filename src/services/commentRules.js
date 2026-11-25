@@ -123,7 +123,14 @@ class CommentRules {
     for (const kw of rule.keywords || []) {
       const k = norm(kw);
       if (!k) continue;
-      if (rule.match === 'exact' ? t === k : (` ${t} `).includes(` ${k} `) || (k.length >= 4 && t.includes(k))) return kw;
+      if (rule.match === 'exact') { if (t === k) return kw; continue; }
+      if ((` ${t} `).includes(` ${k} `) || (k.length >= 4 && t.includes(k))) return kw;
+      // A keyword of several words also matches when all its words are in the comment, in any order.
+      const words = k.split(' ');
+      if (words.length > 1) {
+        const have = new Set(t.split(' '));
+        if (words.every(w => have.has(w) || (w.length >= 4 && t.includes(w)))) return kw;
+      }
     }
     return null;
   }
@@ -191,7 +198,7 @@ class CommentRules {
   }
 
   /** The account's reels/videos (Facebook) and reels/posts (Instagram). */
-  async media({ platform = 'all', reelsOnly = true } = {}) {
+  async media({ platform = 'all', reelsOnly = false } = {}) {
     const meta = require('./metaService');
     await meta.ensureOwnIds();
     const cfg = meta.config();
@@ -199,21 +206,33 @@ class CommentRules {
     if (!token) return { connected: false, items: [], errors: ['فيسبوك/إنستغرام غير مربوط. اربط الحساب من الإعدادات أولاً.'] };
     const items = [];
     const errors = [];
-    const get = (url, params) => axios.get(url, { params: { access_token: token, ...params }, timeout: 15000 }).then(r => r.data);
+    const get = (url, params) => axios.get(url, { params: { access_token: token, ...params }, timeout: 20000 }).then(r => r.data);
+    // Every page of results (Graph returns 25–50 at a time), up to `max` items.
+    const all = async (url, params, max = 300) => {
+      const out = [];
+      let data = await get(url, params);
+      for (;;) {
+        out.push(...(data.data || []));
+        const next = data.paging?.next;
+        if (!next || out.length >= max) break;
+        data = await axios.get(next, { timeout: 20000 }).then(r => r.data);
+      }
+      return out.slice(0, max);
+    };
 
     if (platform !== 'facebook' && cfg.instagram_account_id) {
       try {
-        const data = await get(`${GRAPH}/${cfg.instagram_account_id}/media`, {
+        const list = await all(`${GRAPH}/${cfg.instagram_account_id}/media`, {
           fields: 'id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,comments_count,like_count',
           limit: 50
         });
-        for (const m of data.data || []) {
+        for (const m of list) {
           const isReel = m.media_product_type === 'REELS' || m.media_type === 'VIDEO';
           if (reelsOnly && !isReel) continue;
           items.push({
-            id: m.id, platform: 'instagram', kind: isReel ? 'reel' : 'post',
+            id: m.id, ids: [m.id], platform: 'instagram', kind: isReel ? 'reel' : 'post',
             caption: m.caption || '', permalink: m.permalink || '',
-            thumbnail: m.thumbnail_url || (m.media_type === 'IMAGE' ? m.media_url : '') || '',
+            thumbnail: m.thumbnail_url || m.media_url || '',
             created_at: m.timestamp, comments: m.comments_count ?? null, likes: m.like_count ?? null
           });
         }
@@ -225,37 +244,60 @@ class CommentRules {
     }
 
     if (platform !== 'instagram' && cfg.page_id) {
+      const fbLink = (u) => (!u ? '' : /^https?:/.test(u) ? u : `https://www.facebook.com${u.startsWith('/') ? '' : '/'}${u}`);
+      const videos = new Map();
       try {
-        const data = await get(`${GRAPH}/${cfg.page_id}/videos`, {
-          fields: 'id,description,permalink_url,picture,created_time,length',
+        const list = await all(`${GRAPH}/${cfg.page_id}/videos`, {
+          fields: 'id,description,permalink_url,picture,created_time,comments.limit(0).summary(true)',
           limit: 50
         });
-        for (const v of data.data || []) {
-          items.push({
-            id: v.id, platform: 'facebook', kind: 'reel',
-            caption: v.description || '', permalink: v.permalink_url ? `https://www.facebook.com${v.permalink_url.startsWith('/') ? '' : '/'}${v.permalink_url.replace(/^https?:\/\/(www\.)?facebook\.com/, '')}` : '',
-            thumbnail: v.picture || '', created_at: v.created_time, comments: null, likes: null
-          });
-        }
-        if (!reelsOnly) {
-          const posts = await get(`${GRAPH}/${cfg.page_id}/posts`, { fields: 'id,message,permalink_url,full_picture,created_time', limit: 30 });
-          for (const p of posts.data || []) {
-            items.push({ id: p.id, platform: 'facebook', kind: 'post', caption: p.message || '', permalink: p.permalink_url || '', thumbnail: p.full_picture || '', created_at: p.created_time, comments: null, likes: null });
-          }
+        for (const v of list) {
+          const item = {
+            id: v.id, ids: [v.id], platform: 'facebook', kind: 'reel',
+            caption: v.description || '', permalink: fbLink(v.permalink_url),
+            thumbnail: v.picture || '', created_at: v.created_time, comments: v.comments?.summary?.total_count ?? null, likes: null
+          };
+          videos.set(v.id, item);
+          items.push(item);
         }
       } catch (e) {
-        errors.push(`Facebook: ${e.response?.data?.error?.message || e.message}`);
+        errors.push(`Facebook (videos): ${e.response?.data?.error?.message || e.message}`);
+      }
+      try {
+        const posts = await all(`${GRAPH}/${cfg.page_id}/published_posts`, {
+          fields: 'id,message,permalink_url,full_picture,created_time,attachments{media_type,target{id}},comments.limit(0).summary(true)',
+          limit: 50
+        });
+        for (const p of posts) {
+          // A reel/video also appears as a post: merge them, so comments on either id match its rules.
+          const targetId = p.attachments?.data?.[0]?.target?.id;
+          const video = targetId && videos.get(targetId);
+          if (video) {
+            video.ids.push(p.id);
+            if (video.comments == null) video.comments = p.comments?.summary?.total_count ?? null;
+            continue;
+          }
+          const isVideo = /video/i.test(p.attachments?.data?.[0]?.media_type || '');
+          if (reelsOnly && !isVideo) continue;
+          items.push({
+            id: p.id, ids: [p.id], platform: 'facebook', kind: isVideo ? 'reel' : 'post',
+            caption: p.message || '', permalink: p.permalink_url || '', thumbnail: p.full_picture || '',
+            created_at: p.created_time, comments: p.comments?.summary?.total_count ?? null, likes: null
+          });
+        }
+      } catch (e) {
+        errors.push(`Facebook (posts): ${e.response?.data?.error?.message || e.message}`);
       }
     }
 
     items.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-    // How many comments on each reel triggered a rule (from our own records).
+    // How many comments on each item triggered a rule (from our own records).
     const hits = {};
     for (const c of storageService.getComments()) {
       if (c.rule_id && c.post_id) hits[c.post_id] = (hits[c.post_id] || 0) + 1;
     }
     for (const it of items) {
-      it.rule_hits = Object.entries(hits).reduce((n, [pid, k]) => (pid === it.id || pid.endsWith(`_${it.id}`) ? n + k : n), 0);
+      it.rule_hits = Object.entries(hits).reduce((n, [pid, k]) => (it.ids.some(id => pid === id || pid.endsWith(`_${id}`)) ? n + k : n), 0);
     }
     return { connected: true, items, errors };
   }

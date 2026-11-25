@@ -499,12 +499,19 @@
 
         <div class="glass-card">
           <div class="rl-media-head">
-            <h4><i class="fa-solid fa-clapperboard"></i> Your reels</h4>
-            <div class="rl-filters" role="group" aria-label="Filter">
-              <button type="button" class="rl-chip active" data-rl-platform="all">All</button>
-              <button type="button" class="rl-chip" data-rl-platform="instagram"><i class="fa-brands fa-instagram"></i> Instagram</button>
-              <button type="button" class="rl-chip" data-rl-platform="facebook"><i class="fa-brands fa-facebook"></i> Facebook</button>
-              <label class="rl-allposts"><input type="checkbox" id="rl-allposts"> <span>Show posts too</span></label>
+            <h4><i class="fa-solid fa-clapperboard"></i> Your reels and posts <span class="rl-total no-i18n" id="rl-total"></span></h4>
+            <div class="rl-filters">
+              <div class="rl-seg" role="group" aria-label="Type">
+                <button type="button" class="rl-chip active" data-rl-kind="all">All</button>
+                <button type="button" class="rl-chip" data-rl-kind="reel"><i class="fa-solid fa-film"></i> Reels</button>
+                <button type="button" class="rl-chip" data-rl-kind="post"><i class="fa-regular fa-image"></i> Posts</button>
+              </div>
+              <div class="rl-seg" role="group" aria-label="Platform">
+                <button type="button" class="rl-chip active" data-rl-platform="all">Both</button>
+                <button type="button" class="rl-chip" data-rl-platform="instagram"><i class="fa-brands fa-instagram"></i> Instagram</button>
+                <button type="button" class="rl-chip" data-rl-platform="facebook"><i class="fa-brands fa-facebook"></i> Facebook</button>
+              </div>
+              <input type="search" id="rl-search" class="form-control rl-search" placeholder="Search captions">
             </div>
           </div>
           <div id="rl-notice" class="rl-notice" hidden></div>
@@ -1414,9 +1421,12 @@
       <div class="rl-editor-body">
         <div id="rl-target" class="rl-target"></div>
         <div class="form-group">
-          <label for="rl-keywords">Keywords</label>
-          <input id="rl-keywords" class="form-control" placeholder="atlead, price, السعر">
-          <small class="rl-help">Separate with commas. Arabic spellings are matched with or without hamza and taa marbuta.</small>
+          <label for="rl-kw-input">Keywords</label>
+          <div class="rl-kwbox" id="rl-kwbox">
+            <div class="rl-kwlist no-i18n" id="rl-kwlist"></div>
+            <input id="rl-kw-input" placeholder="Type a word or phrase, then Enter">
+          </div>
+          <small class="rl-help">Add as many keywords as you want. A keyword can be one word or several words (e.g. "how much"); a several-word keyword also matches when all its words are in the comment. Arabic spellings are matched with or without hamza and taa marbuta.</small>
         </div>
         <div class="grid-2">
           <div class="form-group">

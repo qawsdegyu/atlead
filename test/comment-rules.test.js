@@ -117,10 +117,27 @@ test('reels list reads Instagram reels and Facebook videos; rule files are publi
     { id: 'P1', caption: 'Photo', media_type: 'IMAGE', media_product_type: 'FEED', timestamp: '2026-11-19T10:00:00+0000' }
   ] }));
   fake('get', /PAGE1\/videos/, () => ({ data: [{ id: 'V1', description: 'FB reel', permalink_url: '/reel/V1', picture: 'https://x/v.jpg', created_time: '2026-11-21T10:00:00+0000' }] }));
+  // Page 1 of posts links to page 2: every page is read.
+  fake('get', /PAGE1\/published_posts/, () => ({
+    data: [{ id: 'PAGE1_900', message: 'FB reel', created_time: '2026-11-21T10:00:00+0000', attachments: { data: [{ media_type: 'video', target: { id: 'V1' } }] } }],
+    paging: { next: 'https://graph.facebook.com/v21.0/PAGE1/posts_page2' }
+  }));
+  fake('get', /posts_page2/, () => ({ data: [{ id: 'PAGE1_901', message: 'Offer photo', full_picture: 'https://x/p.jpg', created_time: '2026-11-18T10:00:00+0000', attachments: { data: [{ media_type: 'photo' }] }, comments: { summary: { total_count: 7 } } }] }));
   const res = await http(app.base, '/api/reels');
   assert.equal(res.status, 200);
-  assert.deepEqual(res.body.items.map(i => i.id), ['V1', 'R1'], 'reels only, newest first');
+  assert.deepEqual(res.body.items.map(i => i.id), ['V1', 'R1', 'P1', 'PAGE1_901'], 'reels and posts, newest first');
+  assert.deepEqual(res.body.items.map(i => i.kind), ['reel', 'reel', 'post', 'post']);
+  assert.deepEqual(res.body.items[0].ids, ['V1', 'PAGE1_900'], 'the FB reel keeps its post id too');
+  assert.equal(res.body.items[3].comments, 7);
   assert.match(res.body.form_url, /\/consult$/);
+
+  // A rule saved on the FB reel answers comments that arrive with its post id.
+  const saved = await http(app.base, '/api/comment-rules', { method: 'POST', json: { platforms: ['facebook'], media_ids: ['V1', 'PAGE1_900'], keywords: ['كم السعر', 'details please'], dm_text: 'الأسعار هنا' } });
+  assert.equal((await comment('facebook', 'لو سمحت كم السعر؟', 'PAGE1_900')).rule_id, saved.body.rule.id, 'phrase, contiguous');
+  assert.equal((await comment('facebook', 'السعر كم لو سمحت', 'PAGE1_900')).rule_id, saved.body.rule.id, 'phrase, words in another order');
+  assert.equal((await comment('facebook', 'please send details', 'PAGE1_900')).rule_id, saved.body.rule.id, 'second keyword');
+  assert.notEqual((await comment('facebook', 'كم سعر الشحن', 'PAGE1_901')).rule_id, saved.body.rule.id, 'other post not covered');
+  await http(app.base, `/api/comment-rules/${saved.body.rule.id}`, { method: 'DELETE' });
 
   assert.equal((await http(app.base, '/files/rule_nothing.pdf')).status, 404);
 });

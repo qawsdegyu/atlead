@@ -29,3 +29,17 @@ test('unread messages count until the chat is opened, then new ones count again'
   assert.equal(await unreadOf(conv.id), 1, 'a new message after opening');
   assert.equal((await http(app.base, '/api/conversations/nope/read', { method: 'POST' })).status, 404);
 });
+
+test('whoever writes last is at the top of the inbox', async () => {
+  const a = storage.saveConversation({ channel: 'whatsapp', external_user_id: '962790000301', customer_name: 'Old' });
+  storage.addMessage(a.id, { sender: 'customer', content: 'قديمة' });
+  await sleep(5);
+  const b = storage.saveConversation({ channel: 'instagram_dm', external_user_id: 'ig_302', customer_name: 'New' });
+  storage.addMessage(b.id, { sender: 'customer', content: 'جديدة' });
+  let ids = (await http(app.base, '/api/conversations')).body.conversations.map(c => c.id);
+  assert.ok(ids.indexOf(b.id) < ids.indexOf(a.id));
+  await sleep(5);
+  storage.addMessage(a.id, { sender: 'customer', content: 'رجعت' });
+  ids = (await http(app.base, '/api/conversations')).body.conversations.map(c => c.id);
+  assert.equal(ids[0], a.id, 'a new message moves the chat to the top');
+});

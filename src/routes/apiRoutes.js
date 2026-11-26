@@ -375,6 +375,9 @@ router.get('/conversations', (req, res) => {
     list = list.filter(c => c.lead_stage === stage);
   }
 
+  // Newest message first: whoever just wrote is at the top of the inbox.
+  const lastAt = (c) => Date.parse(c.last_message_at || c.messages?.[c.messages.length - 1]?.created_at || c.updated_at || c.created_at || 0) || 0;
+  list = [...list].sort((a, b) => lastAt(b) - lastAt(a));
   res.json({ success: true, conversations: list.map(c => ({ ...c, unread_count: unreadCount(c) })) });
 });
 

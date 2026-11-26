@@ -134,7 +134,7 @@ class AiService {
   }
 
   /** One chat call to any provider. Returns the raw text of the model's answer. */
-  async chat(p, systemPrompt, history, userPrompt, { json = true, temperature = 0.5, timeout = 30000 } = {}) {
+  async chat(p, systemPrompt, history, userPrompt, { json = true, temperature = 0.5, timeout = 30000, maxTokens = null } = {}) {
     if (p.type === 'gemini') {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${p.model}:generateContent?key=${p.key}`;
       const contents = history.map(h => ({ role: h.role === 'model' ? 'model' : 'user', parts: [{ text: h.text }] }));
@@ -176,6 +176,7 @@ class AiService {
       model: p.model,
       messages,
       temperature,
+      ...(maxTokens ? { max_tokens: maxTokens } : {}),
       ...(json ? { response_format: { type: 'json_object' } } : {})
     }, { headers: { Authorization: `Bearer ${p.key}`, 'Content-Type': 'application/json' }, timeout });
     return res.data?.choices?.[0]?.message?.content || '';

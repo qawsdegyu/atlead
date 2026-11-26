@@ -312,7 +312,9 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
 
 طريقة الرد في هذه المكالمة: صوتك يُقرأ بصوت الجهاز، فأعد JSON فقط بهذا الشكل:
 {"say": "ما ستقوله للعميل الآن", "tool": null, "start": null}
-- say: جملة أو جملتان قصيرتان وطبيعيتان للنطق، بدون روابط أو رموز أو إيموجي أو تعداد.
+- say: مثل إنسان على التلفون: جملة قصيرة جداً (12 كلمة أو أقل) فيها سؤال واحد فقط. ممنوع تجمع سؤالين أو ثلاثة بنفس الرد. لا تكرر التحية ولا تعيد كلام العميل. بدون روابط أو رموز أو إيموجي أو تعداد.
+- إذا سأل عن السعر: جملة واحدة قصيرة (السعر بيتحدد حسب احتياجك بعد استشارة مجانية مع المهندس) ثم سؤالك التالي.
+- اكتب بالعامية الأردنية البسيطة وبكلمات واضحة النطق.
 - tool: null أو "get_free_times" أو "book_engineer_meeting" أو "end_call".
 - لاستخدام get_free_times أو book_engineer_meeting اترك say فارغاً، وضع في start الوقت بصيغة YYYY-MM-DD HH:MM عند الحجز. ستصلك النتيجة ثم تكمل.
 - end_call: ضع جملة الوداع في say.
@@ -326,7 +328,7 @@ ${s.free_slots.map(x => `  • ${x.start} = ${lang === 'en' ? x.label_en : x.lab
     const used = [];
     for (let step = 0; step < 4; step++) {
       const last = step === 3; // after 3 tool calls, the model must speak
-      const { text: raw } = await ai.chatWithFailover(system, history, last ? `${prompt}\n\n(لا أدوات الآن: قل للعميل الرد المناسب في say.)` : prompt, { json: true, temperature: 0.5, timeout: 30000 });
+      const { text: raw } = await ai.chatWithFailover(system, history, last ? `${prompt}\n\n(لا أدوات الآن: قل للعميل الرد المناسب في say.)` : prompt, { json: true, temperature: 0.5, timeout: 20000, maxTokens: 180 });
       let r = {};
       try { r = JSON.parse(String(raw).replace(/^```(json)?|```$/g, '').trim()); } catch { r = { say: String(raw || '').slice(0, 400) }; }
       const tool = !last && ['get_free_times', 'book_engineer_meeting', 'end_call'].includes(r.tool) ? r.tool : null;

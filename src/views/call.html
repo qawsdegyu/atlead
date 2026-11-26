@@ -258,11 +258,16 @@
     try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
   }
 
+  // The most natural voice the phone has for this language (neural/online voices first).
   function pickVoice(lang) {
     const voices = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
-    const base = lang.slice(0, 2);
-    return voices.find(v => v.lang === lang) || voices.find(v => v.lang && v.lang.toLowerCase().startsWith(base)) || null;
+    const base = lang.slice(0, 2).toLowerCase();
+    const same = voices.filter(v => v.lang && v.lang.toLowerCase().replace('_', '-').startsWith(base));
+    const score = (v) => (/natural|neural|online|premium|enhanced/i.test(v.name) ? 4 : 0) + (/google|microsoft|siri/i.test(v.name) ? 2 : 0)
+      + (v.lang.replace('_', '-') === lang ? 1 : 0) + (/male|hamed|taim|shakir|majed|maged/i.test(v.name) ? 0.5 : 0);
+    return same.sort((a, b) => score(b) - score(a))[0] || null;
   }
+  if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {}; // loads the voice list early
 
   function speak(text) {
     return new Promise((resolve) => {
@@ -271,11 +276,16 @@
       u.lang = speechLang;
       const v = pickVoice(speechLang);
       if (v) u.voice = v;
-      u.rate = 1;
-      let done = false;
-      const finish = () => { if (!done) { done = true; clearTimeout(guard); resolve(); } };
-      // Some phones never fire onend: stop waiting after a generous estimate.
-      const guard = setTimeout(finish, 2500 + text.length * 110);
+      u.rate = 1.08;
+      let done = false, started = false;
+      const finish = () => { if (!done) { done = true; clearTimeout(guard); clearInterval(poll); resolve(); } };
+      // Some phones never fire onend: watch the speaker and stop waiting as soon as it is quiet.
+      const guard = setTimeout(finish, 1500 + text.length * 75);
+      const poll = setInterval(() => {
+        if (speechSynthesis.speaking) started = true;
+        else if (started) finish();
+      }, 150);
+      u.onstart = () => { started = true; };
       u.onend = finish; u.onerror = finish;
       speechSynthesis.cancel();
       speechSynthesis.speak(u);
@@ -342,7 +352,7 @@
   function listen() {
     if (ended || busy || !browserMode || typing) return;
     if (muted) { mode('listening browser'); setState(T.muted); return; }
-    let finalText = '';
+    let finalText = '', latest = '', sent = false, quiet = null;
     try {
       rec = new SR();
       rec.lang = speechLang;
@@ -350,13 +360,25 @@
       rec.continuous = false;
       rec.maxAlternatives = 1;
     } catch (e) { return useTyping(T.noVoice); }
+    // Send as soon as the customer pauses (~0.9 s), like a person would answer,
+    // instead of waiting for the phone to decide the sentence is over.
+    const sendNow = () => {
+      const t = latest.trim();
+      if (sent || !t || ended || busy) return;
+      sent = true; emptyListens = 0;
+      try { rec && rec.abort(); } catch (e) {}
+      next(t);
+    };
     rec.onresult = (e) => {
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
         else interim += e.results[i][0].transcript;
       }
-      showCaption((finalText + ' ' + interim).trim(), true);
+      latest = (finalText + ' ' + interim).trim();
+      showCaption(latest, true);
+      clearTimeout(quiet);
+      quiet = setTimeout(sendNow, 900);
     };
     rec.onerror = (e) => {
       // Some phones (iPhone) don't know Jordanian Arabic: fall back to general Arabic, then Saudi.
@@ -369,12 +391,12 @@
     };
     rec.onend = () => {
       rec = null;
-      if (ended || busy || typing) return;
-      const t = finalText.trim();
-      if (t) { emptyListens = 0; next(t); return; }
+      clearTimeout(quiet);
+      if (sent || ended || busy || typing) return;
+      if (latest.trim()) return sendNow();
       // Silence: keep listening (offer typing after a long silence).
-      if (++emptyListens >= 6) useTyping(T.typeHint);
-      else setTimeout(listen, 250);
+      if (++emptyListens >= 8) useTyping(T.typeHint);
+      else setTimeout(listen, 120);
     };
     mode('listening browser'); setState(T.listening);
     try { rec.start(); } catch (e) { setTimeout(listen, 600); }

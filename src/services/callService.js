@@ -196,6 +196,8 @@ ${cfg.extra_questions ? `أسئلة إضافية من الإدارة:\n${cfg.ext
 ${calendarOn ? `- حجز اجتماع المهندس، بالترتيب ولا تتجاوز أي خطوة: (1) اسأل العميل إذا حابب يحجز اجتماع أونلاين مع المهندس واستنى جوابه. (2) إذا وافق، استخدم get_free_times. (3) اقترح وقتين أو ثلاثة من النتيجة فقط واستنى يختار. (4) فقط لما يوافق صراحة على وقت محدد استخدم book_engineer_meeting بنفس الوقت. ممنوع تخترع تاريخ أو وقت، وممنوع تحجز بدون موافقته. (5) بعد الحجز أكّد له الموعد وقل إن رابط الاجتماع رح يوصله بالمحادثة.` : '- إذا العميل مهتم وجاهز: قل إن المهندس رح يتواصل معه لتحديد موعد الاجتماع. لا تذكر أي تاريخ أو وقت.'}
 - بالآخر لخّص له الخطوة الجاية بجملة، اشكره، وبعدين استخدم end_call.
 
+تاريخ اليوم (توقيت عمّان): ${this.todayAmman()}. لا تكتب أي تاريخ من عندك: الأوقات تأتي من get_free_times فقط.
+
 معلومات معروفة عن العميل من المحادثة الكتابية:
 ${known || '- لا يوجد'}
 
@@ -313,7 +315,10 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
 - say: جملة أو جملتان قصيرتان وطبيعيتان للنطق، بدون روابط أو رموز أو إيموجي أو تعداد.
 - tool: null أو "get_free_times" أو "book_engineer_meeting" أو "end_call".
 - لاستخدام get_free_times أو book_engineer_meeting اترك say فارغاً، وضع في start الوقت بصيغة YYYY-MM-DD HH:MM عند الحجز. ستصلك النتيجة ثم تكمل.
-- end_call: ضع جملة الوداع في say.`;
+- end_call: ضع جملة الوداع في say.
+- تاريخ اليوم (توقيت عمّان): ${this.todayAmman()}.${(s.free_slots || []).length ? `
+- الأوقات المتاحة التي قرأتها من التقويم في هذه المكالمة (احجز بنفس قيمة start حرفياً):
+${s.free_slots.map(x => `  • ${x.start} = ${lang === 'en' ? x.label_en : x.label_ar}`).join('\n')}` : ''}`;
     const history = s.transcript.slice(-40, said ? -1 : undefined).map(l => ({ role: l.role === 'assistant' ? 'model' : 'user', text: l.text }));
     let prompt = said ? `العميل: ${said}` : '(بداية المكالمة: رحّب بالعميل باسمه إن كان معروفاً، عرّف بنفسك، واطلب إذنه بكم سؤال سريع.)';
     const ai = require('./aiService');
@@ -326,8 +331,12 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
       try { r = JSON.parse(String(raw).replace(/^```(json)?|```$/g, '').trim()); } catch { r = { say: String(raw || '').slice(0, 400) }; }
       const tool = !last && ['get_free_times', 'book_engineer_meeting', 'end_call'].includes(r.tool) ? r.tool : null;
       if (tool && tool !== 'end_call') {
-        const result = await this.tool(token, tool, { start: r.start || '' });
-        used.push({ tool, args: { start: r.start || '' }, result });
+        const start = tool === 'book_engineer_meeting' ? this.matchOffered(r.start, this.get(token).free_slots) : '';
+        const result = await this.tool(token, tool, { start });
+        if (tool === 'get_free_times' && Array.isArray(result?.slots)) {
+          const cur = this.get(token); cur.free_slots = result.slots; this.save(cur);
+        }
+        used.push({ tool, args: { start }, result });
         prompt += `\n\n[نتيجة ${tool}]: ${JSON.stringify(result)}\nالآن قل للعميل الرد المناسب (say).`;
         continue;
       }
@@ -343,6 +352,32 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
     this.save(after);
     if (out.say) this.addTranscript(token, [{ role: 'assistant', text: out.say }]);
     return out;
+  }
+
+  todayAmman() {
+    const d = new Date();
+    const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Amman', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    const day = new Intl.DateTimeFormat('ar', { timeZone: 'Asia/Amman', weekday: 'long' }).format(d);
+    return `${date} (${day})`;
+  }
+
+  /**
+   * The model sometimes writes a wrong date for a time the customer picked from the offered list
+   * ("2023-10-09 10:00" for "tomorrow at 10:00"). If the time of day matches exactly one offered
+   * slot, book that slot. Otherwise keep what the model wrote (the booking tool still refuses it).
+   */
+  matchOffered(start, slots = []) {
+    const v = String(start || '').trim();
+    if (!v || !Array.isArray(slots) || !slots.length) return v;
+    if (slots.some(x => x.start === v)) return v;
+    const hm = v.match(/(\d{1,2}):(\d{2})\s*$/);
+    if (!hm) return v;
+    const key = `${hm[1].padStart(2, '0')}:${hm[2]}`;
+    const same = slots.filter(x => String(x.start).endsWith(` ${key}`));
+    if (same.length === 1) return same[0].start;
+    const date = v.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    const exactDay = date && same.find(x => x.start.startsWith(date));
+    return exactDay ? exactDay.start : v;
   }
 
   /** Text the phone can read aloud: no links, emoji or markdown. */
@@ -528,6 +563,7 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
 ${transcript}
 
 بيانات معروفة سابقاً: الاسم ${conv.customer_name || '-'}، النشاط ${conv.business_type || '-'}، الطلب ${conv.customer_requests || '-'}.
+حالة الحجز من النظام (هي الحقيقة، وليس كلام المكالمة): ${session.appointment?.appointment_label ? `تم حجز اجتماع مع المهندس: ${session.appointment.appointment_label}` : 'لم يُحجز أي اجتماع في التقويم'}.
 
 الحكم على الشراء (بناءً على كلام العميل فقط):
 - buying_probability: رقم من 0 إلى 100 يقدّر احتمال أن يشتري فعلاً.
@@ -547,6 +583,13 @@ customer_name, company_name, job_title, location, business_type, team_size, mont
     // The three signals must agree, otherwise the safe answer wins (no false "ready to buy").
     if (!clean.buying_probability) clean.buying_probability = { Hot: 80, Warm: 50, Cold: 15 }[clean.classification];
     clean.qualified = (clean.qualified === true || clean.qualified === 'true') && clean.classification !== 'Cold' && clean.buying_probability >= 50;
+    // "Meeting booked" only when the calendar really has it.
+    const booked = !!session.appointment?.appointment_label;
+    const saysBooked = /محجوز|تم (ال)?حجز|حجزنا|booked/i.test(`${clean.next_step || ''} ${clean.summary || ''}`);
+    if (!booked && saysBooked) {
+      clean.next_step = clean.qualified ? 'تواصل الفريق مع العميل لتحديد موعد الاجتماع مع المهندس (لم يُحجز موعد في التقويم)' : 'لا يوجد موعد محجوز';
+      clean.summary = String(clean.summary || '').replace(/[^.]*?(تم (ال)?اتفاق على حجز|تم (ال)?حجز|محجوز)[^.]*\.?/g, '').trim();
+    }
     return clean;
   }
 

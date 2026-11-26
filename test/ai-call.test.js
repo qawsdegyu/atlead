@@ -241,3 +241,36 @@ test('browser voice never leaves the customer in silence when the model only cal
   assert.match(r2.body.say, /ممكن تعيد/, 'an empty answer becomes a polite "say again"');
   storage.updateSettings({ ai: { openai_api_key: 'sk-openai-secret' } }, { skipDbSync: true });
 });
+
+test('booking works when the model writes a wrong date for an offered time (seen live: 2023-10-09 10:00)', async () => {
+  storage.updateSettings({ ai: { openai_api_key: '' } }, { skipDbSync: true });
+  const conv = newConv('سامي');
+  const s = callService.createSession(conv);
+  await http(app.base, `/api/call/${s.token}/start`, { method: 'POST' });
+  answers = [{ tool: 'get_free_times' }, { say: 'عندي بكرا الساعة 12:00 أو 13:00، شو بناسبك؟' }];
+  await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: 'بدي أحجز' } });
+  const slots = callService.get(s.token).free_slots;
+  assert.ok(slots?.length, 'offered times are remembered for the next turns');
+  const pick = slots[0].start; // "YYYY-MM-DD HH:MM"
+  const wrongYear = `2023-10-09 ${pick.slice(11)}`;
+  answers = [{ tool: 'book_engineer_meeting', start: wrongYear }, { say: 'تم، حجزتلك.' }];
+  await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: `الساعة ${pick.slice(11)} مناسبة` } });
+  const sysPrompt = calls.filter(c => /openrouter/.test(c.url)).pop().body.messages[0].content;
+  assert.match(sysPrompt, /تاريخ اليوم/, 'the model knows today');
+  assert.match(sysPrompt, new RegExp(pick), 'and the offered times');
+  assert.equal(storage.getConversationById(conv.id).appointment_link, 'https://meet.google.com/eng-meet', 'booked the offered slot');
+  storage.updateSettings({ ai: { openai_api_key: 'sk-openai-secret' } }, { skipDbSync: true });
+});
+
+test('the analysis never says "meeting booked" when nothing was booked', async () => {
+  const conv = newConv('سامي');
+  const s = callService.createSession(conv);
+  callService.addTranscript(s.token, [{ role: 'assistant', text: 'بتحب نحجز اجتماع؟' }, { role: 'customer', text: 'آه أكيد، الساعة 10' }]);
+  answers = [{ business_type: 'عيادة', buying_probability: 85, classification: 'Hot', qualified: true, summary: 'صاحب عيادة جاد. تم الاتفاق على حجز اجتماع لمناقشة التفاصيل.', next_step: 'اجتماع محجوز' }];
+  const a = await callService.analyze(callService.get(s.token), storage.getConversationById(conv.id));
+  assert.doesNotMatch(a.next_step, /^اجتماع محجوز$/);
+  assert.match(a.next_step, /لم يُحجز/);
+  assert.doesNotMatch(a.summary, /حجز اجتماع/);
+  const prompt = calls.filter(c => /openrouter/.test(c.url)).pop().body.messages.map(m => m.content).join('\n');
+  assert.match(prompt, /لم يُحجز أي اجتماع في التقويم/, 'the analyst is told the real booking state');
+});

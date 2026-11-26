@@ -28,7 +28,7 @@ test('a full rehearsal: questions, booking with the engineer, verdict and every 
     { say: 'أهلاً سامي، شو نوع شغلك؟' },
     { say: 'ممتاز، خليني أشوف الأوقات المتاحة.', tool: 'get_free_times' },
     { say: `عنا بكرا الساعة 12:00، بناسبك؟` },
-    { say: 'تمام بحجزلك.', tool: 'book_engineer_meeting', args: { start: `${tomorrow} 12:00` } },
+    { say: 'تمام بحجزلك.', tool: 'book_engineer_meeting', start: `${tomorrow} 12:00`, args: { start: `${tomorrow} 12:00` } },
     { say: 'تم الحجز، شكراً إلك. مع السلامة.', tool: 'end_call' }
   ];
   fake('post', /openrouter\.ai/, (req) => {
@@ -52,5 +52,7 @@ test('a full rehearsal: questions, booking with the engineer, verdict and every 
   assert.equal(done.sheet_row['حجم الفريق'], '6');
   assert.equal(done.sheet_row['مكالمة الـ AI — مؤهل للشراء'], 'نعم');
   assert.deepEqual(done.ungrounded, []);
-  assert.ok(done.transcript.length >= 6);
+  assert.ok(done.transcript.length >= 5);
+  assert.equal(done.engine, 'live', 'the same engine as the real call page');
+  assert.match(done.transcript[0], /^المساعد: أهلاً سامي/, 'the assistant greets first');
 });

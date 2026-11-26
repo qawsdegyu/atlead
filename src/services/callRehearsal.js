@@ -70,23 +70,39 @@ async function run(jobId, personaKey, maxTurns) {
 
     let customerLine = p.first;
     let ended = false;
+    // engine 'live' = the exact turn() the call page uses (browser voice); 'text' = the older text protocol.
+    const live = job.engine !== 'text';
+    if (live) {
+      session.lang = p.lang; session.mode = 'browser'; callService.save(session);
+      const hello = await callService.turn(session.token, ''); // the assistant greets first, like the real page
+      lines.push({ role: 'assistant', text: hello.say });
+      toolLog.push(...(hello.tools || []));
+    }
     for (let turn = 0; turn < maxTurns && !ended; turn++) {
-      say('customer', customerLine);
       job.progress = `turn ${turn + 1}`;
-      let input = `العميل: ${customerLine}`;
-      for (let step = 0; step < 3; step++) { // a reply may need a tool first
-        const { text } = await ai.chatWithFailover(system, assistantHistory, input, { json: true, temperature: 0.6, timeout: 40000 });
-        let out;
-        try { out = JSON.parse(String(text).replace(/^```json|```$/g, '').trim()); } catch { out = { say: String(text || '') }; }
-        assistantHistory.push({ role: 'user', text: input }, { role: 'model', text: JSON.stringify(out) });
-        if (out.say) say('assistant', String(out.say));
-        if (!out.tool) break;
-        const result = await callService.tool(session.token, out.tool, out.args || {});
-        toolLog.push({ tool: out.tool, args: out.args || {}, result });
-        if (out.tool === 'end_call') { ended = true; break; }
-        input = `[نتيجة الأداة ${out.tool}]: ${JSON.stringify(result)}`;
+      if (live) {
+        lines.push({ role: 'customer', text: customerLine });
+        const r = await callService.turn(session.token, customerLine);
+        if (r.say) lines.push({ role: 'assistant', text: r.say });
+        toolLog.push(...(r.tools || []));
+        if (r.end) { ended = true; break; }
+      } else {
+        say('customer', customerLine);
+        let input = `العميل: ${customerLine}`;
+        for (let step = 0; step < 3; step++) { // a reply may need a tool first
+          const { text } = await ai.chatWithFailover(system, assistantHistory, input, { json: true, temperature: 0.6, timeout: 40000 });
+          let out;
+          try { out = JSON.parse(String(text).replace(/^```json|```$/g, '').trim()); } catch { out = { say: String(text || '') }; }
+          assistantHistory.push({ role: 'user', text: input }, { role: 'model', text: JSON.stringify(out) });
+          if (out.say) say('assistant', String(out.say));
+          if (!out.tool) break;
+          const result = await callService.tool(session.token, out.tool, out.args || {});
+          toolLog.push({ tool: out.tool, args: out.args || {}, result });
+          if (out.tool === 'end_call') { ended = true; break; }
+          input = `[نتيجة الأداة ${out.tool}]: ${JSON.stringify(result)}`;
+        }
+        if (ended) break;
       }
-      if (ended) break;
       customerHistory.push({ role: 'model', text: customerLine });
       const lastAssistant = [...lines].reverse().find(l => l.role === 'assistant')?.text || '';
       customerHistory.push({ role: 'user', text: lastAssistant });
@@ -140,10 +156,10 @@ async function run(jobId, personaKey, maxTurns) {
 
 module.exports = {
   PERSONAS,
-  start(persona = 'buyer', { maxTurns = 14, cleanup = true } = {}) {
+  start(persona = 'buyer', { maxTurns = 14, cleanup = true, engine = 'live' } = {}) {
     if (!PERSONAS[persona]) throw new Error('unknown persona');
     const id = crypto.randomBytes(6).toString('hex');
-    jobs.set(id, { id, status: 'running', persona, cleanup, started_at: new Date().toISOString() });
+    jobs.set(id, { id, status: 'running', persona, cleanup, engine: engine === 'text' ? 'text' : 'live', started_at: new Date().toISOString() });
     run(id, persona, Math.min(20, Math.max(4, maxTurns)));
     return jobs.get(id);
   },

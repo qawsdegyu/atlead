@@ -475,7 +475,7 @@ router.get('/bookings/rehearse/:id', (req, res) => {
 // Call rehearsal: a simulated customer talks to the call AI (same script and tools), then the real analysis.
 router.post('/calls/rehearse', (req, res) => {
   try {
-    const job = require('../services/callRehearsal').start(String(req.body?.persona || 'buyer'), { maxTurns: Number(req.body?.max_turns) || 14, cleanup: req.body?.keep !== true });
+    const job = require('../services/callRehearsal').start(String(req.body?.persona || 'buyer'), { maxTurns: Number(req.body?.max_turns) || 14, cleanup: req.body?.keep !== true, engine: req.body?.engine === 'text' ? 'text' : 'live' });
     res.json({ success: true, job });
   } catch (e) { res.status(400).json({ success: false, message: e.message }); }
 });

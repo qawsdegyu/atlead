@@ -29,7 +29,8 @@ api.post('/:token/start', guard, async (req, res) => {
 // Browser-voice calls: one conversation turn (customer words in, assistant sentence out).
 api.post('/:token/turn', guard, async (req, res) => {
   try {
-    res.json({ ok: true, ...(await callService.turn(req.params.token, String(req.body?.text || ''))) });
+    const r = await callService.turn(req.params.token, String(req.body?.text || ''));
+    res.json({ ok: true, say: r.say, end: r.end }); // tool details stay on the server
   } catch (e) {
     console.warn('[Call] turn failed:', e.message);
     res.status(['not_found', 'expired', 'completed'].includes(e.code) ? 400 : 502).json({ ok: false, error: e.code || 'failed' });

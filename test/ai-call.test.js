@@ -225,3 +225,19 @@ test('a broken OpenAI key falls back to browser voice instead of a dead link', a
   assert.equal(start.body.ok, true);
   assert.equal(start.body.mode, 'browser');
 });
+
+test('browser voice never leaves the customer in silence when the model only calls tools', async () => {
+  storage.updateSettings({ ai: { openai_api_key: '' } }, { skipDbSync: true });
+  const conv = newConv('رنا');
+  const s = callService.createSession(conv);
+  await http(app.base, `/api/call/${s.token}/start`, { method: 'POST' });
+  answers = [{ tool: 'get_free_times' }, { tool: 'get_free_times' }, { tool: 'get_free_times' }, { say: 'عندي بكرا الساعة 10 أو 11، شو بناسبك؟', tool: 'get_free_times' }];
+  const r = await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: 'بدي موعد' } });
+  assert.equal(r.body.ok, true);
+  assert.match(r.body.say, /بكرا/, 'forced to speak after three tool calls');
+  assert.equal(r.body.tools, undefined, 'tool details are not sent to the browser');
+  answers = [{ say: '', tool: null }];
+  const r2 = await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: 'آه' } });
+  assert.match(r2.body.say, /ممكن تعيد/, 'an empty answer becomes a polite "say again"');
+  storage.updateSettings({ ai: { openai_api_key: 'sk-openai-secret' } }, { skipDbSync: true });
+});

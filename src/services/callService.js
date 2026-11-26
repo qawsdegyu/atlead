@@ -318,20 +318,26 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
     let prompt = said ? `العميل: ${said}` : '(بداية المكالمة: رحّب بالعميل باسمه إن كان معروفاً، عرّف بنفسك، واطلب إذنه بكم سؤال سريع.)';
     const ai = require('./aiService');
     let out = { say: '', end: false };
-    for (let step = 0; step < 3; step++) {
-      const { text: raw } = await ai.chatWithFailover(system, history, prompt, { json: true, temperature: 0.5, timeout: 30000 });
+    const used = [];
+    for (let step = 0; step < 4; step++) {
+      const last = step === 3; // after 3 tool calls, the model must speak
+      const { text: raw } = await ai.chatWithFailover(system, history, last ? `${prompt}\n\n(لا أدوات الآن: قل للعميل الرد المناسب في say.)` : prompt, { json: true, temperature: 0.5, timeout: 30000 });
       let r = {};
       try { r = JSON.parse(String(raw).replace(/^```(json)?|```$/g, '').trim()); } catch { r = { say: String(raw || '').slice(0, 400) }; }
-      const tool = ['get_free_times', 'book_engineer_meeting', 'end_call'].includes(r.tool) ? r.tool : null;
+      const tool = !last && ['get_free_times', 'book_engineer_meeting', 'end_call'].includes(r.tool) ? r.tool : null;
       if (tool && tool !== 'end_call') {
         const result = await this.tool(token, tool, { start: r.start || '' });
+        used.push({ tool, args: { start: r.start || '' }, result });
         prompt += `\n\n[نتيجة ${tool}]: ${JSON.stringify(result)}\nالآن قل للعميل الرد المناسب (say).`;
         continue;
       }
       out = { say: this.speakable(r.say), end: tool === 'end_call' };
-      if (out.end) await this.tool(token, 'end_call');
+      if (out.end) { await this.tool(token, 'end_call'); used.push({ tool: 'end_call', args: {}, result: { ok: true } }); }
       break;
     }
+    // Never leave the customer in silence.
+    if (!out.say && !out.end) out.say = lang === 'en' ? 'Sorry, could you say that again?' : 'عفواً، ممكن تعيد آخر جملة؟';
+    out.tools = used;
     const after = this.get(token);
     after.turns = (after.turns || 0) + 1;
     this.save(after);

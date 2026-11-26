@@ -345,6 +345,12 @@
       showCaption((finalText + ' ' + interim).trim(), true);
     };
     rec.onerror = (e) => {
+      // Some phones (iPhone) don't know Jordanian Arabic: fall back to general Arabic, then Saudi.
+      if (e.error === 'language-not-supported') {
+        const next = { 'ar-JO': 'ar', 'ar': 'ar-SA' }[speechLang];
+        if (next) { speechLang = next; emptyListens = 0; return; } // onend restarts listening in the new language
+        return useTyping(T.noVoice);
+      }
       if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(e.error)) useTyping(e.error === 'audio-capture' ? T.noVoice : T.errors.mic);
     };
     rec.onend = () => {

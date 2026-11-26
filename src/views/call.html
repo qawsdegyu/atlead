@@ -117,14 +117,14 @@
     mute: 'Mute', unmute: 'Unmute', end: 'End', note: 'Microphone access is needed. The call is transcribed to serve you better.',
     endedT: 'Thank you!', endedS: 'We have everything we need. You will get a summary in the chat.',
     errors: { not_found: 'This call link is not valid.', expired: 'This call link has expired. Ask us in the chat for a new one.', completed: 'This call has already taken place. Thank you!', disabled: 'Calls are not available right now. Please write to us in the chat.', mic: 'Microphone access was blocked. Allow it in your browser settings and try again.', too_many: 'This link has been used too many times. Ask us in the chat for a new one.', failed: 'The call could not start. Please try again.' },
-    retry: 'Try again', dir: 'ltr', thinking: 'One moment…', typeHint: 'Type your answer', send: 'Send', noVoice: 'Voice is not supported in this browser. You can type your answers.'
+    retry: 'Try again', dir: 'ltr', thinking: 'One moment…', typeHint: 'Type your answer', send: 'Send', noVoice: 'Voice is not supported in this browser. You can type your answers.', micTyping: 'The microphone is off. You can type your answers below.'
   } : {
     title: 'مكالمة قصيرة مع مساعد atlead', sub: 'نتعرّف على شغلك واحتياجك بصوتك، وإذا كل شي مناسب نحجزلك اجتماع مع المهندس.',
     start: 'ابدأ المكالمة', connecting: 'جاري الاتصال…', speaking: '<b>المساعد</b> يتحدث', listening: 'أنا أسمعك…', muted: 'الميكروفون مكتوم',
     mute: 'كتم', unmute: 'إلغاء الكتم', end: 'إنهاء', note: 'تحتاج إذن الميكروفون. المكالمة مسجّلة نصياً لخدمتك بشكل أفضل.',
     endedT: 'شكراً لك!', endedS: 'وصلتنا كل التفاصيل، ورح يوصلك ملخص بالمحادثة.',
     errors: { not_found: 'رابط المكالمة غير صالح.', expired: 'انتهت صلاحية رابط المكالمة. اطلب رابطاً جديداً بالمحادثة.', completed: 'تمت هذه المكالمة سابقاً. شكراً لك!', disabled: 'المكالمات غير متاحة حالياً. اكتب لنا بالمحادثة.', mic: 'تم منع الميكروفون. اسمح به من إعدادات المتصفح وحاول مرة أخرى.', too_many: 'تم استخدام هذا الرابط عدة مرات. اطلب رابطاً جديداً بالمحادثة.', failed: 'تعذّر بدء المكالمة. حاول مرة أخرى.' },
-    retry: 'حاول مرة أخرى', dir: 'rtl', thinking: 'لحظة…', typeHint: 'اكتب جوابك', send: 'إرسال', noVoice: 'المتصفح لا يدعم الصوت. يمكنك كتابة إجاباتك.'
+    retry: 'حاول مرة أخرى', dir: 'rtl', thinking: 'لحظة…', typeHint: 'اكتب جوابك', send: 'إرسال', noVoice: 'المتصفح لا يدعم الصوت. يمكنك كتابة إجاباتك.', micTyping: 'الميكروفون مقفل، فيك تكتب إجاباتك تحت.'
   };
   let T = PACK(false);
   const $ = (id) => document.getElementById(id);
@@ -163,6 +163,7 @@
     applyLang(info.lang === 'en');
     if (!info.ok) return fail(info.error || 'failed');
     maxMin = info.max_minutes || 15;
+    infoMode = info.mode || null;
     if (info.name) $('title').textContent = en ? `Hi ${info.name}, ${T.title.toLowerCase()}` : `أهلاً ${info.name}، ${T.title}`;
     $('btn-start').disabled = false;
   }).catch(() => fail('failed'));
@@ -185,6 +186,7 @@
     loop();
   }
 
+  let infoMode = null;
   async function start() {
     $('btn-start').disabled = true;
     $('intro').classList.add('hidden');
@@ -192,15 +194,27 @@
     setState(T.connecting);
     try {
       mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    } catch { return fail('mic'); }
+    } catch {
+      // Browser voice can still go on by typing; the OpenAI voice call needs the microphone.
+      if (infoMode !== 'browser') return fail('mic');
+      mic = null;
+    }
     let s;
     try {
       const r = await fetch(`/api/call/${token}/start`, { method: 'POST' });
       s = await r.json();
-      if (!s.ok) { mic.getTracks().forEach(t => t.stop()); return fail(s.error || 'failed'); }
-    } catch { mic.getTracks().forEach(t => t.stop()); return fail('failed'); }
+      if (!s.ok) { mic && mic.getTracks().forEach(t => t.stop()); return fail(s.error || 'failed'); }
+    } catch { mic && mic.getTracks().forEach(t => t.stop()); return fail('failed'); }
     maxMin = s.max_minutes || maxMin;
-    if (s.mode === 'browser') { mic.getTracks().forEach(t => t.stop()); mic = null; return startBrowser(s); }
+    if (s.mode === 'browser') {
+      const noMic = !mic;
+      if (mic) mic.getTracks().forEach(t => t.stop());
+      mic = null;
+      startBrowser(s);
+      if (noMic) useTyping(T.micTyping);
+      return;
+    }
+    if (!mic) return fail('mic');
 
     pc = new RTCPeerConnection();
     pc.ontrack = (e) => { $('remote').srcObject = e.streams[0]; visualise(e.streams[0]); };

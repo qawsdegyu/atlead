@@ -378,8 +378,9 @@ async function bootstrap() {
     marketing: { enabled: true, morning_time: '09:00', language: 'ar', free_image_fallback: true, publish_facebook: true, publish_instagram: true, publish_telegram_channel: false, ...(s.marketing || {}) },
     telegram: { notify_handoffs: true, ...(s.telegram || {}) },
     ai: { image_understanding_enabled: s.ai?.image_understanding_enabled ?? true },
+    ai_call: { enabled: s.ai_call?.enabled ?? true, model: s.ai_call?.model || 'gpt-4o-mini-realtime-preview', voice: s.ai_call?.voice || 'coral', ...(s.ai_call || {}) },
     bot: {
-      reply_delay_seconds: s.bot?.reply_delay_seconds ?? 10,
+      reply_delay_seconds: s.bot?.reply_delay_seconds ?? 3,
       quote_replies: s.bot?.quote_replies ?? true,
       typing_indicator: s.bot?.typing_indicator ?? true,
       pause_on_human_reply: s.bot?.pause_on_human_reply ?? true,

@@ -53,6 +53,8 @@ function getTeam() {
 
 class CrmService {
   shouldHandoff(aiResult) {
+    // Qualification call comes first: never hand off to sales while AI call is being offered
+    if (aiResult?.offer_ai_call || aiResult?.ai_call_offered) return false;
     // While the bot is agreeing a meeting time with the customer, it stays with them.
     if (aiResult?.scheduling && !aiResult?.appointment) return false;
     if (aiResult?.appointment) return true;
@@ -118,6 +120,10 @@ class CrmService {
 
   /** The text the customer gets this turn: a booking confirmation wins over the generic handoff message. */
   replyForTurn(convId, aiResult, handoff) {
+    // If the turn is offering or containing the AI qualification call link, never replace with handoff message
+    if (aiResult?.offer_ai_call || aiResult?.ai_call_offered || (aiResult?.reply_text && aiResult.reply_text.includes('/call/'))) {
+      return aiResult.reply_text;
+    }
     if (handoff && (aiResult?.appointment || aiResult?.requested_time)) { this.assignRep(convId); return aiResult.reply_text; }
     return handoff ? this.prepareHandoffMessage(convId) : aiResult.reply_text;
   }

@@ -24,7 +24,7 @@ const crmService = require('./crmService');
 const notificationService = require('./notificationService');
 const aiService = require('./aiService');
 
-const DEFAULT_DELAY_SECONDS = 10;
+const DEFAULT_DELAY_SECONDS = 3;
 const BOOT_TIME = Date.now();
 
 // Phone numbers (Jordan local 07xxxxxxxx or international +962 / 00962 / any +country) and emails.

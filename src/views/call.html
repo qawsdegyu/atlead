@@ -262,25 +262,65 @@
   function pickVoice(lang) {
     const voices = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
     const base = lang.slice(0, 2).toLowerCase();
+    const arabicVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('ar'));
+    const score = (v) => (/natural|neural|online|premium|enhanced/i.test(v.name) ? 6 : 0)
+      + (/google|microsoft|siri|maged|tarik|leila|salma|zeina|naayf/i.test(v.name) ? 3 : 0)
+      + (v.lang.replace('_', '-').toLowerCase() === lang.toLowerCase() ? 2 : 0)
+      + (/male|hamed|taim|shakir/i.test(v.name) ? 1 : 0);
+    if (base === 'ar' && arabicVoices.length) {
+      return arabicVoices.sort((a, b) => score(b) - score(a))[0];
+    }
     const same = voices.filter(v => v.lang && v.lang.toLowerCase().replace('_', '-').startsWith(base));
-    const score = (v) => (/natural|neural|online|premium|enhanced/i.test(v.name) ? 4 : 0) + (/google|microsoft|siri/i.test(v.name) ? 2 : 0)
-      + (v.lang.replace('_', '-') === lang ? 1 : 0) + (/male|hamed|taim|shakir|majed|maged/i.test(v.name) ? 0.5 : 0);
     return same.sort((a, b) => score(b) - score(a))[0] || null;
   }
   if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {}; // loads the voice list early
 
-  function speak(text) {
+  let currentAudio = null;
+  async function speak(text) {
+    if (!text) return;
+    const clean = text
+      .replace(/atlead/gi, 'آت ليد')
+      .replace(/\bAI\b/gi, 'الذكاء الاصطناعي')
+      .replace(/\bCRM\b/gi, 'نظام إدارة العملاء');
+
+    // 1. Try server-side studio TTS first (crystal clear human Arabic)
+    try {
+      const res = await fetch(`/api/call/${token}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: clean })
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        return new Promise((resolve) => {
+          if (currentAudio) { try { currentAudio.pause(); } catch(e){} }
+          const a = new Audio(url);
+          currentAudio = a;
+          let done = false;
+          const finish = () => { if (!done) { done = true; URL.revokeObjectURL(url); resolve(); } };
+          a.onended = finish;
+          a.onerror = finish;
+          setTimeout(finish, 20000);
+          a.play().catch(finish);
+        });
+      }
+    } catch (e) {
+      // Fall through to browser speech synthesis
+    }
+
+    // 2. Browser speech synthesis fallback
     return new Promise((resolve) => {
-      if (!text || !window.speechSynthesis) return resolve();
-      const u = new SpeechSynthesisUtterance(text);
+      if (!window.speechSynthesis) return resolve();
+      const u = new SpeechSynthesisUtterance(clean);
       u.lang = speechLang;
       const v = pickVoice(speechLang);
       if (v) u.voice = v;
-      u.rate = 1.08;
+      u.rate = 1.0;
       let done = false, started = false;
       const finish = () => { if (!done) { done = true; clearTimeout(guard); clearInterval(poll); resolve(); } };
       // Some phones never fire onend: watch the speaker and stop waiting as soon as it is quiet.
-      const guard = setTimeout(finish, 1500 + text.length * 75);
+      const guard = setTimeout(finish, 1500 + clean.length * 75);
       const poll = setInterval(() => {
         if (speechSynthesis.speaking) started = true;
         else if (started) finish();

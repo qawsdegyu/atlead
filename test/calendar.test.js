@@ -80,6 +80,16 @@ test('times outside the booking hours are refused', async () => {
   assert.match(r.reply_text, /خارج أوقات الحجز/);
 });
 
+test('calendar prompt never offers midnight or night slots (00:00 or 02:00) even when all_day is true', async () => {
+  storage.updateSettings({
+    calendar: { enabled: true, calendar_id: 'eng@gmail.com', days: [0, 1, 2, 3, 4, 5, 6], all_day: true, duration_minutes: 30, min_notice_hours: 0, days_ahead: 3 }
+  }, { skipDbSync: true });
+  const block = await cal.promptBlock(conv());
+  assert.doesNotMatch(block, /00:00/, 'never offers midnight 00:00');
+  assert.doesNotMatch(block, /02:00/, 'never offers 02:00 AM');
+  assert.doesNotMatch(block, /04:00/, 'never offers 04:00 AM');
+});
+
 test('offering times is not cut off by the handoff, and times/dates are not treated as invented numbers', async () => {
   const [, m, d] = tomorrow.split('-').map(Number);
   answers = [{ reply_text: `عندنا ${d}/${m} الساعة 09:00 أو الساعة 12:30، أي واحد بناسبك؟`, scheduling: true, buying_probability: 90 }];

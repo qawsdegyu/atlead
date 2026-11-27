@@ -219,10 +219,12 @@ class CalendarService {
 
   /** Booking window for one local day, in minutes from midnight. */
   dayWindow(cfg) {
-    if (cfg.all_day) return { start: 0, end: 1440 };
-    const start = toMin(cfg.start);
-    let end = toMin(cfg.end);
-    if (end <= start) end = 1440; // "until midnight"
+    if (cfg.all_day) return { start: 540, end: 1260 }; // 09:00 - 21:00 (reasonable daytime working hours)
+    let start = toMin(cfg.start || '09:00');
+    let end = toMin(cfg.end || '21:00');
+    // Clamp to daytime business hours: never start at midnight or early morning (before 08:30)
+    if (start < 480) start = 540; // if 00:00 or unset, default to 09:00
+    if (end <= start || end > 1320) end = 1260; // default to 21:00
     return { start, end };
   }
 
@@ -291,7 +293,13 @@ class CalendarService {
       const midnight = zoned(d.dateKey, 0, tz).getTime();
       const starts = [];
       for (const r of d.ranges) {
-        for (let t = r.start.getTime(); t + slot <= r.end.getTime() && starts.length < 4; t += 2 * 3600000) starts.push(t);
+        for (let t = r.start.getTime(); t + slot <= r.end.getTime() && starts.length < 4; t += 2 * 3600000) {
+          const p = localParts(new Date(t), tz);
+          // Only offer daytime / business hours between 08:30 and 21:30 (never midnight or early dawn)
+          if (p.minutes >= 510 && p.minutes <= 1290) {
+            starts.push(t);
+          }
+        }
       }
       if (!starts.length || total >= 14) return null;
       total += starts.length;

@@ -75,6 +75,35 @@ test('WhatsApp: the bot sends the call link in the chat and it opens without log
   await linkOpensWithoutLogin(url);
 });
 
+test('customer asking for engineer/owner/trainer meeting gets the AI call link first before booking', async () => {
+  aiAnswer = { reply_text: 'مهند رح يتواصل معك بأسرع وقت لترتيب الاجتماع', consultation_requested: true, requested_time: '12:00', buying_probability: 85 };
+  await customerSays('whatsapp', '962799988776', 'أحجز اجتماع مع المهندس عشان بدي أشتغل معكم', whatsappService.getAdapter());
+  const sent = calls.find(c => /\/555\/messages/.test(c.url) && c.body?.to === '962799988776');
+  assert.ok(sent, 'reply was sent');
+  const text = sent.body.text.body;
+  assert.match(text, /رابط المكالمة: https:\/\/\S+\/call\/[A-Za-z0-9_-]+/);
+  assert.match(text, /مكالمة صوتية سريعة/);
+  const conv = storage.getConversationByChannelUser('whatsapp', '962799988776');
+  assert.equal(conv.ai_call_status, 'offered');
+  assert.ok(!conv.handoff_at, 'no human handoff before AI qualification call');
+});
+
+test('customer agreeing ("اه تمام") after bot proposed call gets the AI call link immediately', async () => {
+  aiAnswer = { reply_text: 'ممكن نرتب لك مكالمة قصيرة مع مساعدنا الذكي نفهم فيها احتياجك بشكل أفضل، وبعدها نحدد الخطوات الجاية. شو رأيك؟', buying_probability: 60 };
+  await customerSays('whatsapp', '962788877766', 'بدي أحل مشكلة الردود', whatsappService.getAdapter());
+  const conv = storage.getConversationByChannelUser('whatsapp', '962788877766');
+  assert.ok(conv, 'conversation created');
+
+  aiAnswer = { reply_text: 'تمام، م. مهند رح يتواصل معك لمتابعة التفاصيل.', buying_probability: 85, handoff_triggered: true };
+  await customerSays('whatsapp', '962788877766', 'اه تمام', whatsappService.getAdapter());
+  const sent = calls.filter(c => /\/555\/messages/.test(c.url) && c.body?.to === '962788877766').slice(-1)[0];
+  assert.ok(sent, 'reply was sent');
+  assert.match(sent.body.text.body, /رابط المكالمة: https:\/\/\S+\/call\/[A-Za-z0-9_-]+/);
+  const updated = storage.getConversationById(conv.id);
+  assert.equal(updated.ai_call_status, 'offered');
+  assert.ok(!updated.handoff_at, 'should not be handed off before qualification call');
+});
+
 test('English customers get an English message and an English call page', async () => {
   aiAnswer = { reply_text: 'Let us have a short call so I understand your business.', offer_ai_call: true, buying_probability: 70 };
   await customerSays('facebook_messenger', 'psid_en', 'How does your system work?', metaService.getAdapter('facebook_messenger'));

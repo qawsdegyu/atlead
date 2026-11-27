@@ -24,13 +24,19 @@ const IDLE_FINISH_MS = 15 * 60000; // a call left open without activity is close
 
 const DEFAULTS = {
   enabled: false,
-  model: 'gpt-realtime-2.1',
-  voice: 'marin',
+  model: 'gpt-4o-mini-realtime-preview',
+  voice: 'coral',
   max_minutes: 15,
   link_days: 7,
   extra_questions: ''
 };
-const FALLBACK_MODELS = ['gpt-realtime-2.1', 'gpt-realtime-2', 'gpt-realtime'];
+const FALLBACK_MODELS = [
+  'gpt-4o-mini-realtime-preview',
+  'gpt-4o-realtime-preview',
+  'gpt-4o-realtime-preview-2024-12-17',
+  'gpt-4o-realtime-preview-2024-10-01',
+  'gpt-realtime-2.1'
+];
 
 // Everything the analysis can learn about the customer → saved on the conversation.
 const PROFILE_FIELDS = ['company_name', 'job_title', 'location', 'business_type', 'team_size', 'monthly_volume',
@@ -181,10 +187,12 @@ class CallService {
     return `أنت مستشار مبيعات صوتي لشركة atlead (أنظمة مبيعات ذكية وأتمتة للشركات) في مكالمة صوتية أونلاين مع عميل محتمل.
 هدف المكالمة (حوالي ${Math.min(cfg.max_minutes, 10)} دقائق): تفهم شغل العميل واحتياجه، وتتأكد هل هو جاد ومستعد يشتري، وإذا كان جاهز تحجزله اجتماع أونلاين مع المهندس.
 
-طريقة الكلام:
-- ${lang === 'en' ? 'The customer writes in English: speak English unless they switch to Arabic.' : 'احكِ باللهجة الأردنية البيضاء، وإذا حكى العميل إنجليزي احكِ إنجليزي.'}
-- جمل قصيرة وطبيعية كأنك موظف حقيقي ودود، سؤال واحد بكل مرة، واستنى العميل يخلص كلامه.
-- ابدأ بالتحية وعرّف بنفسك كمساعد atlead الذكي، واطلب إذنه بكم سؤال سريع.
+طريقة الكلام والنطق:
+- ${lang === 'en' ? 'The customer writes in English: speak English unless they switch to Arabic.' : 'احكِ باللهجة العربية البيضاء الواضحة والمفهومة مخارج حروفها بدقة.'}
+- انطق اسم الشركة دائماً: "آت ليد" باللغة العربية (وليس بالإنجليزية) حتى ينطقها محرك الصوت بطلاقة.
+- انطق مصطلح AI دائماً: "الذكاء الاصطناعي" أو "إيه آي".
+- جمل قصيرة جداً ومباشرة (أقل من 15 كلمة) وسؤال واحد بكل مرة لتكون الاستجابة سريعة وفورية دون أي تأخير، واستنى العميل يخلص كلامه.
+- ابدأ بالتحية وعرّف بنفسك كمساعد آت ليد الذكي، واطلب إذنه بكم سؤال سريع لتأهيل طلبه قبل موعد المهندس.
 
 الأسئلة (لا تسأل عن شي معروف تحت — أكّده بس):
 1. شو نوع شغله، واسم الشركة، وشو دوره فيها.
@@ -394,7 +402,9 @@ ${s.free_slots.map(x => `  • ${x.start} = ${lang === 'en' ? x.label_en : x.lab
     if (same.length === 1) return same[0].start;
     const date = v.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
     const exactDay = date && same.find(x => x.start.startsWith(date));
-    return exactDay ? exactDay.start : v;
+    if (exactDay) return exactDay.start;
+    if (same.length > 0) return same[0].start;
+    return v;
   }
 
   /** Text the phone can read aloud: no links, emoji or markdown. */
@@ -406,6 +416,33 @@ ${s.free_slots.map(x => `  • ${x.start} = ${lang === 'en' ? x.label_en : x.lab
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 600);
+  }
+
+  /** Server-side high quality speech synthesis (TTS) using OpenAI's tts-1 */
+  async synthesizeSpeech(text, voice = 'alloy') {
+    const key = this.apiKey();
+    if (!key) return null;
+    const clean = this.speakable(text)
+      .replace(/atlead/gi, 'آت ليد')
+      .replace(/\bAI\b/gi, 'الذكاء الاصطناعي')
+      .replace(/\bCRM\b/gi, 'نظام إدارة العملاء');
+    const VALID_VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+    const chosenVoice = VALID_VOICES.includes(String(voice || '').toLowerCase()) ? String(voice).toLowerCase() : 'alloy';
+    try {
+      const res = await axios.post('https://api.openai.com/v1/audio/speech', {
+        model: 'tts-1',
+        voice: chosenVoice,
+        input: clean
+      }, {
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        responseType: 'arraybuffer',
+        timeout: 10000
+      });
+      return Buffer.from(res.data);
+    } catch (e) {
+      console.warn('[Call] TTS synthesis failed:', e.message);
+      return null;
+    }
   }
 
   async startOpenAi(session, conv, lang, cfg) {
@@ -421,7 +458,7 @@ ${s.free_slots.map(x => `  • ${x.start} = ${lang === 'en' ? x.label_en : x.lab
             instructions: this.instructions(session, conv, lang),
             audio: {
               input: {
-                transcription: { model: 'gpt-4o-transcribe' },
+                transcription: { model: 'whisper-1' },
                 turn_detection: { type: 'semantic_vad', eagerness: 'low' },
                 noise_reduction: { type: 'near_field' }
               },

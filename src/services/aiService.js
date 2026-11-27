@@ -34,7 +34,7 @@ const PROVIDER_LABELS = {
 
 const OPENAI_COMPATIBLE = {
   openai: { base: 'https://api.openai.com/v1', model: 'gpt-4o' },
-  openrouter: { base: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
+  openrouter: { base: 'https://openrouter.ai/api/v1', model: 'anthropic/claude-3.7-sonnet' },
   groq: { base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' }
 };
 
@@ -244,13 +244,15 @@ class AiService {
     const callOn = !!(conversation.id && callService.isActive());
     const callDone = conversation.ai_call_status === 'completed';
     const callBlock = !callOn ? '' : callDone
-      ? `\nمكالمة الـ AI الصوتية: العميل أجرى المكالمة. ملخصها: ${conversation.ai_call_summary || '-'}. لا تعرض مكالمة جديدة إلا إذا طلبها.\n`
+      ? `\nمكالمة الـ AI الصوتية: العميل أجرى المكالمة الصوتية التأهيلية بنجاح. ملخصها: ${conversation.ai_call_summary || '-'}. يمكنك الآن ترتيب وحجز موعد له مع المهندس إذا كان مؤهلاً.\n`
       : `
-مكالمة صوتية مع مساعد atlead (المرحلة الأولى قبل اجتماع المهندس):
-- لما يبين العميل اهتمام حقيقي (سأل عن التفاصيل أو الأسعار أو طريقة العمل، أو بده استشارة أو اجتماع): اعرض عليه مكالمة صوتية قصيرة (حوالي 10 دقائق) مع مساعد atlead الذكي، يقدر يدخلها هلق أو بأي وقت يناسبه من رابط، بنفهم فيها شغله واحتياجه وبعدها بنحجزله اجتماع مع المهندس.
-- لما تعرض المكالمة ضع "offer_ai_call": true — النظام يضيف رابط المكالمة لآخر ردك تلقائياً. لا تكتب أي رابط بنفسك.
-- إذا رفض المكالمة وبده المهندس مباشرة، كمّل بحجز موعد المهندس كالعادة.
-${conversation.ai_call_status === 'offered' ? '- العميل وصله رابط المكالمة سابقاً؛ إذا طلبه مرة ثانية ضع "offer_ai_call": true.\n' : ''}`;
+مكالمة صوتية تأهيلية مع مساعد atlead الذكي (مرحلة إجبارية قبل أي موعد مع المهندس أو صاحب العمل أو المدرب):
+- عندما يطلب العميل حجز موعد، أو اجتماع، أو مكالمة، أو استشارة (سواء مع المهندس، صاحب العمل، المدرب، أو الإدارة)، أو يبدي رغبة في العمل أو الاستفسار عن الأسعار والتفاصيل: ممنوع منعاً باتاً حجز موعد مع المهندس/صاحب العمل مباشرة، وممنوع تحويله لموظف قبل إتمام مكالمة الـ AI الصوتية للتأكد من جديته ورغبته الحقيقية بالعمل وتأهيله!
+- ضع دائماً "offer_ai_call": true (النظام يضيف رابط المكالمة تلقائياً لآخر ردك). لا تكتب أي رابط بنفسك.
+- في نص ردك (reply_text): رحب به وأخبره بلطف: "أهلاً بك! لتأكيد وترتيب موعدك مع المهندس/صاحب العمل/المدرب بدقة، وفرنا لك مكالمة صوتية سريعة ومباشرة (دقائق بسيطة) مع مساعدنا الذكي بالصوت عبر الرابط أدناه؛ لنفهم تفاصيل عملك وتطلعاتك ونتأكد من جاهزية طلبك وجدية العمل، وبمجرد إتمامها بنثبت موعدك الرسمي فوراً."
+- إذا أصر العميل على مقابلة المهندس فوراً أو سأل عن الرابط مجدداً: أعد إرسال الرابط بلطف ("offer_ai_call": true) وأكد له أن هذه المكالمة السريعة شرط أساسي لتجهيز ملفه وتأكيد موعده الرسمي.
+- إذا وافق العميل أو أكد بعد عرض المكالمة (مثل: "اه تمام"، "اوك"، "يلا"، "تمام"، "موافق"، "أكيد"، "ماشي"): ضع فوراً "offer_ai_call": true وأرسل له الرابط فوراً، وممنوع نهائياً تحويله لموظف ("handoff_triggered": false).
+${conversation.ai_call_status === 'offered' ? '- العميل وصله رابط المكالمة سابقاً؛ إذا كتب مجدداً أو طلبه مرة ثانية ضع "offer_ai_call": true وأعد إرساله فوراً.\n' : ''}`;
     const userPrompt = `
 الرسالة الجديدة من العميل: "${incomingMessage}"
 
@@ -281,7 +283,7 @@ ${conversation.handoff_at ? `- مهم: العميل تحوّل لموظف الم
 6. التنسيق: الرد بيوصل على واتساب/إنستغرام/ماسنجر — لا تستخدم Markdown (لا [نص](رابط) ولا ** ولا #). اكتب الرابط كامل لحاله مثل https://agsco.shop
 7. لا تخمّن أبداً: جاوب فقط من المرجع الرسمي وبيانات العميل. إذا المعلومة مش موجودة بالمرجع، قل بوضوح إنها بدها تأكيد من الفريق واعرض إنهم يتواصلوا معه — لا تخترع.
 8. الأرقام: ممنوع تذكر أي رقم (سعر، تكلفة، نسبة، مدة تنفيذ، عدد عملاء، نتائج) إلا إذا كان مكتوب حرفياً بالمرجع. الأسعار تحديداً: لا سعر ولا رينج ولا "يبدأ من" — السعر بيتحدد بعد الاستشارة المجانية.
-${callBlock}${calendarBlock}${!calendarBlock && !callOn && !conversation.requested_meeting_time ? `
+${callBlock}${calendarBlock}${!calendarBlock && (!callOn || callDone) && !conversation.requested_meeting_time ? `
 طلب استشارة أو اجتماع (التقويم غير مربوط حالياً):
 - إذا طلب العميل استشارة أو اجتماع أو موعد: رحّب بطلبه واسأله سؤالاً واحداً: أي يوم ووقت بناسبه؟ وضع "scheduling": true (بدون تحويل للموظف بعد).
 - لما يحدد يوم أو وقت: ضع "requested_time": "اليوم والوقت كما قاله العميل" — النظام يسجّل الطلب ويبلّغ الفريق ليأكد الموعد معه. لا تقل إن الموعد تأكد.
@@ -330,18 +332,49 @@ Your previous answer was in Arabic. The customer writes in English — return th
         else result.reply_text = this.safeAnswer(check.price ? 'price' : 'unknown', lang, conversation);
         result.grounding_fixed = true;
       }
+
+      // Check if customer wants a meeting / call / consultation with engineer, trainer, owner, etc.
+      const wantsMeeting = /(احجز|أحجز|نحجز|حجز\s*(موعد|استشار|اجتماع|مكالم)|(بدي|بدنا|ممكن|حابب|بحب)\s*(موعد|استشار|اجتماع|مكالم|أحكي مع المهندس|أحكي مع صاحب العمل|أحكي مع المدرب)|استشار[ةه]\s*مجاني[ةه]|موعد\s*مع\s*(المهندس|صاحب العمل|المدرب)|\bbook (a|an|the)\b|\bschedule (a|an)\b|appointment with|meeting with|free consultation|\bbook\b.*\b(meeting|call|consultation|appointment)\b)/i.test(incomingMessage);
+
+      // Also check if customer agreed to a call after the bot previously proposed it:
+      const lastBotMsg = (conversation.messages || []).filter(m => m.sender === 'bot').slice(-1)[0]?.content || '';
+      const botAskedForCall = /(مكالمة|مساعدنا الذكي|رابط المكالمة|مكالمة قصيرة|شو رأيك)/i.test(lastBotMsg);
+      const customerAgreed = /^(اه|أه|اي|أي|تمام|أوك|اوك|يلا|موافق|أكيد|اكيد|ماشي|نعم|ياريت|جاهز|يس|yes|ok|sure|deal|done)[\s.!,]*$/i.test(incomingMessage.trim()) || /(موافق|يلا|ابعث|أرسل|ارسل|هات|تمام|ماشي|رابط|الرابط)/i.test(incomingMessage);
+
+      // MANDATORY QUALIFICATION: If AI call is active and not completed yet, the bot MUST send the AI call link
+      // before booking any appointment with engineer/owner/trainer.
+      if (callOn && !callDone && (wantsMeeting || (botAskedForCall && customerAgreed) || result.offer_ai_call || result.consultation_requested || result.appointment || result.book_start || result.requested_time)) {
+        const wantsHumanRep = /(موظف|خدمة العملاء|إنسان|شخص|بشري|مندوب)/i.test(incomingMessage) && result.handoff_triggered;
+        if (!wantsHumanRep) {
+          result.offer_ai_call = true;
+          result.appointment = null;
+          result.book_start = null;
+          result.requested_time = null;
+          result.consultation_requested = false;
+          result.handoff_triggered = false;
+          result.scheduling = true; // prevents generic handoff cutoff
+        }
+      }
+
       // The voice call link (a private page on this site).
       if (callOn && !callDone && result.offer_ai_call) {
         const session = callService.createSession(conversation);
-        result.reply_text = `${result.reply_text}\n\n${lang === 'en' ? 'Call link' : 'رابط المكالمة'}: ${callService.publicUrl(session.token)}`;
+        const link = callService.publicUrl(session.token);
+        if (!result.reply_text || /(مهند|الموظف|المهندس|فريقنا)\s*رح\s*يتواصل/i.test(result.reply_text) || (botAskedForCall && customerAgreed)) {
+          result.reply_text = lang === 'en'
+            ? 'Glad to assist! Before confirming your appointment with the engineer or team, please join this quick AI voice call to qualify your requirements:'
+            : 'أكيد ويسعدنا جداً! وقبل تثبيت الموعد مع المهندس أو صاحب العمل، يسعدنا أولاً دخولك لمكالمة صوتية سريعة (دقائق بسيطة) مع مساعدنا الذكي بالصوت عبر الرابط أدناه؛ لنفهم تفاصيل عملك واحتياجك بدقة ونتأكد من جاهزية طلبك، وبعدها بنثبت موعدك الرسمي فوراً.';
+        }
+        if (!result.reply_text.includes(session.token)) {
+          result.reply_text = `${result.reply_text}\n\n${lang === 'en' ? 'Call link' : 'رابط المكالمة'}: ${link}`;
+        }
         result.ai_call_offered = true;
         result.scheduling = true; // not a handoff yet: the call comes first
+        result.handoff_triggered = false;
       }
-      // No calendar and no AI call: never jump straight to the handoff on "I want a consultation".
+      // No calendar and no AI call (or AI call already completed): never jump straight to the handoff on "I want a consultation".
       // Ask for the customer's preferred time first, record it, then the team confirms it.
-      if (!calendarBlock && !callOn && !conversation.requested_meeting_time) {
-        // Real booking requests only ("we get 50 appointments a week" is not one).
-        const wantsMeeting = /(احجز|أحجز|نحجز|حجز (موعد|استشار|اجتماع|مكالم)|(بدي|بدنا|ممكن|حابب|بحب) (موعد|استشار|اجتماع|مكالم|أحكي مع المهندس)|استشار[ةه] مجاني[ةه]|موعد مع المهندس|\bbook (a|an|the)\b|\bschedule (a|an)\b|appointment with|meeting with|free consultation|\bbook\b.*\b(meeting|call|consultation|appointment)\b)/i.test(incomingMessage);
+      if (!calendarBlock && (!callOn || callDone) && !conversation.requested_meeting_time) {
         const lastBot = [...(conversation.messages || [])].reverse().find(m => m.sender === 'bot')?.content || '';
         const askedTime = /(أي يوم|اي يوم|أي وقت|اي وقت|يوم ووقت|الوقت اللي|which day|what time|which time|when suits|when works)/i.test(lastBot);
         const saysTime = /(\d{1,2}(:\d{2})?|بكرا|بكره|بعد بكرا|اليوم|الأحد|الاحد|الاثنين|الإثنين|الثلاثاء|الأربعاء|الاربعاء|الخميس|الجمعة|السبت|الصبح|الظهر|العصر|المسا|بالليل|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|morning|afternoon|evening|am|pm)/i.test(incomingMessage);

@@ -936,7 +936,7 @@
               </h4>
               <div class="form-group">
                 <label class="form-label">Wait before replying (seconds)</label>
-                <input type="number" id="bot-reply-delay" class="form-control" min="0" max="120" value="10">
+                <input type="number" id="bot-reply-delay" class="form-control" min="0" max="120" value="3">
                 <span class="form-hint">After the customer’s last message. Messages in a row get one reply.</span>
               </div>
               <div style="display:flex; flex-direction:column; gap:10px;">
@@ -1164,7 +1164,7 @@
               </div>
               <div class="grid-3">
                 <div class="form-group"><label class="form-label">Assistant voice</label>
-                  <select id="call-voice" class="form-control"><option value="marin">Marin</option><option value="cedar">Cedar</option><option value="coral">Coral</option><option value="sage">Sage</option><option value="ash">Ash</option><option value="verse">Verse</option></select></div>
+                  <select id="call-voice" class="form-control"><option value="coral">Coral (طبيعي وواضح - أنثوي)</option><option value="sage">Sage (طبيعي وواضح - ذكر)</option><option value="alloy">Alloy (متزن وواضح)</option><option value="echo">Echo (ذكر)</option><option value="shimmer">Shimmer (أنثوي)</option><option value="marin">Marin</option><option value="cedar">Cedar</option></select></div>
                 <div class="form-group"><label class="form-label">Maximum call length</label>
                   <select id="call-max" class="form-control"><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option></select></div>
                 <div class="form-group"><label class="form-label">Link valid for</label>
@@ -1176,7 +1176,7 @@
               </div>
               <div class="form-group" style="margin-bottom: 0;">
                 <label class="form-label">Model</label>
-                <input type="text" id="call-model" class="form-control" value="gpt-realtime-2.1" dir="ltr">
+                <input type="text" id="call-model" class="form-control" value="gpt-4o-mini-realtime-preview" dir="ltr">
               </div>
             </div>
 
@@ -1348,14 +1348,17 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label">Model</label>
-                <input type="text" id="openrouter-model" class="form-control" list="openrouter-models" value="openai/gpt-4o-mini" style="direction: ltr;">
+                <label class="form-label">Model (النموذج المستخدم)</label>
+                <input type="text" id="openrouter-model" class="form-control" list="openrouter-models" value="anthropic/claude-3.7-sonnet" style="direction: ltr;">
                 <datalist id="openrouter-models">
-                  <option value="openai/gpt-4o-mini">Fast &amp; cheap (default)</option>
-                  <option value="openai/gpt-4o">Smarter, pricier</option>
-                  <option value="google/gemini-2.5-flash">Fast, understands voice &amp; images</option>
-                  <option value="anthropic/claude-sonnet-5-5">Very natural replies, pricier</option>
+                  <option value="anthropic/claude-3.7-sonnet">Claude 3.7 Sonnet (الأفضل عالمياً — قمة الذكاء والإقناع ومبيعات الشات)</option>
+                  <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet (فائق الفصاحة العربية والمحادثات الودية)</option>
+                  <option value="openai/gpt-4o">GPT-4o (نموذج OpenAI الرائد — دقيق جداً وذكي)</option>
+                  <option value="google/gemini-2.5-pro">Gemini 2.5 Pro (الاستيعاب الأقوى وسياق البيانات الضخمة)</option>
+                  <option value="google/gemini-2.5-flash">Gemini 2.5 Flash (فائق السرعة — ممتاز جداً للمكالمات الصوتية)</option>
+                  <option value="openai/gpt-4o-mini">GPT-4o Mini (سريع وخفيف)</option>
                 </datalist>
+                <small class="form-hint">اختر Claude 3.7 Sonnet لأعلى ذكاء وإقناع وفصاحة، أو Gemini 2.5 Flash لأسرع استجابة في المكالمات الصوتية.</small>
               </div>
 
               <div style="display: flex; gap: 16px; flex-wrap: wrap;">

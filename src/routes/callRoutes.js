@@ -37,6 +37,21 @@ api.post('/:token/turn', guard, async (req, res) => {
   }
 });
 
+// Studio-quality voice synthesis (TTS) for the call
+api.post('/:token/tts', guard, async (req, res) => {
+  try {
+    const text = String(req.body?.text || '').trim();
+    if (!text) return res.status(400).json({ ok: false, error: 'empty_text' });
+    const cfg = callService.getConfig();
+    const audio = await callService.synthesizeSpeech(text, cfg.voice);
+    if (!audio) return res.status(501).json({ ok: false, error: 'tts_not_available' });
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(audio);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 api.post('/:token/transcript', guard, (req, res) => {
   const s = callService.addTranscript(req.params.token, req.body?.lines);
   res.json({ ok: !!s });

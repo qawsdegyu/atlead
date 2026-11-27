@@ -974,7 +974,7 @@ async function loadSettings() {
       document.getElementById('meta-auto-dm-template').value = s.meta?.auto_dm_template || '';
 
       // Bot behaviour
-      document.getElementById('bot-reply-delay').value = s.bot?.reply_delay_seconds ?? 10;
+      document.getElementById('bot-reply-delay').value = s.bot?.reply_delay_seconds ?? 3;
       document.getElementById('bot-quote-replies').checked = s.bot?.quote_replies !== false;
       document.getElementById('bot-typing-indicator').checked = s.bot?.typing_indicator !== false;
       document.getElementById('bot-pause-on-human').checked = s.bot?.pause_on_human_reply !== false;
@@ -1081,8 +1081,8 @@ async function loadSettings() {
       document.getElementById('call-max').value = String(ac.max_minutes || 15);
       document.getElementById('call-days').value = String(ac.link_days || 7);
       document.getElementById('call-questions').value = ac.extra_questions || '';
-      document.getElementById('call-model').value = ac.model || 'gpt-realtime-2.1';
-      document.getElementById('openrouter-model').value = s.ai?.openrouter_model || 'openai/gpt-4o-mini';
+      document.getElementById('call-model').value = ac.model || 'gpt-4o-mini-realtime-preview';
+      document.getElementById('openrouter-model').value = s.ai?.openrouter_model || 'anthropic/claude-3.7-sonnet';
       document.getElementById('voice-transcription-enabled').checked = s.ai?.voice_transcription_enabled !== false;
 
       // Handoff
@@ -1143,7 +1143,7 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
       max_minutes: Number(document.getElementById('call-max').value) || 15,
       link_days: Number(document.getElementById('call-days').value) || 7,
       extra_questions: document.getElementById('call-questions').value.trim(),
-      model: document.getElementById('call-model').value.trim() || 'gpt-realtime-2.1'
+      model: document.getElementById('call-model').value.trim() || 'gpt-4o-mini-realtime-preview'
     },
     calendar: {
       enabled: document.getElementById('cal-enabled').checked,

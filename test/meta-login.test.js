@@ -104,3 +104,62 @@ test('webhook signatures are checked with the server-level App Secret', async ()
   const r = await http(app.base, '/webhook/meta', { method: 'POST', json: { object: 'page', entry: [] }, headers: { 'X-Hub-Signature-256': 'sha256=bad' } });
   assert.equal(r.status, 401);
 });
+
+test('Instagram DM under page object or standby is routed to instagram_dm channel', async () => {
+  storage.updateSettings({ meta: { page_id: '555', instagram_account_id: '777', page_access_token: 'PAGE_TOKEN' } }, { skipDbSync: true });
+  fake('get', /\/777/, () => ({ id: '777', username: 'atlead.ai' }));
+  fake('get', /\/user_ig_123/, () => ({ username: 'client_ig' }));
+
+  const payload = {
+    object: 'page',
+    entry: [{
+      id: '555',
+      messaging: [{
+        sender: { id: 'user_ig_123' },
+        recipient: { id: '777' },
+        timestamp: Date.now(),
+        message: { mid: 'mid_ig_1', text: 'مرحبا، كم اسعاركم؟' }
+      }]
+    }]
+  };
+  const r = await http(app.base, '/webhook/meta', { method: 'POST', json: payload });
+  assert.equal(r.status, 200);
+
+  const conv = storage.getConversationByChannelUser('instagram_dm', 'user_ig_123');
+  assert.ok(conv, 'conversation created under instagram_dm');
+  assert.equal(conv.channel, 'instagram_dm');
+});
+
+test('Instagram DM send payload omits messaging_type', async () => {
+  storage.updateSettings({ meta: { page_access_token: 'PAGE_TOKEN' } }, { skipDbSync: true });
+  fake('post', /\/me\/messages/, (url, body) => ({ message_id: 'mid_sent_ig', echo: body }));
+
+  const res = await meta.sendDirectMessage('instagram_dm', 'ig_user_456', 'أهلاً وسهلاً بك');
+  assert.equal(res.ok, true);
+
+  const sentCall = calls.find(c => /me\/messages/.test(c.url));
+  assert.ok(sentCall, 'called me/messages');
+  assert.equal(sentCall.body.messaging_type, undefined, 'messaging_type is omitted for Instagram');
+  assert.equal(sentCall.body.recipient.id, 'ig_user_456');
+  assert.equal(sentCall.body.message.text, 'أهلاً وسهلاً بك');
+});
+
+test('customer acknowledgment after handoff (اه تمام) receives reassurance reply', async () => {
+  const aiService = require('../src/services/aiService');
+  const conv = {
+    channel: 'whatsapp',
+    customer_name: 'Universal Doors',
+    handoff_at: '2026-11-27T16:26:00Z',
+    lead_stage: 'handed_off',
+    interest_score: 30,
+    messages: [
+      { sender: 'customer', content: 'هلا اخوي...' },
+      { sender: 'bot', content: 'أهلا وسهلا فيك...' },
+      { sender: 'customer', content: 'اه تمام' },
+      { sender: 'bot', content: 'تمام، م. مهند من قسم المبيعات في شركة atlead رح يتواصل معك بأسرع وقت...' }
+    ]
+  };
+  const res = await aiService.generateReply(conv, 'اه تمام');
+  assert.ok(res.reply_text, 'reply_text is not empty');
+  assert.match(res.reply_text, /مهند|فريق|خدمة|أهلاً|بأسرع وقت/);
+});

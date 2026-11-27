@@ -267,7 +267,7 @@ ${conversation.ai_call_status === 'offered' ? '- العميل وصله رابط 
 - مرحلة العميل السابقة: ${conversation.lead_stage || 'new'}
 - نسبة الشراء السابقة: ${Number(conversation.interest_score) || 0}%
 ${daysSince >= 1 ? `- ملاحظة: العميل راجع بعد ${daysSince} يوم من آخر رسالة — كمّل معه من وين ما وقفتوا.` : ''}
-${conversation.handoff_at ? `- مهم: العميل تحوّل لموظف المبيعات${conversation.assigned_to_name ? ` (${conversation.assigned_to_name})` : ''} وبانتظار تواصله. لا تعيد رسالة التحويل${calendarBlock ? '' : ' ولا تعطِ موعداً جديداً'}. جاوب على سؤاله من المرجع فقط، وإذا سأل متى رح يتواصلوا معه قل إن الموظف سيتواصل معه قريباً.` : ''}
+${conversation.handoff_at ? `- مهم: العميل تحوّل لموظف المبيعات${conversation.assigned_to_name ? ` (${conversation.assigned_to_name})` : ''} وبانتظار تواصله. لا تعيد رسالة التحويل${calendarBlock ? '' : ' ولا تعطِ موعداً جديداً'}. جاوب على سؤاله من المرجع فقط، وإذا سأل متى رح يتواصلوا معه قل إن الموظف سيتواصل معه قريباً. وإذا كانت رسالة العميل مجرد تأكيد أو شكر أو كلمة مختصرة (مثل: "اه تمام"، "اوك"، "شكراً"، "يعطيك العافية"، "تمام"): رد بلطف بلهجة أردنية مهنية وأكد له أن موظف المبيعات سيتواصل معه بأسرع وقت وأنت بالخدمة لأي استفسار إضافي.` : ''}
 
 قم بتحليل الرسالة، وتوليد الرد المناسب حسب قواعد atlead الدقيقة، وتحديد حالة العميل وتصنيفه، وما إذا وصل لمرحلة الديل/التحويل للبشري.
 إذا طلب العميل رابطاً أو مثالاً أو ملفاً أو تفاصيل عن مشروع سابق، ابحث في المرجع الرسمي عن الرابط/الملف المطابق وانسخه كما هو في الرد. لا تستبدل الرابط برد عام، ولا تذكر GitHub كمصدر؛ المصدر التشغيلي هو Supabase knowledge_docs.
@@ -520,11 +520,6 @@ Your previous answer was in Arabic. The customer writes in English — return th
       };
     }
 
-    // Replies this bot already sent in this conversation — never send the same one twice.
-    const sentReplies = (conversation.messages || [])
-      .filter(m => m.sender !== 'customer' && m.sender !== 'agent')
-      .map(m => m.content || '');
-    const alreadySent = (reply) => sentReplies.some(s => normalizeArabic(s) === normalizeArabic(reply));
     const base = {
       identified_problem: null,
       proposed_solution: null,
@@ -533,6 +528,27 @@ Your previous answer was in Arabic. The customer writes in English — return th
       buying_probability: 40,
       handoff_triggered: false
     };
+
+    // If the customer already had a handoff and sends an acknowledgment or short reply:
+    if (conversation.handoff_at) {
+      const rep = conversation.assigned_to_name || 'م. مهند من قسم المبيعات';
+      if (/^(اه|اي|اوك|تمام|اوكي|شكرا|يسلمو|يعطيك العافية|الله يعافيك|ماشي|حبيبي|تسلم|ok|yes|thanks|thank you)/i.test(t) || t.length <= 15) {
+        return {
+          ...base,
+          reply_text: `أهلاً بك دائماً! مثل ما أكدنا معك، ${rep} رح يتواصل معك بأقرب وقت لمتابعة كافة التفاصيل. إذا خطر ببالك أي استفسار ثاني أنا بالخدمة 🙏`,
+          lead_stage: 'handed_off',
+          classification: 'Hot',
+          buying_probability: Number(conversation.interest_score) || 90,
+          handoff_triggered: false
+        };
+      }
+    }
+
+    // Replies this bot already sent in this conversation — never send the same one twice.
+    const sentReplies = (conversation.messages || [])
+      .filter(m => m.sender !== 'customer' && m.sender !== 'agent')
+      .map(m => m.content || '');
+    const alreadySent = (reply) => sentReplies.some(s => normalizeArabic(s) === normalizeArabic(reply));
 
     // Answer from the company knowledge files (approved FAQ).
     const faq = knowledgeService.findFaqAnswer(text, { exclude: sentReplies });

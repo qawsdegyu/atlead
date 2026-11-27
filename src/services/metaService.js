@@ -589,15 +589,19 @@ class MetaService {
       return { ok: false, simulated: true };
     }
 
-    const base = { recipient: { id: recipientId }, message: { text }, messaging_type: 'RESPONSE' };
+    const isIg = channel === 'instagram_dm';
+    const base = { recipient: { id: recipientId }, message: { text } };
+    if (!isIg) {
+      base.messaging_type = 'RESPONSE';
+    }
     const attempt = async (body) => axios.post(`${GRAPH}/me/messages`, body, { params: { access_token: token }, timeout: 10000 });
 
     try {
-      const res = await attempt(replyToMid ? { ...base, reply_to: { mid: replyToMid } } : base);
+      const res = await attempt(!isIg && replyToMid ? { ...base, reply_to: { mid: replyToMid } } : base);
       this.rememberSent(res.data?.message_id, text);
       return { ok: true, external_message_id: res.data?.message_id || null };
     } catch (err) {
-      if (replyToMid) {
+      if (!isIg && replyToMid) {
         console.warn('Quoted reply rejected by Meta, sending as normal message:', err.response?.data?.error?.message || err.message);
         try {
           const res = await attempt(base);

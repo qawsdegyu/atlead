@@ -391,7 +391,17 @@ class WaQrService {
         if (quoted?.wa_raw?.key && quoted?.wa_raw?.message) {
           options.quoted = quoted.wa_raw; // shows as a swipe-reply on the customer's message
         }
-        const sent = await this.sock.sendMessage(jid, { text }, options);
+        let sent;
+        try {
+          sent = await this.sock.sendMessage(jid, { text }, options);
+        } catch (sendErr) {
+          if (options.quoted) {
+            console.warn('[WhatsApp QR] Quoted send failed, retrying clean send:', sendErr.message);
+            sent = await this.sock.sendMessage(jid, { text });
+          } else {
+            throw sendErr;
+          }
+        }
         if (sent?.key?.id) {
           this.sentIds.add(sent.key.id);
           if (this.sentIds.size > 2000) this.sentIds.delete(this.sentIds.values().next().value);

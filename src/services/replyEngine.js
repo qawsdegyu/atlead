@@ -243,7 +243,13 @@ class ReplyEngine {
       // Deal point / ready to buy / asked for a human → the handoff message, once.
       // After that the bot keeps answering normally until a rep replies.
       const handoff = crmService.shouldHandoff(aiResult) && !conv.handoff_at;
-      const replyText = crmService.replyForTurn(conv.id, aiResult, handoff);
+      let replyText = crmService.replyForTurn(conv.id, aiResult, handoff);
+      if (!replyText || !String(replyText).trim()) {
+        console.warn(`[ReplyEngine] Empty replyText for ${conv.id} — using polite confirmation fallback.`);
+        replyText = conv.handoff_at
+          ? 'أهلاً بك دائماً! مثل ما أكدنا معك، موظف المبيعات رح يتواصل معك بأسرع وقت لمتابعة كافة التفاصيل، وأنا بالخدمة لأي استفسار إضافي 🙏'
+          : 'أهلاً وسهلاً بك! كيف بقدر أساعدك اليوم؟';
+      }
       if (handoff && !crmService.keepBotUntilHuman()) {
         // Old behaviour: switch the bot off BEFORE sending so no parallel reply can slip through.
         conv = storageService.saveConversation({ id: conv.id, is_bot_active: false });

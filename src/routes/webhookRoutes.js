@@ -65,13 +65,21 @@ router.post('/meta', async (req, res) => {
     }
     console.log(`[Meta Webhook] ${body.object}: ${(body.entry || []).map(e => `${(e.messaging || []).length} msg / ${(e.changes || []).map(c => c.field).join(',') || '0 changes'}`).join(' | ')}`);
     if (body.object !== 'page' && body.object !== 'instagram') return;
-    const isInstagram = body.object === 'instagram';
-    const channel = isInstagram ? 'instagram_dm' : 'facebook_messenger';
+    const cfg = metaService.config();
+    const igAccountId = cfg.instagram_account_id;
 
     for (const entry of body.entry || []) {
+      const entryIsIg = body.object === 'instagram' || (igAccountId && entry.id === igAccountId);
+
+      // Support both entry.messaging and entry.standby (Handover protocol / Meta Business Suite / Instagram inbox)
+      const messagingEvents = [...(entry.messaging || []), ...(entry.standby || [])];
+
       // A. Direct messages (Messenger / Instagram DM)
-      for (const event of entry.messaging || []) {
+      for (const event of messagingEvents) {
+        const isIgEvent = entryIsIg || (igAccountId && (event.recipient?.id === igAccountId || event.sender?.id === igAccountId));
+        const channel = isIgEvent ? 'instagram_dm' : 'facebook_messenger';
         const senderId = event.sender?.id;
+
         if (event.message?.is_echo) {
           // Sent by the Page: either the bot, or a staff member replying from the Meta inbox / IG app.
           metaService.handleEcho(channel, event.recipient?.id, event.message).catch(err => console.error('[Meta] echo error:', err.message));
@@ -89,9 +97,10 @@ router.post('/meta', async (req, res) => {
       // B. Comments
       for (const change of entry.changes || []) {
         const val = change.value || {};
+        const isIgChange = entryIsIg || change.field === 'comments' || change.field === 'live_comments' || change.field === 'mention';
 
         // Facebook page feed comments
-        if (!isInstagram && change.field === 'feed' && val.item === 'comment' && val.verb === 'add') {
+        if (!isIgChange && change.field === 'feed' && val.item === 'comment' && val.verb === 'add') {
           await metaService.handleIncomingComment('facebook', {
             comment_id: val.comment_id,
             post_id: val.post_id,
@@ -101,7 +110,7 @@ router.post('/meta', async (req, res) => {
         }
 
         // Instagram comments: { id, text, from: {id, username}, media: {id} }
-        if (isInstagram && (change.field === 'comments' || change.field === 'live_comments')) {
+        if (isIgChange && (change.field === 'comments' || change.field === 'live_comments')) {
           await metaService.handleIncomingComment('instagram', {
             comment_id: val.id,
             post_id: val.media?.id,

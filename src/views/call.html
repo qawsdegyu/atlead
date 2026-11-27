@@ -276,12 +276,27 @@
   if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {}; // loads the voice list early
 
   let currentAudio = null;
+  function stopSpeaking() {
+    if (currentAudio) {
+      try { currentAudio.pause(); currentAudio.currentTime = 0; } catch (e) {}
+      currentAudio = null;
+    }
+    if (window.speechSynthesis) {
+      try { speechSynthesis.cancel(); } catch (e) {}
+    }
+  }
+
   async function speak(text) {
     if (!text) return;
     const clean = text
-      .replace(/atlead/gi, 'آت ليد')
+      .replace(/\batlead\b/gi, 'آت ليد')
+      .replace(/\bat\s*least\b/gi, 'آت ليد')
       .replace(/\bAI\b/gi, 'الذكاء الاصطناعي')
-      .replace(/\bCRM\b/gi, 'نظام إدارة العملاء');
+      .replace(/\bCRM\b/gi, 'نظام إدارة العملاء')
+      .replace(/\bAPI\b/gi, 'واجهة البرمجة')
+      .replace(/\bWhatsApp\b/gi, 'واتساب')
+      .replace(/\bInstagram\b/gi, 'إنستغرام')
+      .replace(/\bFacebook\b/gi, 'فيسبوك');
 
     // 1. Try server-side studio TTS first (crystal clear human Arabic)
     try {
@@ -294,11 +309,11 @@
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         return new Promise((resolve) => {
-          if (currentAudio) { try { currentAudio.pause(); } catch(e){} }
+          stopSpeaking();
           const a = new Audio(url);
           currentAudio = a;
           let done = false;
-          const finish = () => { if (!done) { done = true; URL.revokeObjectURL(url); resolve(); } };
+          const finish = () => { if (!done) { done = true; URL.revokeObjectURL(url); currentAudio = null; resolve(); } };
           a.onended = finish;
           a.onerror = finish;
           setTimeout(finish, 20000);
@@ -312,6 +327,7 @@
     // 2. Browser speech synthesis fallback
     return new Promise((resolve) => {
       if (!window.speechSynthesis) return resolve();
+      stopSpeaking();
       const u = new SpeechSynthesisUtterance(clean);
       u.lang = speechLang;
       const v = pickVoice(speechLang);
@@ -327,7 +343,6 @@
       }, 150);
       u.onstart = () => { started = true; };
       u.onend = finish; u.onerror = finish;
-      speechSynthesis.cancel();
       speechSynthesis.speak(u);
     });
   }
@@ -410,6 +425,8 @@
       next(t);
     };
     rec.onresult = (e) => {
+      // Barge-in: if the customer speaks while assistant is talking, mute assistant immediately
+      stopSpeaking();
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
@@ -418,7 +435,7 @@
       latest = (finalText + ' ' + interim).trim();
       showCaption(latest, true);
       clearTimeout(quiet);
-      quiet = setTimeout(sendNow, 900);
+      quiet = setTimeout(sendNow, 800);
     };
     rec.onerror = (e) => {
       // Some phones (iPhone) don't know Jordanian Arabic: fall back to general Arabic, then Saudi.

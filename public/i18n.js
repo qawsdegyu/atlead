@@ -506,6 +506,8 @@
     ['مكالمة الـ AI الصوتية', 'AI voice call'],
     ['يعرض البوت على العميل المهتم مكالمة صوتية مع الـ AI قبل اجتماع المهندس', 'The bot offers interested customers a voice call with the AI before the engineer meeting'],
     ['يرسل البوت رابط مكالمة خاصاً على موقعك. يسأل الـ AI العميل بالصوت، ويحجز له اجتماع المهندس إذا كان جاهزاً، ثم تُحفظ كل التفاصيل في Google Sheets.', 'The bot sends a private call link on your site. The AI asks the customer by voice, books the engineer meeting if they are ready, and every detail is saved to Google Sheets.'],
+    ['API Key (OpenRouter أو OpenAI للصوت)', 'API Key (OpenRouter or OpenAI for voice)'],
+    ['يقبل مفتاح OpenRouter (sk-or-...) أو OpenAI (sk-...). مع OpenRouter تعمل المكالمة بذكاء عبر وضع المتصفح مباشرة.', 'Accepts an OpenRouter key (sk-or-...) or OpenAI key (sk-...). With OpenRouter, calls run seamlessly in smart browser-voice mode.'],
     ['OpenAI API Key (للصوت)', 'OpenAI API Key (for voice)'],
     ['من platform.openai.com ← API keys. يبقى المفتاح على الخادم فقط.', 'From platform.openai.com → API keys. The key stays on the server only.'],
     ['صوت المساعد', 'Assistant voice'],

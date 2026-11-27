@@ -53,16 +53,22 @@ class CallService {
     return cfg;
   }
 
+  openRouterKey() {
+    const ai = storageService.getSettings().ai || {};
+    const key = ai.openrouter_api_key || process.env.OPENROUTER_API_KEY || '';
+    if (key) return String(key).trim();
+    const raw = String(ai.openai_api_key || '').trim();
+    return /^sk-or-/i.test(raw) ? raw : '';
+  }
+
   apiKey() {
     const key = storageService.getSettings().ai?.openai_api_key || process.env.OPENAI_API_KEY || '';
-    // An OpenRouter key (sk-or-...) cannot run OpenAI voice calls: treat it as missing,
-    // so the bot never sends call links that would not work.
+    // An OpenRouter key (sk-or-...) runs voice calls in browser voice mode, not direct OpenAI Realtime WebRTC.
     return /^sk-or-/i.test(String(key).trim()) ? '' : key;
   }
 
   keyProblem() {
-    const key = String(storageService.getSettings().ai?.openai_api_key || '').trim();
-    if (/^sk-or-/i.test(key)) return 'المفتاح الموجود في خانة OpenAI هو مفتاح OpenRouter (يبدأ بـ sk-or-). المكالمات الصوتية تحتاج مفتاحاً من platform.openai.com ← API keys (يبدأ بـ sk-proj- أو sk-).';
+    // OpenRouter keys are fully supported in browser voice mode.
     return null;
   }
 
@@ -70,10 +76,11 @@ class CallService {
    * How the call runs:
    *  'realtime' = OpenAI voice (natural voice, needs a real OpenAI key);
    *  'browser'  = the customer's phone does the listening and speaking, and the chat AI
-   *               (OpenRouter / any configured key) runs the conversation. Works with no OpenAI key.
+   *               (OpenRouter / any configured key) runs the conversation. Works with OpenRouter.
    */
   voiceMode() {
     if (this.apiKey()) return 'realtime';
+    if (this.openRouterKey()) return 'browser';
     try { return require('./aiService').getProviders().length ? 'browser' : null; } catch { return null; }
   }
 
@@ -234,9 +241,17 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
    * (never the key). Tries each voice model, newest first.
    */
   async checkKey() {
+    if (this.openRouterKey() && !this.apiKey()) {
+      return { ok: true, mode: 'browser', message: 'مفتاح OpenRouter متصل ويعمل بنجاح للمكالمات الصوتية (وضع المتصفح الذكي).' };
+    }
     if (this.keyProblem()) return { ok: false, mode: this.voiceMode(), message: `${this.keyProblem()}${this.voiceMode() === 'browser' ? ' إلى ذلك الحين تعمل المكالمات بصوت جهاز العميل (وضع المتصفح).' : ''}` };
     const key = this.apiKey();
-    if (!key) return { ok: false, message: 'لا يوجد OpenAI API Key.' };
+    if (!key) {
+      if (this.openRouterKey() || this.voiceMode() === 'browser') {
+        return { ok: true, mode: 'browser', message: 'مفتاح OpenRouter متصل ويعمل بنجاح للمكالمات الصوتية (وضع المتصفح الذكي).' };
+      }
+      return { ok: false, message: 'لا يوجد مفتاح OpenAI أو OpenRouter.' };
+    }
     const cfg = this.getConfig();
     const models = [...new Set([cfg.model, ...FALLBACK_MODELS].filter(Boolean))];
     const tried = [];

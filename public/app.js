@@ -1060,8 +1060,10 @@ async function loadSettings() {
       loadSupabaseSyncStatus();
 
       // AI
-      document.getElementById('openrouter-api-key').value = s.ai?.openrouter_api_key || '';
-      document.getElementById('call-openai-key').value = s.ai?.openai_api_key || '';
+      const orKey = s.ai?.openrouter_api_key || '';
+      const oaKey = s.ai?.openai_api_key || '';
+      document.getElementById('openrouter-api-key').value = orKey;
+      document.getElementById('call-openai-key').value = oaKey || orKey || '';
       const ph = s.phone_ai || {};
       document.getElementById('phone-enabled').checked = !!ph.enabled;
       document.getElementById('phone-sid').value = ph.twilio_account_sid || '';
@@ -1212,8 +1214,9 @@ document.getElementById('btn-save-all-settings')?.addEventListener('click', asyn
     },
     ai: {
       provider: 'openrouter',
-      openrouter_api_key: document.getElementById('openrouter-api-key').value,
-      openai_api_key: document.getElementById('call-openai-key').value,
+      openrouter_api_key: document.getElementById('openrouter-api-key').value.trim() ||
+        (document.getElementById('call-openai-key').value.trim().startsWith('sk-or-') ? document.getElementById('call-openai-key').value.trim() : ''),
+      openai_api_key: document.getElementById('call-openai-key').value.trim().startsWith('sk-or-') ? '' : document.getElementById('call-openai-key').value.trim(),
       openrouter_model: document.getElementById('openrouter-model').value.trim() || 'openai/gpt-4o-mini',
       voice_transcription_enabled: document.getElementById('voice-transcription-enabled').checked,
       image_understanding_enabled: document.getElementById('image-understanding-enabled').checked

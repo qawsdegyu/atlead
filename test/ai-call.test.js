@@ -179,7 +179,8 @@ test('with only an OpenRouter key the call runs in browser voice: greeting, free
   assert.match(r.message, /OpenRouter/);
   assert.match(r.message, /وضع المتصفح/);
   const saveRes = await http(app.base, '/api/settings', { method: 'POST', json: { ai: { openai_api_key: 'sk-or-v1-xyz' } } });
-  assert.equal(saveRes.status, 400, 'the wrong key is refused with a clear reason');
+  assert.equal(saveRes.status, 200, 'an OpenRouter key is accepted and routed to openrouter_api_key');
+  assert.equal(storage.getSettings().ai?.openrouter_api_key, 'sk-or-v1-xyz');
 
   const conv = newConv('سلمى');
   const s = callService.createSession(conv);

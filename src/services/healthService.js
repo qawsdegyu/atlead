@@ -311,6 +311,9 @@ class HealthService {
     const label = 'مكالمة الـ AI الصوتية';
     if (!cs.getConfig().enabled) return warn('ai_call', label, 'متوقفة — لا يعرض البوت رابط المكالمة على العملاء.');
     if (cs.voiceMode() === 'browser') {
+      if (cs.openRouterKey()) {
+        return ok('ai_call', label, 'مفعلة وتعمل بوضع المتصفح الذكي عبر مفتاح OpenRouter.');
+      }
       const why = cs.keyProblem() || 'لا يوجد مفتاح OpenAI.';
       return warn('ai_call', label, `تعمل بصوت جهاز العميل (وضع المتصفح) مع الذكاء الاصطناعي الحالي. ${why} للصوت الطبيعي الأفضل أضف مفتاح OpenAI.`);
     }

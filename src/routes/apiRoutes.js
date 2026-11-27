@@ -90,8 +90,12 @@ router.post('/calendar/test', async (req, res) => {
 router.post('/settings', (req, res) => {
   const body = stripMasked(req.body);
 
+  // If an OpenRouter key is provided in openai_api_key (e.g. from the AI voice call card),
+  // accept it seamlessly and route it to openrouter_api_key.
   if (body.ai?.openai_api_key && /^sk-or-/i.test(String(body.ai.openai_api_key).trim())) {
-    return res.status(400).json({ success: false, message: 'هذا مفتاح OpenRouter (يبدأ بـ sk-or-) وليس مفتاح OpenAI. مفتاح OpenRouter مكانه خانة OpenRouter API Key، والمكالمات الصوتية تحتاج مفتاحاً من platform.openai.com ← API keys.' });
+    const orKey = String(body.ai.openai_api_key).trim();
+    if (!body.ai.openrouter_api_key) body.ai.openrouter_api_key = orKey;
+    body.ai.openai_api_key = '';
   }
   if (body.google_sheets?.service_account_json) {
     const sa = googleSheetsService.parseServiceAccount(body.google_sheets.service_account_json);

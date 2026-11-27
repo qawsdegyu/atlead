@@ -120,12 +120,17 @@ class CrmService {
 
   /** The text the customer gets this turn: a booking confirmation wins over the generic handoff message. */
   replyForTurn(convId, aiResult, handoff) {
+    const cfg = handoffConfig();
+    const conv = convId ? storageService.getConversationById(convId) : null;
+    const repName = conv?.assigned_to_name || cfg.repName;
+    const clean = (t) => (typeof t === 'string' ? t.replace(/\{rep\}/g, repName) : t);
+
     // If the turn is offering or containing the AI qualification call link, never replace with handoff message
     if (aiResult?.offer_ai_call || aiResult?.ai_call_offered || (aiResult?.reply_text && aiResult.reply_text.includes('/call/'))) {
-      return aiResult.reply_text;
+      return clean(aiResult.reply_text);
     }
-    if (handoff && (aiResult?.appointment || aiResult?.requested_time)) { this.assignRep(convId); return aiResult.reply_text; }
-    return handoff ? this.prepareHandoffMessage(convId) : aiResult.reply_text;
+    if (handoff && (aiResult?.appointment || aiResult?.requested_time)) { this.assignRep(convId); return clean(aiResult.reply_text); }
+    return clean(handoff ? this.prepareHandoffMessage(convId) : aiResult.reply_text);
   }
 
   getHandoffMessage(convId = null) {

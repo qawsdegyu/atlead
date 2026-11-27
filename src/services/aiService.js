@@ -526,20 +526,57 @@ Your previous answer was in Arabic. The customer writes in English — return th
     }
   }
 
-  // Intelligent fallback engine when AI keys are not yet provided
+  // Intelligent fallback engine when AI keys are not yet provided or providers fail
   ruleBasedReply(conversation, text) {
     const t = normalizeArabic(text);
     const settings = storageService.getSettings();
-    const handoffMsg = settings.handoff?.handoff_message || 
-      'تمام، م. مهند من قسم المبيعات في شركة atlead رح يتواصل معك بأسرع وقت لمتابعة كافة التفاصيل وترتيب كل شيء معك. شكراً لاهتمامك وثقتك.';
+    const rep = conversation.assigned_to_name || settings.handoff?.representative_name || 'م. مهند من قسم المبيعات';
+    const handoffTpl = settings.handoff?.handoff_message || 
+      'تمام، {rep} في شركة atlead رح يتواصل معك بأسرع وقت لمتابعة كافة التفاصيل وترتيب كل شيء معك. شكراً لاهتمامك وثقتك.';
+    const handoffMsg = handoffTpl.replace(/\{rep\}/g, rep);
 
-    // Check deal / agreement triggers
+    const callService = require('./callService');
+    const calendarService = require('./calendarService');
+    const callOn = !!(conversation.id && callService.isActive());
+    const callDone = conversation.ai_call_status === 'completed';
+
+    // Check meeting / booking / deal triggers
+    const wantsMeeting = /(احجز|أحجز|نحجز|حجز|موعد|استشار|اجتماع|مكالم|ديمو|demo|بدي ابدا|خلينا نبدا)/i.test(t);
     const agreementTriggers = [
       'اتفقنا', 'موافق', 'احجزلي', 'بدي احجز', 'حابب احجز', 'بدي استشاره', 'بدي ديمو', 'demo', 'جاهز اشتري',
       'بدي اشتري', 'بدي اشترك', 'بدي ابدا', 'خلينا نبدا', 'رقم الحساب', 'العقد', 'ابعتلي العقد', 'تواصلوا معي',
       'كلموني', 'اتصلوا فيي', 'مهند', 'بدي احكي مع حدا', 'بدي احكي مع موظف', 'شخص حقيقي', 'نرتب موعد', 'بدي موعد'
     ];
-    if (agreementTriggers.some(trigger => t.includes(trigger))) {
+
+    if (wantsMeeting || agreementTriggers.some(trigger => t.includes(trigger))) {
+      // 1. Mandatory qualification: AI call must come first if not done
+      if (callOn && !callDone) {
+        const session = callService.createSession(conversation);
+        const link = callService.publicUrl(session.token);
+        return {
+          reply_text: `أكيد ويسعدنا جداً! وقبل تثبيت الموعد مع المهندس أو صاحب العمل، يسعدنا أولاً دخولك لمكالمة صوتية سريعة (دقائق بسيطة) مع مساعدنا الذكي بالصوت عبر الرابط أدناه لنفهم تفاصيل عملك واحتياجك بدقة، وبعدها بنثبت موعدك الرسمي فوراً:\n\nرابط المكالمة: ${link}`,
+          offer_ai_call: true,
+          ai_call_offered: true,
+          scheduling: true,
+          lead_stage: 'qualified',
+          classification: 'Hot',
+          buying_probability: 80,
+          handoff_triggered: false
+        };
+      }
+
+      // 2. Call is done or call not active: schedule engineer meeting
+      if (callDone || wantsMeeting) {
+        return {
+          reply_text: `أهلاً بك ${conversation.customer_name ? conversation.customer_name + '! ' : ''}يسعدنا جداً ترتيب موعد الاستشارة مع المهندس لمتابعة كافة التفاصيل. أي يوم ووقت بناسبك لننسق الاجتماع معك؟`,
+          scheduling: true,
+          lead_stage: 'qualified',
+          classification: 'Hot',
+          buying_probability: 85,
+          handoff_triggered: false
+        };
+      }
+
       return {
         reply_text: handoffMsg,
         identified_problem: 'طلب موعد استشارة / جاهزية للاتفاق',

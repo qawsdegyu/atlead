@@ -244,6 +244,10 @@ class ReplyEngine {
       // After that the bot keeps answering normally until a rep replies.
       const handoff = crmService.shouldHandoff(aiResult) && !conv.handoff_at;
       let replyText = crmService.replyForTurn(conv.id, aiResult, handoff);
+      if (replyText) {
+        const repName = conv.assigned_to_name || storageService.getSettings().handoff?.representative_name || 'فريق المبيعات';
+        replyText = replyText.replace(/\{rep\}/g, repName);
+      }
       if (!replyText || !String(replyText).trim()) {
         console.warn(`[ReplyEngine] Empty replyText for ${conv.id} — using polite confirmation fallback.`);
         replyText = conv.handoff_at

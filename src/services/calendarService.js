@@ -458,7 +458,29 @@ ${lines.length ? lines.join('\n') : '- لا توجد أوقات متاحة خل�
    * Book (or move) the customer's consultation.
    * Returns { ok, appointment, reply } — reply is the exact text to send the customer.
    */
-  async book({ start: startText, conv = {}, lang = 'ar' }) {
+  async book(args = {}) {
+    const cfg = this.getConfig();
+    if (!this.parseLocal(args.start)) return this._bookUnlocked(args);
+
+    // Google Calendar has no atomic reservation API. Serialize this process's
+    // bookings per calendar and re-check free/busy after each waiter acquires it.
+    this._bookingLocks ||= new Map();
+    const lockKey = cfg.calendar_id || 'default';
+    const previous = this._bookingLocks.get(lockKey) || Promise.resolve();
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    const tail = previous.catch(() => {}).then(() => gate);
+    this._bookingLocks.set(lockKey, tail);
+    await previous.catch(() => {});
+    try {
+      return await this._bookUnlocked(args);
+    } finally {
+      release();
+      if (this._bookingLocks.get(lockKey) === tail) this._bookingLocks.delete(lockKey);
+    }
+  }
+
+  async _bookUnlocked({ start: startText, conv = {}, lang = 'ar' }) {
     const cfg = this.getConfig();
     const mock = this.mockFor(conv);
     const start = this.parseLocal(startText);

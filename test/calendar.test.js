@@ -20,7 +20,7 @@ const at = (hhmm) => cal._zoned(tomorrow, Number(hhmm.slice(0, 2)) * 60 + Number
 let answers; let busy; let inserted;
 test.beforeEach(() => {
   reset();
-  cal._busy = null; cal._token = null;
+  cal._busy = null; cal._token = null; cal._bookingLocks = new Map();
   storage.updateSettings({
     ai: { openrouter_api_key: 'sk-or-x', provider: 'openrouter' },
     google_sheets: { service_account_json: JSON.stringify(sa) },
@@ -61,6 +61,29 @@ test('a confirmed free time is booked with a Meet link, and the customer gets th
   // The booking is the handoff, and the confirmation (not the generic handoff text) is what is sent.
   assert.equal(crm.shouldHandoff(r), true);
   assert.equal(crm.replyForTurn(null, r, true), r.reply_text);
+});
+
+test('concurrent bookings of one slot serialize and only one event is created', async () => {
+  const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  fake('post', /calendar\/v3\/freeBusy/, async () => {
+    await pause(20);
+    return { calendars: { 'eng@gmail.com': { busy } } };
+  });
+  fake('post', /calendar\/v3\/calendars\/.+\/events/, (req) => {
+    inserted.push(req.body);
+    busy.push({ start: req.body.start.dateTime, end: req.body.end.dateTime });
+    return { id: `ev${inserted.length}`, hangoutLink: 'https://meet.google.com/concurrent-test' };
+  });
+
+  const start = `${tomorrow} 12:00`;
+  const results = await Promise.all([
+    cal.book({ start, conv: { ...conv(), id: 'c1' } }),
+    cal.book({ start, conv: { ...conv(), id: 'c2', customer_name: 'عميل آخر' } })
+  ]);
+
+  assert.equal(inserted.length, 1);
+  assert.equal(results.filter(result => result.ok).length, 1);
+  assert.equal(results.filter(result => result.why === 'taken').length, 1);
 });
 
 test('a taken time is never booked — the customer gets the nearest free times instead', async () => {

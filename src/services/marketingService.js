@@ -705,6 +705,22 @@ ${this.langRule()}
 
   // ---- publishing ---------------------------------------------------------
   async publishPlan(id, only = null) {
+    this._publishLocks ||= new Map();
+    const previous = this._publishLocks.get(id) || Promise.resolve();
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    const tail = previous.catch(() => {}).then(() => gate);
+    this._publishLocks.set(id, tail);
+    await previous.catch(() => {});
+    try {
+      return await this._publishPlanUnlocked(id, only);
+    } finally {
+      release();
+      if (this._publishLocks.get(id) === tail) this._publishLocks.delete(id);
+    }
+  }
+
+  async _publishPlanUnlocked(id, only = null) {
     const plan = this.mustGet(id, ['scheduled', 'failed', 'partial']);
     // Restored from the database storage if this server lost the file.
     const filePath = await imageService.ensureLocal(plan.image_file);
@@ -797,8 +813,8 @@ ${this.langRule()}
   }
 
   /** Create today's plan and send it to the admin on Telegram. */
-  async sendBrief({ source = 'morning' } = {}) {
-    const plan = await this.createPlan({ source, refresh: true });
+  async sendBrief({ source = 'morning', existingPlan = null } = {}) {
+    const plan = existingPlan || await this.createPlan({ source, refresh: true });
     const { text, buttons } = this.briefMessage(plan);
     const sent = await telegram.sendMessage(text, { buttons, type: 'morning_brief' });
     plan.telegram_sent = sent.success;
@@ -808,6 +824,17 @@ ${this.langRule()}
 
   /** Scheduler: once a day at the configured time (never hours late, e.g. after a restart at night). */
   async maybeSendMorningBrief() {
+    if (this._morningBriefInFlight) return this._morningBriefInFlight;
+    const run = this._maybeSendMorningBriefUnlocked();
+    this._morningBriefInFlight = run;
+    try {
+      return await run;
+    } finally {
+      if (this._morningBriefInFlight === run) this._morningBriefInFlight = null;
+    }
+  }
+
+  async _maybeSendMorningBriefUnlocked() {
     const cfg = this.getConfig();
     if (!cfg.enabled || !telegram.isConfigured()) return null;
     const now = businessHours.localParts();
@@ -815,9 +842,13 @@ ${this.langRule()}
     if (now.minutes < start || now.minutes > start + 6 * 60) return null;
     const data = read();
     if (data.last_brief === now.dateKey) return null;
-    data.last_brief = now.dateKey;
-    write(data); // saved to the database too → never twice a day, even after a redeploy
-    const res = await this.sendBrief();
+    const existingPlan = data.plans.find(p => p.source === 'morning' && p.date === now.dateKey && !p.telegram_sent);
+    const res = await this.sendBrief({ existingPlan });
+    if (res.sent.success) {
+      const latest = read();
+      latest.last_brief = now.dateKey;
+      write(latest); // Mark only after Telegram confirms the send; retries reuse the same plan.
+    }
     console.log(`[Marketing] morning brief ${now.dateKey}: ${res.sent.success ? 'sent' : 'not sent — ' + res.sent.error}`);
     return res;
   }

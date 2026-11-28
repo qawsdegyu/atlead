@@ -29,6 +29,59 @@ const BOOT_TIME = Date.now();
 const VALID_LEAD_STAGES = new Set(['new', 'discovery', 'qualified', 'hot', 'deal_closing', 'handed_off']);
 const VALID_CLASSIFICATIONS = new Set(['Cold', 'Warm', 'Hot']);
 
+function mergeCustomerRequests(...values) {
+  const items = [];
+  const seen = new Set();
+  for (const value of values) {
+    for (const item of String(value || '').split(/\s*(?:\||،|;|\n)\s*/).map(part => part.trim()).filter(Boolean)) {
+      const key = item.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u064B-\u065F\u0670\u0300-\u036f]/g, '')
+        .replace(/[إأآ]/g, 'ا')
+        .replace(/ة/g, 'ه')
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        items.push(item);
+      }
+    }
+  }
+  return items.join('، ');
+}
+
+function mergeCustomerSummary(previous, incoming) {
+  const oldText = String(previous || '').trim();
+  const newText = String(incoming || '').trim();
+  if (!oldText) return newText.slice(0, 2000);
+  if (!newText) return oldText.slice(0, 2000);
+  const normalize = (value) => value.toLowerCase().normalize('NFD')
+    .replace(/[\u064B-\u065F\u0670\u0300-\u036f]/g, '')
+    .replace(/[إأآ]/g, 'ا').replace(/ة/g, 'ه').replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  const oldKey = normalize(oldText);
+  const newKey = normalize(newText);
+  if (newKey.includes(oldKey)) return newText.slice(0, 2000);
+  if (oldKey.includes(newKey)) return oldText.slice(0, 2000);
+
+  const parts = [oldText, newText]
+    .flatMap(value => value.split(/(?<=[.!؟?])\s+|[;\n]+/))
+    .map(part => part.trim()).filter(Boolean);
+  const seen = new Set();
+  const unique = parts.filter(part => {
+    const key = normalize(part);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  let result = unique.join('، ');
+  while (result.length > 2000 && unique.length > 1) {
+    unique.shift();
+    result = unique.join('، ');
+  }
+  return result.slice(0, 2000);
+}
+
 // Phone numbers (Jordan local 07xxxxxxxx or international +962 / 00962 / any +country), emails, business type, and requests.
 function extractContact(text, conv = {}) {
   const out = {};
@@ -188,9 +241,7 @@ class ReplyEngine {
     if (contact.email && !fresh.customer_email) contactPatch.customer_email = contact.email;
     if (contact.business_type && !fresh.business_type) contactPatch.business_type = contact.business_type;
     if (contact.customer_requests) {
-      contactPatch.customer_requests = fresh.customer_requests
-        ? `${fresh.customer_requests} | ${contact.customer_requests}`
-        : contact.customer_requests;
+      contactPatch.customer_requests = mergeCustomerRequests(fresh.customer_requests, contact.customer_requests);
     }
     if (Object.keys(contactPatch).length) {
       conv = storageService.saveConversation({ id: conv.id, ...contactPatch });
@@ -214,21 +265,26 @@ class ReplyEngine {
       return { success: true, bot_scheduled: false, conversation_id: conv.id };
     }
 
-    this.schedule(conv.id, adapter);
+    this.schedule(conv.id, adapter, customerMsg.id);
     return { success: true, bot_scheduled: true, conversation_id: conv.id, delay_seconds: getBotConfig().delaySeconds };
   }
 
-  schedule(convId, adapter) {
+  schedule(convId, adapter, customerMessageId = null) {
     const { delaySeconds, typingIndicator } = getBotConfig();
     const state = this.pending.get(convId) || {};
     if (process.env.REPLY_DEBUG) console.log('[debug] schedule', convId, Date.now(), 'running=' + !!state.running, 'delay=' + delaySeconds);
     clearTimeout(state.timer);
     clearTimeout(state.typingTimer);
     state.adapter = adapter;
+    state.queuedMessageIds ||= [];
 
     if (state.running) {
-      // A reply is being generated right now; answer the new message right after it.
+      // Preserve messages arriving during generation/send; they may no longer be
+      // contiguous with the last bot message when the current send completes.
       state.rerun = true;
+      if (customerMessageId && !state.queuedMessageIds.includes(customerMessageId)) {
+        state.queuedMessageIds.push(customerMessageId);
+      }
       this.pending.set(convId, state);
       return;
     }
@@ -274,63 +330,85 @@ class ReplyEngine {
     state.rerun = false;
 
     try {
-      let conv = storageService.getConversationById(convId);
-      if (!conv || conv.is_bot_active === false) return;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (this.pending.get(convId) !== state) return;
+        let conv = storageService.getConversationById(convId);
+        if (!conv || conv.is_bot_active === false) return;
 
-      const unanswered = this._unansweredCustomerMessages(conv);
-      if (unanswered.length === 0) return;
+        const queued = new Set(state.queuedMessageIds || []);
+        const unanswered = queued.size
+          ? (conv.messages || []).filter(m => m.sender === 'customer' && queued.has(m.id))
+          : this._unansweredCustomerMessages(conv);
+        if (unanswered.length === 0) return;
 
-      const quoted = unanswered[unanswered.length - 1];
-      const combinedText = unanswered.map(m => m.content).join('\n');
+        const currentMessageIds = unanswered.map(m => m.id);
+        const quoted = unanswered[unanswered.length - 1];
+        const combinedText = unanswered.map(m => m.content).join('\n');
 
-      // AI sees history without the unanswered messages (they're passed as the new input).
-      const historyConv = { ...conv, messages: conv.messages.slice(0, conv.messages.length - unanswered.length) };
-      const aiResult = await aiService.generateReply(historyConv, combinedText);
+        // AI sees history without the unanswered messages (they're passed as new input).
+        const unansweredIds = new Set(currentMessageIds);
+        const historyConv = { ...conv, messages: (conv.messages || []).filter(m => !unansweredIds.has(m.id)) };
+        const aiResult = await aiService.generateReply(historyConv, combinedText);
 
-      // Re-check: a human may have taken over while the AI was thinking.
-      conv = storageService.getConversationById(convId);
-      if (!conv || conv.is_bot_active === false) return;
+        // A human takeover invalidates this turn. New customer text invalidates
+        // the draft too: regenerate from the complete unanswered batch instead.
+        conv = storageService.getConversationById(convId);
+        if (this.pending.get(convId) !== state || !conv || conv.is_bot_active === false) return;
+        if (state.rerun) {
+          state.queuedMessageIds = [...new Set([...(state.queuedMessageIds || []), ...currentMessageIds])];
+          state.rerun = false;
+          if (attempt < 4) continue;
+          state.rerun = true;
+          return;
+        }
 
-      // Deal point / ready to buy / asked for a human → the handoff message, once.
-      // After that the bot keeps answering normally until a rep replies.
-      const handoff = crmService.shouldHandoff(aiResult) && !conv.handoff_at;
-      let replyText = crmService.replyForTurn(conv.id, aiResult, handoff);
-      if (replyText) {
-        const repName = conv.assigned_to_name || storageService.getSettings().handoff?.representative_name || 'فريق المبيعات';
-        replyText = replyText.replace(/\{rep\}/g, repName);
+        // Deal point / ready to buy / asked for a human → the handoff message, once.
+        // After that the bot keeps answering normally until a rep replies.
+        const handoff = crmService.shouldHandoff(aiResult) && !conv.handoff_at;
+        let replyText = crmService.replyForTurn(conv.id, aiResult, handoff);
+        if (replyText) {
+          const repName = conv.assigned_to_name || storageService.getSettings().handoff?.representative_name || 'فريق المبيعات';
+          replyText = replyText.replace(/\{rep\}/g, repName);
+        }
+        if (!replyText || !String(replyText).trim()) {
+          console.warn(`[ReplyEngine] Empty replyText for ${conv.id} — using polite confirmation fallback.`);
+          const repName = conv.assigned_to_name || storageService.getSettings().handoff?.representative_name || 'م. مهند من قسم المبيعات';
+          replyText = conv.handoff_at
+            ? `أهلاً بك دائماً! مثل ما أكدنا معك، ${repName} رح يتواصل معك بأسرع وقت لمتابعة كافة التفاصيل، وأنا بالخدمة لأي استفسار إضافي 🙏`
+            : 'أهلاً وسهلاً بك! كيف بقدر أساعدك اليوم؟';
+        }
+        if (handoff && !crmService.keepBotUntilHuman()) {
+          // Old behaviour: switch the bot off BEFORE sending so no parallel reply can slip through.
+          conv = storageService.saveConversation({ id: conv.id, is_bot_active: false });
+        }
+
+        // No await occurs between the rerun check and dispatch, so a message
+        // received during generation cannot be answered with this stale draft.
+        const { quoteReplies } = getBotConfig();
+        const sendResult = await this.sendWithAdapter(state.adapter, conv, replyText, quoteReplies ? quoted : null);
+
+        const botMsg = storageService.addMessage(conv.id, {
+          sender: 'bot',
+          content: replyText,
+          media_type: 'text',
+          external_message_id: sendResult.external_message_id || null,
+          reply_to_id: quoteReplies ? quoted.id : null,
+          reply_to_content: quoteReplies ? quoted.content : null,
+          reply_to_sender: quoteReplies ? 'customer' : null,
+          delivery_status: sendResult.ok ? 'sent' : (sendResult.simulated ? 'simulated' : 'failed')
+        });
+        supabaseService.saveMessage(botMsg, conv.id).catch(() => {});
+        state.queuedMessageIds = (state.queuedMessageIds || []).filter(id => !unansweredIds.has(id));
+
+        const latestConv = storageService.getConversationById(convId) || conv;
+        await this.applyAiState(latestConv, aiResult, handoff);
+        break;
       }
-      if (!replyText || !String(replyText).trim()) {
-        console.warn(`[ReplyEngine] Empty replyText for ${conv.id} — using polite confirmation fallback.`);
-        const repName = conv.assigned_to_name || storageService.getSettings().handoff?.representative_name || 'م. مهند من قسم المبيعات';
-        replyText = conv.handoff_at
-          ? `أهلاً بك دائماً! مثل ما أكدنا معك، ${repName} رح يتواصل معك بأسرع وقت لمتابعة كافة التفاصيل، وأنا بالخدمة لأي استفسار إضافي 🙏`
-          : 'أهلاً وسهلاً بك! كيف بقدر أساعدك اليوم؟';
-      }
-      if (handoff && !crmService.keepBotUntilHuman()) {
-        // Old behaviour: switch the bot off BEFORE sending so no parallel reply can slip through.
-        conv = storageService.saveConversation({ id: conv.id, is_bot_active: false });
-      }
-
-      const { quoteReplies } = getBotConfig();
-      const sendResult = await this.sendWithAdapter(state.adapter, conv, replyText, quoteReplies ? quoted : null);
-
-      const botMsg = storageService.addMessage(conv.id, {
-        sender: 'bot',
-        content: replyText,
-        media_type: 'text',
-        external_message_id: sendResult.external_message_id || null,
-        reply_to_id: quoteReplies ? quoted.id : null,
-        reply_to_content: quoteReplies ? quoted.content : null,
-        reply_to_sender: quoteReplies ? 'customer' : null,
-        delivery_status: sendResult.ok ? 'sent' : (sendResult.simulated ? 'simulated' : 'failed')
-      });
-      supabaseService.saveMessage(botMsg, conv.id).catch(() => {});
-
-      await this.applyAiState(conv, aiResult, handoff);
     } catch (err) {
       console.error(`[ReplyEngine] flush error for ${convId}:`, err.message);
     } finally {
       state.running = false;
+      if (this.pending.get(convId) !== state) return;
       if (state.rerun) {
         this.schedule(convId, state.adapter);
       } else {
@@ -379,8 +457,8 @@ class ReplyEngine {
       identified_problem: keep(aiResult.identified_problem, conv.identified_problem),
       proposed_solution: keep(aiResult.proposed_solution, conv.proposed_solution),
       business_type: keep(aiResult.business_type, conv.business_type),
-      customer_requests: keep(aiResult.customer_requests, conv.customer_requests),
-      customer_summary: keep(aiResult.customer_summary, conv.customer_summary),
+      customer_requests: mergeCustomerRequests(conv.customer_requests, aiResult.customer_requests) || null,
+      customer_summary: mergeCustomerSummary(conv.customer_summary, aiResult.customer_summary),
       objections: keep(aiResult.objections, conv.objections)
     };
     if (aiResult.customer_name && /عميل|مستخدم|متابع/.test(conv.customer_name || '')) patch.customer_name = aiResult.customer_name;
@@ -411,6 +489,7 @@ class ReplyEngine {
   // Used by the human-agent reply box in the dashboard (no delay, optional quote).
   async sendAgentMessage(conv, text, adapter, quotedMsgId = null) {
     const quoted = quotedMsgId ? conv.messages?.find(m => m.id === quotedMsgId) : null;
+    if (!String(conv.channel).startsWith('simulator')) this.pauseForHuman(conv.id, 'لوحة التحكم');
     const res = await this.sendWithAdapter(adapter, conv, text, quoted);
     const msg = storageService.addMessage(conv.id, {
       sender: 'agent',
@@ -423,7 +502,6 @@ class ReplyEngine {
       delivery_status: res.ok ? 'sent' : (res.simulated ? 'simulated' : 'failed')
     });
     supabaseService.saveMessage(msg, conv.id).catch(() => {});
-    if (!String(conv.channel).startsWith('simulator')) this.pauseForHuman(conv.id, 'لوحة التحكم');
     return { msg, sent: !!res.ok };
   }
 

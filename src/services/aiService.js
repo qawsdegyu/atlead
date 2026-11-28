@@ -62,6 +62,85 @@ class AiService {
     return n;
   }
 
+  normalizeQuestion(text) {
+    return normalizeArabic(String(text || ''))
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  findPreviouslyAnsweredFaq(conversation, text, faq = knowledgeService.findFaqAnswer(text)) {
+    if (!faq) return null;
+    const target = this.normalizeQuestion(faq.q);
+    const messages = conversation.messages || [];
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].sender !== 'customer') continue;
+      const previousFaq = knowledgeService.findFaqAnswer(messages[i].content || '');
+      if (!previousFaq || this.normalizeQuestion(previousFaq.q) !== target) continue;
+      for (let j = i + 1; j < messages.length && messages[j].sender !== 'customer'; j++) {
+        if (messages[j].sender === 'bot' || messages[j].sender === 'agent') return faq;
+      }
+    }
+    return null;
+  }
+
+  isBusinessTypeQuestion(text) {
+    return /(?:نوع|طبيعة|مجال)\s*(?:شغلكم?|عملكم?|نشاطكم?)|what\s+(?:kind|type)\s+of\s+(?:business|work)/i.test(String(text || ''));
+  }
+
+  finalQuestion(text, questionAt) {
+    return String(text).slice(this.finalQuestionStart(text, questionAt), questionAt + 1).trim();
+  }
+
+  finalQuestionStart(text, questionAt) {
+    const boundary = Math.max(
+      String(text).lastIndexOf('.', questionAt),
+      String(text).lastIndexOf('!', questionAt),
+      String(text).lastIndexOf('\n', questionAt)
+    );
+    return boundary + 1;
+  }
+
+  avoidKnownBusinessQuestion(reply, conversation = {}) {
+    if (!conversation.business_type) return String(reply || '');
+    const text = String(reply || '');
+    const questionAt = Math.max(text.lastIndexOf('؟'), text.lastIndexOf('?'));
+    if (questionAt < 0 || !this.isBusinessTypeQuestion(this.finalQuestion(text, questionAt))) return text;
+    const answer = text.slice(0, this.finalQuestionStart(text, questionAt)).replace(/[\s،,;:.!؟?]+$/g, '').trim();
+    const followUp = 'شو التحدي الأكبر عندكم بمتابعة العملاء أو تحويلهم لمبيعات؟';
+    return answer ? `${answer} ${followUp}` : followUp;
+  }
+
+  formatFaqAnswer(faq, conversation = {}, repeated = false) {
+    const answer = String(faq?.a || '').trim();
+    const questionAt = Math.max(answer.lastIndexOf('؟'), answer.lastIndexOf('?'));
+    if (repeated && questionAt >= 0) {
+      const directAnswer = answer.slice(0, this.finalQuestionStart(answer, questionAt)).replace(/[\s،,;:.!؟?]+$/g, '').trim();
+      return directAnswer ? `أكيد، للتوضيح: ${directAnswer}` : answer;
+    }
+    if (conversation.business_type && questionAt >= 0 && this.isBusinessTypeQuestion(this.finalQuestion(answer, questionAt))) {
+      const directAnswer = answer.slice(0, this.finalQuestionStart(answer, questionAt)).replace(/[\s،,;:.!؟?]+$/g, '').trim();
+      return directAnswer ? `${directAnswer} شو التحدي الأكبر عندكم بمتابعة العملاء أو تحويلهم لمبيعات؟` : answer;
+    }
+    return this.avoidKnownBusinessQuestion(answer, conversation);
+  }
+
+  repeatedFaqResult(conversation, incomingMessage) {
+    const faq = knowledgeService.findFaqAnswer(incomingMessage);
+    if (!this.findPreviouslyAnsweredFaq(conversation, incomingMessage, faq)) return null;
+    const pricing = /سعر|تكلف|كلفه|price|cost/i.test(normalizeArabic(faq.q));
+    return {
+      reply_text: this.formatFaqAnswer(faq, conversation, true),
+      identified_problem: pricing ? 'استفسار عن الأسعار' : faq.q,
+      proposed_solution: pricing ? 'جلسة استشارة مجانية لتحديد الحل والتكلفة' : null,
+      lead_stage: conversation.lead_stage || 'discovery',
+      classification: conversation.classification || 'Warm',
+      buying_probability: Number(conversation.interest_score) || (pricing ? 55 : 45),
+      handoff_triggered: false,
+      source: 'knowledge_repeat'
+    };
+  }
+
   /** Chat apps don't render Markdown: [text](url) → "text: url", drop ** and # headings. */
   toPlainText(text) {
     return String(text || '')
@@ -228,6 +307,8 @@ class AiService {
     }
     if (voiceFailed) incomingMessage = `${incomingMessage}
 (ملاحظة: العميل بعث كمان رسالة صوتية ما انفهمت — اطلب منه يعيدها إذا لزم)`;
+    const repeatedFaq = this.repeatedFaqResult(conversation, incomingMessage);
+    if (repeatedFaq) return repeatedFaq;
     const systemPrompt = knowledgeService.getSystemPrompt();
 
     // Prepare message history
@@ -433,13 +514,16 @@ Your previous answer was in Arabic. The customer writes in English — return th
           result.scheduling = true;
         }
       }
+      result.reply_text = this.avoidKnownBusinessQuestion(result.reply_text, conversation);
       return { ...result, source: 'ai' };
     } catch (err) {
       if (err.message !== 'NO_AI_KEY') console.error('[AI] All providers failed — using the knowledge-file fallback.');
     }
 
     // Last resort (no working AI key): approved answers from the company files, never repeated.
-    return { ...this.ruleBasedReply(conversation, incomingMessage), source: 'fallback' };
+    const fallback = this.ruleBasedReply(conversation, incomingMessage);
+    fallback.reply_text = this.avoidKnownBusinessQuestion(fallback.reply_text, conversation);
+    return { ...fallback, source: 'fallback' };
   }
 
   /**
@@ -476,9 +560,11 @@ Your previous answer was in Arabic. The customer writes in English — return th
   /** Safe answers when the AI tried to invent something. */
   safeAnswer(kind, lang = 'ar', conversation = {}) {
     if (kind === 'price') {
-      if (lang === 'en') return 'Every system we build is tailored to your business, so we don\'t quote fixed prices in chat. The first step is a free 30-minute online consultation where we understand your needs and give you an exact plan and cost. What kind of business do you run?';
+      if (lang === 'en') return conversation.business_type
+        ? 'Every system we build is tailored to your business, so we don\'t quote fixed prices in chat. The first step is a free 30-minute online consultation where we understand your needs and give you an exact plan and cost. Since I know your business type, what is your biggest challenge with lead follow-up or conversion?'
+        : 'Every system we build is tailored to your business, so we don\'t quote fixed prices in chat. The first step is a free 30-minute online consultation where we understand your needs and give you an exact plan and cost. What kind of business do you run?';
       const faq = knowledgeService.findFaqAnswer('كم السعر');
-      return faq?.a || 'كل نظام بنبنيه بيكون مخصص حسب احتياج شغلك، لهيك ما بنعطي أسعار بالشات. أول خطوة جلسة استشارة مجانية (30 دقيقة أونلاين) بنفهم فيها احتياجك وبنعطيك خطة وتكلفة دقيقة. شو نوع شغلك؟';
+      return this.formatFaqAnswer({ a: faq?.a || 'كل نظام بنبنيه بيكون مخصص حسب احتياج شغلك، لهيك ما بنعطي أسعار بالشات. أول خطوة جلسة استشارة مجانية (30 دقيقة أونلاين) بنفهم فيها احتياجك وبنعطيك خطة وتكلفة دقيقة. شو نوع شغلك؟' }, conversation);
     }
     if (lang === 'en') return 'I don\'t have that detail confirmed right now, and I\'d rather not guess. I can have our team get back to you with the exact information — would that work for you?';
     return 'هاي المعلومة مش متوفرة عندي بدقة حالياً وما بدي أعطيك معلومة غير مؤكدة. بقدر أخلي الفريق يتواصل معك ويعطيك التفاصيل الدقيقة، بناسبك؟';
@@ -690,12 +776,14 @@ Your previous answer was in Arabic. The customer writes in English — return th
     const alreadySent = (reply) => sentReplies.some(s => normalizeArabic(s) === normalizeArabic(reply));
 
     // Answer from the company knowledge files (approved FAQ).
-    const faq = knowledgeService.findFaqAnswer(text, { exclude: sentReplies });
+    const matchedFaq = knowledgeService.findFaqAnswer(text);
+    const repeatedFaq = this.findPreviouslyAnsweredFaq(conversation, text, matchedFaq);
+    const faq = repeatedFaq || knowledgeService.findFaqAnswer(text, { exclude: sentReplies });
     if (faq) {
       const pricing = /سعر|تكلف|كلفه|price|cost/.test(normalizeArabic(faq.q));
       return {
         ...base,
-        reply_text: faq.a,
+        reply_text: this.formatFaqAnswer(faq, conversation, !!repeatedFaq),
         identified_problem: pricing ? 'استفسار عن الأسعار' : faq.q,
         proposed_solution: pricing ? 'جلسة استشارة مجانية لتحديد الحل والتكلفة' : null,
         buying_probability: pricing ? 55 : 45

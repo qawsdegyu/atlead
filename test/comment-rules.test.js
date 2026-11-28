@@ -1,6 +1,6 @@
 // Reels page: comment a keyword → fixed public reply + one DM (text, link, file, consultation form);
 // the filled form becomes a Prospect lead.
-const { fake, reset, calls, startApp, http } = require('./helpers');
+const { fake, reset, calls, startApp, http, status } = require('./helpers');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -50,6 +50,16 @@ test('Arabic spelling and no keyword', async () => {
   const none = await comment('instagram', 'فيديو حلو');
   assert.equal(none.rule_id, undefined);
   assert.ok(calls.some(c => /openrouter/.test(c.url)), 'ordinary comments still go to the AI');
+});
+
+test('a failed private reply is recorded as failed rather than simulated or sent', async () => {
+  fake('post', /\/messages\?/, () => status(500, { error: { message: 'Meta unavailable' } }));
+  const out = await comment('instagram', 'atlead', 'REEL1', 'c_dm_failed');
+  assert.equal(out.dm_delivery_status, 'failed');
+  assert.match(out.dm_error, /تعذّر تأكيد/);
+  assert.equal(out.dm_triggered, false);
+  assert.equal(out.dm_sent_at, null);
+  assert.ok(calls.some(call => /\/messages\?/.test(call.url)), 'the attempted private send is observable');
 });
 
 test('a reel-specific rule sends its own link and file and wins over "all posts"', async () => {

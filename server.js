@@ -104,7 +104,9 @@ app.get('/consult', (req, res) => {
   res.sendFile(path.join(__dirname, 'src', 'views', 'consult.html'), { dotfiles: 'allow' });
 });
 app.post('/api/consult', express.json({ limit: '20kb' }), async (req, res) => {
-  const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+  // Never let an arbitrary caller choose a fresh rate-limit key via X-Forwarded-For.
+  // If a deployment wants proxy-aware IPs, configure Express trust proxy explicitly.
+  const ip = String(req.ip || req.socket?.remoteAddress || 'unknown').trim();
   const now = Date.now();
   const recent = (consultHits.get(ip) || []).filter(t => now - t < 60 * 60 * 1000);
   if (recent.length >= 8) return res.status(429).json({ ok: false, error: 'too_many' });
@@ -155,6 +157,9 @@ app.post('/voice/after-dial', (req, res) => {
 const crypto = require('crypto');
 const SESSION_COOKIE = 'atl_admin';
 const SESSION_DAYS = 30;
+const adminPasswordRequired = () => process.env.NODE_ENV === 'production'
+  || !!(process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_ENVIRONMENT_NAME)
+  || ['production', 'preview'].includes(process.env.VERCEL_ENV);
 const safeEqual = (a, b) => {
   const ba = Buffer.from(String(a)); const bb = Buffer.from(String(b));
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
@@ -193,11 +198,19 @@ button{margin-top:22px;width:100%;padding:12px;border:0;border-radius:10px;backg
 <label>كلمة السر</label><input name="password" type="password" autocomplete="current-password" autofocus>
 ${error ? `<div class="err">${error}</div>` : ''}<button type="submit">دخول</button></form></body></html>`;
 
-app.get('/login', (req, res) => res.send(loginPage('', safeNext(req.query.next))));
+app.get('/login', (req, res) => {
+  if (!process.env.ADMIN_PASSWORD && adminPasswordRequired()) {
+    return res.status(503).send(loginPage('لوحة التحكم غير متاحة حتى يتم ضبط ADMIN_PASSWORD على الخادم.', safeNext(req.query.next)));
+  }
+  res.send(loginPage('', safeNext(req.query.next)));
+});
 app.post('/login', (req, res) => {
   const password = process.env.ADMIN_PASSWORD;
   const user = process.env.ADMIN_USER || 'admin';
-  if (!password) return res.redirect('/');
+  if (!password) {
+    if (adminPasswordRequired()) return res.status(503).send(loginPage('لوحة التحكم غير متاحة حتى يتم ضبط ADMIN_PASSWORD على الخادم.', '/'));
+    return res.redirect('/');
+  }
   const { username = '', password: pass = '', next = '/' } = req.body || {};
   if (safeEqual(String(username).trim(), user) && safeEqual(pass, password)) {
     res.set('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(makeSession())}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}`);
@@ -212,7 +225,10 @@ app.get('/logout', (req, res) => {
 
 app.use((req, res, next) => {
   const password = process.env.ADMIN_PASSWORD;
-  if (!password) return next();
+  if (!password) {
+    if (!adminPasswordRequired()) return next();
+    return res.status(503).json({ success: false, message: 'Dashboard authentication is not configured' });
+  }
   if (validSession(readCookie(req, SESSION_COOKIE))) return next();
   const user = process.env.ADMIN_USER || 'admin';
   const [scheme, encoded] = (req.headers.authorization || '').split(' ');
@@ -400,11 +416,18 @@ async function bootstrap() {
   }, { skipDbSync: true });
 
   // 2. Load settings (API keys, tokens...) from the database if Supabase is configured
-  const dbSettings = await supabaseService.loadSettings();
+  let dbSettings = null;
+  let settingsReadFailed = false;
+  try {
+    dbSettings = await supabaseService.loadSettings();
+  } catch (err) {
+    settingsReadFailed = true;
+    console.error('[Settings] Could not load Supabase settings; keeping local settings and refusing to overwrite the database:', err.message);
+  }
   if (dbSettings) {
     storageService.updateSettings(dbSettings, { skipDbSync: true });
     console.log('[Settings] Loaded from Supabase (app_settings)');
-  } else if (supabaseService.isEnabled()) {
+  } else if (!settingsReadFailed && supabaseService.isEnabled()) {
     await supabaseService.saveSettings(storageService.getSettings());
   }
 
@@ -454,7 +477,11 @@ if (!process.env.VERCEL) phoneService.attach(app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`🚀 atlead Sales Chatbot & Omnichannel CRM is Running!`);
   console.log(`🌐 Dashboard URL: http://localhost:${PORT}`);
-  if (!process.env.ADMIN_PASSWORD) console.log('⚠️  ADMIN_PASSWORD not set — dashboard is open to anyone who can reach this server.');
+  if (!process.env.ADMIN_PASSWORD) {
+    console.log(adminPasswordRequired()
+      ? '🚨 ADMIN_PASSWORD is required — dashboard routes are disabled until it is configured.'
+      : '⚠️  ADMIN_PASSWORD not set — dashboard is open in local development.');
+  }
   console.log(`📡 Meta Webhook:  http://localhost:${PORT}/webhook/meta`);
   console.log(`💬 WhatsApp Webhook: http://localhost:${PORT}/webhook/whatsapp`);
   console.log(`====================================================`);

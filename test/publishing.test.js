@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const storage = require('../src/services/storageService');
 const mk = require('../src/services/marketingService');
 const imageService = require('../src/services/imageService');
+const publisher = require('../src/services/socialPublisher');
 
 const META = { page_access_token: 'PAGE_TOKEN', page_id: '111', instagram_account_id: '222', _ids_checked: true };
 
@@ -79,6 +80,31 @@ test('partial failure: retry re-sends ONLY the failed platform (no duplicate Fac
   assert.equal(p.status, 'published');
   assert.equal(calls.filter(c => /111\/photos/.test(c.url)).length, 0, 'facebook not posted again');
   assert.equal(calls.filter(c => /media_publish/.test(c.url)).length, 1);
+});
+
+test('two concurrent publish requests for one plan send to the publisher only once', async () => {
+  const plan = await readyPlan();
+  const originalPublish = publisher.publish;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  let attempts = 0;
+  publisher.publish = async () => {
+    attempts += 1;
+    await gate;
+    return { facebook: { ok: true, url: 'https://facebook.example/post/1' } };
+  };
+  try {
+    const first = mk.publishPlan(plan.id);
+    await new Promise(resolve => setImmediate(resolve));
+    const second = mk.publishPlan(plan.id);
+    release();
+    await first;
+    await assert.rejects(second, /غير متاحة بالحالة الحالية/);
+    assert.equal(attempts, 1);
+  } finally {
+    release();
+    publisher.publish = originalPublish;
+  }
 });
 
 test('missing permission is explained in Arabic', async () => {

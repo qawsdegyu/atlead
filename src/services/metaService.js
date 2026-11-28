@@ -750,9 +750,11 @@ class MetaService {
       if (!comment.simulated && hasToken) {
         recipientId = await this.sendPrivateReply(commentId, analysis.auto_dm);
       }
+      patch.dm_delivery_status = recipientId ? 'sent' : (comment.simulated || !hasToken ? 'simulated' : 'failed');
+      if (!recipientId && !comment.simulated && hasToken) patch.dm_error = 'تعذّر تأكيد إرسال الرسالة الخاصة من Meta';
       if (recipientId || comment.simulated || !hasToken) {
         patch.dm_triggered = true;
-        patch.dm_sent_at = new Date().toISOString();
+        if (recipientId) patch.dm_sent_at = new Date().toISOString();
         patch.dm_text = analysis.auto_dm;
         if (!recipientId) patch.dm_simulated = true;
 
@@ -777,7 +779,7 @@ class MetaService {
           external_message_id: recipientId ? this._lastPrivateReplyMid : null,
           reply_to_content: `💬 تعليق على المنشور: ${comment.comment_text}`,
           reply_to_sender: 'comment',
-          delivery_status: recipientId ? 'sent' : 'simulated'
+          delivery_status: recipientId ? 'sent' : (comment.simulated || !hasToken ? 'simulated' : 'failed')
         });
         if (!conv.customer_requests) {
           storageService.saveConversation({ id: conv.id, customer_requests: `تعليق: ${comment.comment_text}` });

@@ -415,12 +415,16 @@ router.get('/conversations/:id', (req, res) => {
 
 router.post('/conversations/:id/toggle-bot', async (req, res) => {
   const { is_active, reason } = req.body;
-  const conv = storageService.setBotActive(req.params.id, is_active, reason);
+  let conv = storageService.setBotActive(req.params.id, is_active, reason);
   if (!conv) return res.status(404).json({ success: false, message: 'المحادثة غير موجودة' });
-  if (!is_active) replyEngine.cancel(conv.id);
-
-  await supabaseService.saveConversation(conv);
-  crmService.upsertLead(conv.id).catch(() => {});
+  if (!is_active) {
+    replyEngine.cancel(conv.id);
+    await crmService.handoff(conv.id, reason || conv.handoff_reason || 'إيقاف يدوي وتحويل للموظف');
+    conv = storageService.getConversationById(conv.id) || conv;
+  } else {
+    await supabaseService.saveConversation(conv);
+    crmService.upsertLead(conv.id).catch(() => {});
+  }
   res.json({
     success: true,
     message: is_active ? 'تم تفعيل الرد الآلي للبوت في هذه المحادثة' : 'تم إيقاف البوت وتحويل المحادثة للموظف البشري',

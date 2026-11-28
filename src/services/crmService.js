@@ -212,6 +212,10 @@ class CrmService {
   async handoff(convId, reason) {
     let conv = storageService.getConversationById(convId);
     if (!conv) return null;
+    if (!getTeam().some(member => member.id === String(conv.assigned_to_id || ''))) {
+      this.assignRep(convId);
+      conv = storageService.getConversationById(convId) || conv;
+    }
     const alreadyHandedOff = !!conv.handoff_at && !!conv.human_notified_at;
     const { keepBotUntilHuman } = handoffConfig();
 

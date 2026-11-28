@@ -2,6 +2,7 @@
 const { fake, reset, calls, startApp, http } = require('./helpers');
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 
 const storage = require('../src/services/storageService');
 const meta = require('../src/services/metaService');
@@ -105,7 +106,33 @@ test('webhook signatures are checked with the server-level App Secret', async ()
   assert.equal(r.status, 401);
 });
 
+test('Meta and WhatsApp webhooks reject POSTs when no App Secret is configured', async () => {
+  const metaResponse = await http(app.base, '/webhook/meta', { method: 'POST', json: { object: 'page', entry: [] } });
+  const whatsappResponse = await http(app.base, '/webhook/whatsapp', { method: 'POST', json: { object: 'whatsapp_business_account', entry: [] } });
+  assert.equal(metaResponse.status, 401);
+  assert.equal(whatsappResponse.status, 401);
+});
+
+test('WhatsApp webhook returns a retryable failure if message processing reports failure', async () => {
+  process.env.META_APP_SECRET = 'SECRET1';
+  const whatsapp = require('../src/services/whatsappService');
+  const originalHandler = whatsapp.handleIncomingMessage;
+  const payload = { object: 'whatsapp_business_account', entry: [{ id: 'account-1' }] };
+  const rawBody = JSON.stringify(payload);
+  const signature = `sha256=${crypto.createHmac('sha256', process.env.META_APP_SECRET).update(rawBody).digest('hex')}`;
+  whatsapp.handleIncomingMessage = async () => ({ success: false, error: 'disk full' });
+  try {
+    const response = await http(app.base, '/webhook/whatsapp', {
+      method: 'POST', json: payload, headers: { 'X-Hub-Signature-256': signature }
+    });
+    assert.equal(response.status, 500);
+  } finally {
+    whatsapp.handleIncomingMessage = originalHandler;
+  }
+});
+
 test('Instagram DM under page object or standby is routed to instagram_dm channel', async () => {
+  process.env.META_APP_SECRET = 'SECRET1';
   storage.updateSettings({ meta: { page_id: '555', instagram_account_id: '777', page_access_token: 'PAGE_TOKEN' } }, { skipDbSync: true });
   fake('get', /\/777/, () => ({ id: '777', username: 'atlead.ai' }));
   fake('get', /\/user_ig_123/, () => ({ username: 'client_ig' }));
@@ -122,7 +149,9 @@ test('Instagram DM under page object or standby is routed to instagram_dm channe
       }]
     }]
   };
-  const r = await http(app.base, '/webhook/meta', { method: 'POST', json: payload });
+  const rawBody = JSON.stringify(payload);
+  const signature = `sha256=${crypto.createHmac('sha256', process.env.META_APP_SECRET).update(rawBody).digest('hex')}`;
+  const r = await http(app.base, '/webhook/meta', { method: 'POST', json: payload, headers: { 'X-Hub-Signature-256': signature } });
   assert.equal(r.status, 200);
 
   const conv = storage.getConversationByChannelUser('instagram_dm', 'user_ig_123');

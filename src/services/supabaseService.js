@@ -41,6 +41,11 @@ class SupabaseService {
     return require('crypto').createHash('sha1').update(JSON.stringify(record)).digest('hex');
   }
 
+  _clearProjectCaches() {
+    this._convUuidCache.clear();
+    for (const cache of Object.values(this._lastHash)) cache.clear();
+  }
+
   getClient() {
     const settings = storageService.getSettings();
     const config = settings.supabase || {};
@@ -53,6 +58,7 @@ class SupabaseService {
 
     const cacheKey = `${url}|${key}`;
     if (this._client && this._clientKey === cacheKey) return this._client;
+    if (this._clientKey !== cacheKey) this._clearProjectCaches();
 
     try {
       this._client = createClient(url, key, { auth: { persistSession: false } });
@@ -125,13 +131,11 @@ class SupabaseService {
     try {
       const { data, error } = await client.from('app_settings').select('value').eq('key', 'settings').maybeSingle();
       if (error) {
-        console.warn('Supabase loadSettings warning:', error.message);
-        return null;
+        throw new Error(error.message || 'Supabase settings query failed');
       }
       return data?.value || null;
     } catch (err) {
-      console.error('Supabase loadSettings error:', err.message);
-      return null;
+      throw new Error(`Supabase loadSettings failed: ${err.message}`, { cause: err });
     }
   }
 

@@ -138,18 +138,22 @@ class FollowUpService {
       delivery_status: res.ok ? 'sent' : (res.simulated ? 'simulated' : 'failed'),
       is_follow_up: true
     });
+    const delivered = !!res.ok;
+    const nextCount = (fresh.follow_up_count || 0) + (delivered ? 1 : 0);
     const updated = storageService.saveConversation({
       id: conv.id,
-      follow_up_count: (fresh.follow_up_count || 0) + 1,
-      last_follow_up_at: new Date().toISOString(),
-      next_follow_up_at: this.nextFollowUpAt({ ...fresh, follow_up_count: (fresh.follow_up_count || 0) + 1 }),
-      notes: [fresh.notes, `لم يرد العميل بعد آخر رسالة؛ تم إرسال متابعة رقم ${(fresh.follow_up_count || 0) + 1}`].filter(Boolean).join(' | ')
+      follow_up_count: nextCount,
+      ...(delivered ? { last_follow_up_at: new Date().toISOString() } : {}),
+      next_follow_up_at: this.nextFollowUpAt({ ...fresh, follow_up_count: nextCount }),
+      notes: [fresh.notes, delivered
+        ? `لم يرد العميل بعد آخر رسالة؛ تم إرسال متابعة رقم ${nextCount}`
+        : 'تعذّر تأكيد تسليم رسالة المتابعة؛ يلزم التحقق قبل إعادة الإرسال'].filter(Boolean).join(' | ')
     });
     supabaseService.saveMessage(msg, conv.id).catch(() => {});
     supabaseService.saveConversation(updated).catch(() => {});
     require('./crmService').upsertLead(updated).catch(() => {});
     console.log(`[FollowUp] Sent to ${conv.customer_name} (${conv.channel}, ${conv.interest_score}%) — ${res.ok ? 'delivered' : res.simulated ? 'simulated' : 'FAILED'}`);
-    return { sent: 1, conversation_id: conv.id, text, delivered: !!res.ok };
+    return { sent: delivered ? 1 : 0, conversation_id: conv.id, text, delivered };
   }
 }
 

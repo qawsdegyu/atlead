@@ -10,6 +10,41 @@ test.before(async () => { app = await startApp(); });
 test.after(async () => { await app.close(); });
 test.afterEach(() => { delete process.env.ADMIN_PASSWORD; });
 
+test('hosted dashboard routes fail closed when ADMIN_PASSWORD is missing', async () => {
+  const previousEnv = process.env.NODE_ENV;
+  const previousRailwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+  const previousRailwayName = process.env.RAILWAY_ENVIRONMENT_NAME;
+  const previousVercelEnv = process.env.VERCEL_ENV;
+  delete process.env.ADMIN_PASSWORD;
+  delete process.env.RAILWAY_PUBLIC_DOMAIN;
+  delete process.env.RAILWAY_ENVIRONMENT_NAME;
+  delete process.env.VERCEL_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    const dashboard = await http(app.base, '/');
+    const login = await http(app.base, '/login');
+    assert.equal(dashboard.status, 503);
+    assert.equal(dashboard.body.message, 'Dashboard authentication is not configured');
+    assert.equal(login.status, 503);
+  } finally {
+    if (previousEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousEnv;
+    if (previousRailwayDomain === undefined) delete process.env.RAILWAY_PUBLIC_DOMAIN; else process.env.RAILWAY_PUBLIC_DOMAIN = previousRailwayDomain;
+    if (previousRailwayName === undefined) delete process.env.RAILWAY_ENVIRONMENT_NAME; else process.env.RAILWAY_ENVIRONMENT_NAME = previousRailwayName;
+    if (previousVercelEnv === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = previousVercelEnv;
+  }
+});
+
+test('consult rate limits cannot be bypassed by spoofing X-Forwarded-For', async () => {
+  const results = [];
+  for (let i = 0; i < 9; i++) {
+    results.push(await http(app.base, '/api/consult', {
+      method: 'POST', json: {}, headers: { 'X-Forwarded-For': `198.51.100.${i + 1}` }
+    }));
+  }
+  assert.equal(results.slice(0, 8).every(result => result.status === 400), true);
+  assert.equal(results[8].status, 429);
+});
+
 test('the Telegram link survives the login page, but cannot redirect to another site', async () => {
   process.env.ADMIN_PASSWORD = 'pw';
   const r = await http(app.base, '/?tab=marketing&plan=p1&topic=2', { headers: { Accept: 'text/html' } });
@@ -54,6 +89,35 @@ test('post images are public (Instagram must download them) but nothing else is'
   for (const p of ['/media/settings.json', '/media/..%2Fsettings.json', '/media/mk_x.js']) {
     assert.equal((await http(app.base, p)).status, 404, p);
   }
+});
+
+test('manual bot shutdown performs the CRM handoff and assigns an active rep', async () => {
+  process.env.ADMIN_PASSWORD = 'pw';
+  storage.updateSettings({
+    handoff: { keep_bot_until_human: true },
+    telegram: { bot_token: '', chat_ids: [], notify_handoffs: false },
+    notifications: { enabled: false, recipients: [] },
+    sales_team: { members: [{ id: 'rep-1', name: 'م. ليلى', email: 'leila@example.com', active: true }] }
+  }, { skipDbSync: true });
+  const conv = storage.saveConversation({
+    id: 'manual-handoff-test', channel: 'whatsapp', external_user_id: '+962790000401',
+    customer_name: 'عميل اختبار', is_bot_active: true, messages: []
+  });
+  const response = await http(app.base, `/api/conversations/${conv.id}/toggle-bot`, {
+    method: 'POST',
+    json: { is_active: false, reason: 'طلب الموظف متابعة العميل' },
+    headers: { Authorization: `Basic ${Buffer.from('admin:pw').toString('base64')}` }
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.success, true);
+  const updated = storage.getConversationById(conv.id);
+  assert.equal(updated.is_bot_active, false);
+  assert.equal(updated.assigned_to_id, 'rep-1');
+  assert.equal(updated.handoff_reason, 'طلب الموظف متابعة العميل');
+  const lead = storage.getLeads().find(item => item.conversation_id === conv.id);
+  assert.equal(lead.purchase_status, 'pending_human');
+  assert.equal(lead.bot_state, 'handed_off');
 });
 
 test('wizard over HTTP: new post → choose → back keeps earlier choices', async () => {

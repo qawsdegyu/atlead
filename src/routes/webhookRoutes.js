@@ -5,9 +5,9 @@ const storageService = require('../services/storageService');
 const metaService = require('../services/metaService');
 const whatsappService = require('../services/whatsappService');
 
-// Verifies X-Hub-Signature-256 when an App Secret is configured.
+// Webhook POSTs are trusted only when the App Secret is configured and the raw body matches its signature.
 function isValidSignature(req, appSecret) {
-  if (!appSecret) return true;
+  if (!appSecret) return false;
   const signature = req.get('x-hub-signature-256');
   if (!signature || !req.rawBody) return false;
   const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(req.rawBody).digest('hex');
@@ -47,7 +47,6 @@ router.post('/meta', async (req, res) => {
     metaService.logWebhookEvent({ object: req.body?.object || '?', kind: 'rejected', detail: 'توقيع غير صحيح (App Secret غير مطابق)' });
     return res.sendStatus(401);
   }
-  res.status(200).send('EVENT_RECEIVED');
 
   try {
     const body = req.body;
@@ -64,7 +63,7 @@ router.post('/meta', async (req, res) => {
       }
     }
     console.log(`[Meta Webhook] ${body.object}: ${(body.entry || []).map(e => `${(e.messaging || []).length} msg / ${(e.changes || []).map(c => c.field).join(',') || '0 changes'}`).join(' | ')}`);
-    if (body.object !== 'page' && body.object !== 'instagram') return;
+    if (body.object !== 'page' && body.object !== 'instagram') return res.status(200).send('EVENT_RECEIVED');
     const cfg = metaService.config();
     const igAccountId = cfg.instagram_account_id;
 
@@ -82,15 +81,17 @@ router.post('/meta', async (req, res) => {
 
         if (event.message?.is_echo) {
           // Sent by the Page: either the bot, or a staff member replying from the Meta inbox / IG app.
-          metaService.handleEcho(channel, event.recipient?.id, event.message).catch(err => console.error('[Meta] echo error:', err.message));
+          await metaService.handleEcho(channel, event.recipient?.id, event.message);
         } else if (event.message && senderId && !event.message.is_deleted && !event.message.is_unsupported) {
-          await metaService.handleIncomingMessage(channel, senderId, event.message);
+          const result = await metaService.handleIncomingMessage(channel, senderId, event.message);
+          if (result?.success === false) throw new Error(result.error || result.message || 'Meta message processing failed');
         } else if (event.postback && senderId) {
           // Button / Ice-breaker / "Get Started" clicks → treat the button title as the customer's message
-          await metaService.handleIncomingMessage(channel, senderId, {
+          const result = await metaService.handleIncomingMessage(channel, senderId, {
             mid: event.postback.mid || `pb_${event.timestamp || Date.now()}_${senderId}`,
             text: event.postback.title || event.postback.payload || 'مرحبا'
           });
+          if (result?.success === false) throw new Error(result.error || result.message || 'Meta postback processing failed');
         }
       }
 
@@ -101,27 +102,31 @@ router.post('/meta', async (req, res) => {
 
         // Facebook page feed comments
         if (!isIgChange && change.field === 'feed' && val.item === 'comment' && val.verb === 'add') {
-          await metaService.handleIncomingComment('facebook', {
+          const result = await metaService.handleIncomingComment('facebook', {
             comment_id: val.comment_id,
             post_id: val.post_id,
             from: val.from,
             message: val.message
           });
+          if (result?.success === false) throw new Error(result.error || result.message || 'Facebook comment processing failed');
         }
 
         // Instagram comments: { id, text, from: {id, username}, media: {id} }
         if (isIgChange && (change.field === 'comments' || change.field === 'live_comments')) {
-          await metaService.handleIncomingComment('instagram', {
+          const result = await metaService.handleIncomingComment('instagram', {
             comment_id: val.id,
             post_id: val.media?.id,
             from: { id: val.from?.id, name: val.from?.username, username: val.from?.username },
             message: val.text
           });
+          if (result?.success === false) throw new Error(result.error || result.message || 'Instagram comment processing failed');
         }
       }
     }
+    return res.status(200).send('EVENT_RECEIVED');
   } catch (err) {
     console.error('[Meta Webhook] Processing error:', err.message);
+    return res.sendStatus(500);
   }
 });
 
@@ -135,17 +140,19 @@ router.post('/whatsapp', async (req, res) => {
   if (!isValidSignature(req, appSecret)) {
     return res.sendStatus(401);
   }
-  res.status(200).send('EVENT_RECEIVED');
 
   try {
     const body = req.body;
     if (body.object === 'whatsapp_business_account') {
       for (const entry of body.entry || []) {
-        await whatsappService.handleIncomingMessage(entry);
+        const result = await whatsappService.handleIncomingMessage(entry);
+        if (result?.success === false) throw new Error(result.error || result.message || 'WhatsApp message processing failed');
       }
     }
+    return res.status(200).send('EVENT_RECEIVED');
   } catch (err) {
     console.error('[WhatsApp Webhook] Processing error:', err.message);
+    return res.sendStatus(500);
   }
 });
 

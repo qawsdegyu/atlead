@@ -51,6 +51,51 @@ test('sent once a day, only at/after the chosen time', async () => {
   assert.equal(await mk.maybeSendMorningBrief(), null, 'not twice the same day');
 });
 
+test('a failed morning brief is retried with the same plan and is marked complete only after success', async () => {
+  const now = businessHours.localParts().minutes;
+  storage.updateSettings({ marketing: { morning_time: hhmm(now - 1) } }, { skipDbSync: true });
+  const originalSend = telegram.sendMessage;
+  telegram.sendMessage = async () => ({ success: false, error: 'temporary network failure' });
+  let first;
+  try {
+    first = await mk.maybeSendMorningBrief();
+  } finally {
+    telegram.sendMessage = originalSend;
+  }
+  assert.equal(first.sent.success, false);
+
+  const second = await mk.maybeSendMorningBrief();
+  assert.equal(second.sent.success, true);
+  assert.equal(second.plan.id, first.plan.id, 'reuses the saved same-day morning plan');
+  assert.equal(await mk.maybeSendMorningBrief(), null, 'confirmed delivery is not repeated again that day');
+});
+
+test('overlapping scheduler ticks share one in-flight morning brief send', async () => {
+  const now = businessHours.localParts().minutes;
+  storage.updateSettings({ marketing: { morning_time: hhmm(now - 1) } }, { skipDbSync: true });
+  const originalSend = telegram.sendMessage;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  let sends = 0;
+  telegram.sendMessage = async () => {
+    sends += 1;
+    await gate;
+    return { success: true };
+  };
+  try {
+    const first = mk.maybeSendMorningBrief();
+    await new Promise(resolve => setImmediate(resolve));
+    const second = mk.maybeSendMorningBrief();
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    assert.equal(sends, 1);
+    assert.equal(a.plan.id, b.plan.id);
+  } finally {
+    release();
+    telegram.sendMessage = originalSend;
+  }
+});
+
 test('not sent hours late (e.g. server restarted in the evening)', async () => {
   const now = businessHours.localParts().minutes;
   if (now < 7 * 60) return; // can't build a "7 hours ago" time just after midnight

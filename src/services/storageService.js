@@ -23,45 +23,53 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// In-memory cache: files are read from disk once, then served from memory.
-// Every write goes to memory AND disk immediately, so nothing is lost.
+// In-memory cache: files are read once, then returned as isolated snapshots.
+// Writes reach disk before the cache is replaced, so failures cannot masquerade as saves.
 const cache = new Map();
 
+function cloneJson(value) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
 function readJsonFile(filePath, defaultValue = []) {
-  if (cache.has(filePath)) return cache.get(filePath);
+  if (cache.has(filePath)) return cloneJson(cache.get(filePath));
   try {
     if (!fs.existsSync(filePath)) {
       writeJsonFile(filePath, defaultValue);
-      return defaultValue;
+      return cloneJson(defaultValue);
     }
     const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
     cache.set(filePath, data);
-    return data;
+    return cloneJson(data);
   } catch (err) {
+    if (err.code === 'PERSIST_FAILED') throw err;
     // Never silently replace a corrupted file with an empty one — keep a copy for recovery.
     console.error(`Error reading ${filePath}:`, err.message);
     try { fs.copyFileSync(filePath, `${filePath}.corrupted-${Date.now()}`); } catch { /* ignore */ }
     cache.set(filePath, defaultValue);
-    return defaultValue;
+    return cloneJson(defaultValue);
   }
 }
 
 function writeJsonFile(filePath, data) {
-  cache.set(filePath, data);
   const json = JSON.stringify(data, null, 2);
   try {
     // Atomic write: a crash mid-write can never leave a half-written (corrupted) file.
     const tmp = `${filePath}.tmp`;
     fs.writeFileSync(tmp, json, 'utf-8');
     fs.renameSync(tmp, filePath);
+    cache.set(filePath, cloneJson(data));
     return true;
   } catch (err) {
     try {
       fs.writeFileSync(filePath, json, 'utf-8');
+      cache.set(filePath, cloneJson(data));
       return true;
     } catch (err2) {
       console.error(`Error writing ${filePath}:`, err2.message);
-      return false;
+      const persistError = new Error(`Could not persist ${path.basename(filePath)}: ${err2.message}`, { cause: err2 });
+      persistError.code = 'PERSIST_FAILED';
+      throw persistError;
     }
   }
 }
@@ -380,4 +388,3 @@ class StorageService {
 }
 
 module.exports = new StorageService();
-

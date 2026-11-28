@@ -546,6 +546,48 @@ Your previous answer was in Arabic. The customer writes in English — return th
     const callOn = !!(conversation.id && callService.isActive());
     const callDone = conversation.ai_call_status === 'completed';
 
+    // 0. If the bot asked for a preferred day/time and the customer provided a time:
+    const lastBotMsg = [...(conversation.messages || [])].reverse().find(m => m.sender === 'bot')?.content || '';
+    const askedTime = /(أي يوم|اي يوم|أي وقت|اي وقت|يوم ووقت|الوقت اللي|which day|what time|which time)/i.test(lastBotMsg);
+    const saysTime = /(\d{1,2}(:\d{2})?|بكرا|بكره|بعد بكرا|اليوم|الأحد|الاحد|الاثنين|الإثنين|الثلاثاء|الأربعاء|الاربعاء|الخميس|الجمعة|السبت|الصبح|الظهر|العصر|المسا|بالليل|tomorrow|today)/i.test(t);
+    if (askedTime && saysTime) {
+      return {
+        reply_text: `تمام، سجّلت طلبك للاستشارة: ${text.trim()}. رح يتواصل معك م. مهند من قسم المبيعات لتأكيد الموعد وترتيب الاجتماع. شكراً لاهتمامك!`,
+        lead_stage: 'qualified',
+        classification: 'Hot',
+        buying_probability: 85,
+        handoff_triggered: true,
+        requested_time: text.trim(),
+        consultation_requested: true
+      };
+    }
+
+    // 0.1 Check for customer clarifying they do not have a website:
+    if (/ما (عنا|عندنا|عندي|فيه) موقع/i.test(t)) {
+      return {
+        reply_text: 'ولا يهمك، مش مشكلة أبداً! إحنا بنقدر نربط نظام المبيعات الذكي مباشرة مع واتساب وإنستغرام وفيسبوك بدون الحاجة لأي موقع، وبنقدر كمان نبنيلكم موقع أو منصة مخصصة بالكامل إذا حابين. شو أكتر قناة بيوصلكم عليها زبائن واستفسارات حالياً؟',
+        lead_stage: 'discovery',
+        classification: 'Warm',
+        buying_probability: 50,
+        handoff_triggered: false
+      };
+    }
+
+    // 0.2 Check for greetings (never send handoff message on greetings):
+    if (/^(مرحبا|مرحب|هلا|اهلا|اهلين|السلام|سلام|مسا|صباح|hi|hello|hey|هاي)[\s!.]*$/i.test(t)) {
+      const rep = conversation.assigned_to_name || 'م. مهند من قسم المبيعات';
+      const greetingReply = t.includes('السلام')
+        ? 'وعليكم السلام ورحمة الله وأهلاً بك! تفضل، كيف بقدر أساعدك اليوم؟'
+        : 'أهلاً وسهلاً بك! تفضل، كيف بقدر أساعدك اليوم؟';
+      return {
+        reply_text: conversation.handoff_at ? `${greetingReply} (إذا بتنتظر رد ${rep}، هو رح يتواصل معك قريباً، وأنا جاهز لأي استفسار هسا)` : greetingReply,
+        lead_stage: conversation.lead_stage || 'discovery',
+        classification: 'Warm',
+        buying_probability: Number(conversation.interest_score) || 40,
+        handoff_triggered: false
+      };
+    }
+
     // Check meeting / booking / deal triggers
     const wantsMeeting = /(احجز|أحجز|نحجز|حجز|موعد|استشار|اجتماع|مكالم|ديمو|demo|بدي ابدا|خلينا نبدا)/i.test(t);
     const agreementTriggers = [
@@ -605,10 +647,11 @@ Your previous answer was in Arabic. The customer writes in English — return th
       handoff_triggered: false
     };
 
-    // If the customer already had a handoff and sends an acknowledgment or short reply:
+    // If the customer already had a handoff and sends an acknowledgment:
     if (conversation.handoff_at) {
       const rep = conversation.assigned_to_name || 'م. مهند من قسم المبيعات';
-      if (/^(اه|اي|اوك|تمام|اوكي|شكرا|يسلمو|يعطيك العافية|الله يعافيك|ماشي|حبيبي|تسلم|ok|yes|thanks|thank you)/i.test(t) || t.length <= 15) {
+      const ackWords = /^(اه|اي|اوك|تمام|اوكي|شكرا|يسلمو|يعطيك العافية|الله يعافيك|ماشي|حبيبي|تسلم|ok|yes|thanks|thank you)/i;
+      if (ackWords.test(t) && !/^(السلام|سلام|مرحبا|هلا|صباح|مساء|ما عنا|ما عندنا|ما عندي|بدي|كم|وين|كيف)/i.test(t)) {
         return {
           ...base,
           reply_text: `أهلاً بك دائماً! مثل ما أكدنا معك، ${rep} رح يتواصل معك بأقرب وقت لمتابعة كافة التفاصيل. إذا خطر ببالك أي استفسار ثاني أنا بالخدمة 🙏`,

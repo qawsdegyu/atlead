@@ -299,8 +299,9 @@ class ReplyEngine {
       }
       if (!replyText || !String(replyText).trim()) {
         console.warn(`[ReplyEngine] Empty replyText for ${conv.id} — using polite confirmation fallback.`);
+        const repName = conv.assigned_to_name || storageService.getSettings().handoff?.representative_name || 'م. مهند من قسم المبيعات';
         replyText = conv.handoff_at
-          ? 'أهلاً بك دائماً! مثل ما أكدنا معك، موظف المبيعات رح يتواصل معك بأسرع وقت لمتابعة كافة التفاصيل، وأنا بالخدمة لأي استفسار إضافي 🙏'
+          ? `أهلاً بك دائماً! مثل ما أكدنا معك، ${repName} رح يتواصل معك بأسرع وقت لمتابعة كافة التفاصيل، وأنا بالخدمة لأي استفسار إضافي 🙏`
           : 'أهلاً وسهلاً بك! كيف بقدر أساعدك اليوم؟';
       }
       if (handoff && !crmService.keepBotUntilHuman()) {

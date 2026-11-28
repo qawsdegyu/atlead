@@ -261,6 +261,12 @@ ${conversation.ai_call_status === 'offered' ? '- العميل وصله رابط 
 - الاسم: ${this.realName(conversation.customer_name) || 'غير معروف (لا تناديه باسم)'}
 - رقم الهاتف: ${conversation.customer_phone || 'غير مسجل'}
 - نوع النشاط: ${conversation.business_type || 'غير معروف'}
+${conversation.business_type ? `- تنبيه صارم وحاسم: نوع نشاط العميل معروف ومؤكد (${conversation.business_type})! ممنوع منعاً باتاً أن تسأله مجدداً "شو نوع شغلك؟" أو "شو طبيعة عملك؟" أو تسأله عن مجاله! بل رحب به وأكد معرفتك بنشاطه وخاطبه بمصطلحات مجاله مباشرة، واسأله عن التحدي في متابعة رسائله وزبائنه.` : ''}
+${/profile|بروفايل|أعمالكم|سابقة أعمال|سابقه اعمال|ملف الشركة/i.test(incomingMessage) ? `
+- تنبيه هام وعاجل: العميل طلب صراحة بروفايل الشركة (profile) وسوابق أعمال atlead!
+أجبه مباشرة وقدم له رابط ملف البروفايل والأعمال:
+https://atlead-production.up.railway.app/uploads/portfolio.pdf
+مع ذكر مشاريع مطابقة لمجاله من المرجع (مثل متجر Agsco https://agsco.shop للمتاجر والتجارة). لا تتجاهل طلب البروفايل أبداً!` : ''}
 - طلبات العميل السابقة: ${conversation.customer_requests || 'لا يوجد'}
 - المشكلة: ${conversation.identified_problem || 'غير محددة'}
 - الحل المقترح: ${conversation.proposed_solution || 'غير محدد'}

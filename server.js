@@ -31,6 +31,17 @@ const legalPage = (title, body) => `<!DOCTYPE html><html lang="en"><head><meta c
 <style>body{font-family:system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.7;color:#222}h1{font-size:1.6rem}h2{font-size:1.15rem;margin-top:1.6em}</style>
 </head><body><h1>${title}</h1><p><em>Last updated: ${new Date().toISOString().slice(0, 10)}</em></p>${body}</body></html>`;
 
+// Public Company Profile / Portfolio PDF
+app.get(['/portfolio.pdf', '/uploads/portfolio.pdf'], (req, res) => {
+  const pdfPath = path.join(__dirname, 'Atlead Company Portfolio (ENG).pdf');
+  if (fs.existsSync(pdfPath)) {
+    res.set('Content-Type', 'application/pdf');
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.sendFile(pdfPath);
+  }
+  res.status(404).send('Portfolio not found');
+});
+
 app.get('/privacy', (req, res) => res.send(legalPage('Privacy Policy', `
 <p>atlead ("we") operates an automated sales assistant that replies to messages and comments sent to our Facebook Page, Instagram account and WhatsApp number.</p>
 <h2>Data we collect</h2>

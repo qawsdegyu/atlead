@@ -27,12 +27,17 @@ const aiService = require('./aiService');
 const DEFAULT_DELAY_SECONDS = 3;
 const BOOT_TIME = Date.now();
 
-// Phone numbers (Jordan local 07xxxxxxxx or international +962 / 00962 / any +country) and emails.
-function extractContact(text) {
+// Phone numbers (Jordan local 07xxxxxxxx or international +962 / 00962 / any +country), emails, business type, and requests.
+function extractContact(text, conv = {}) {
   const out = {};
-  const t = String(text || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+  const raw = String(text || '');
+  const t = raw.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+  
+  // 1. Email extraction
   const email = t.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
   if (email) out.email = email[0].toLowerCase();
+  
+  // 2. Phone extraction
   const candidates = t.match(/(?:\+|00)?\d[\d\s-]{7,16}\d/g) || [];
   for (const c of candidates) {
     let d = c.replace(/[\s-]/g, '');
@@ -42,6 +47,44 @@ function extractContact(text) {
     if (d.startsWith('+') && digitsOnly.length >= 10 && digitsOnly.length <= 15) { out.phone = '+' + digitsOnly; break; }
     if (/^9627[789]\d{7}$/.test(digitsOnly)) { out.phone = '+' + digitsOnly; break; }
   }
+
+  // 3. Business Type extraction (e.g. "نحن تجارة اقمشه", "شغلنا ملابس", "مصنع أبواب")
+  const bizPatterns = [
+    /نحن\s+(?:شركة|محل|معرض|مصنع|تجارة|متجر|مؤسسة)?\s*(تجارة\s+[^.،!?\n]+|أقمشة|اقمشه|ملابس|أثاث|أبواب|مطعم|مطاعم|حلويات|سياحة|عقارات|مقاولات|سيارات|مفروشات|أدوات\s+منزلية|أجهزة|إلكترونيات|استيراد\s+وتصدير|عيادة|صيدلية|تسويق|برمجة|خدمات)/i,
+    /(?:شغلنا|شغلي|نشاطنا|مجالنا|طبيعة\s+(?:شغلي|شغلنا|عملنا)|بشتغل|بنشتغل|عندي|عندنا)\s+(?:في|بـ|ب)?\s*(تجارة\s+[^.،!?\n]+|أقمشة|اقمشه|ملابس|أثاث|أبواب|مطعم|مطاعم|حلويات|سياحة|عقارات|مقاولات|سيارات|مفروشات|أدوات\s+منزلية|أجهزة|إلكترونيات|استيراد\s+وتصدير|عيادة|صيدلية|تسويق|برمجة|خدمات)/i,
+    /\b(تجارة\s+(?:أقمشة|اقمشه|ملابس|أثاث|أغذية|سيارات|إلكترونيات|أجهزة|جملة|تجزئة|أحذية|عطور|مكياج|إكسسوارات|مواد\s+بناء))/i,
+    /\b(مصنع\s+[^.،!?\n]+|معرض\s+[^.،!?\n]+)/i
+  ];
+  for (const pat of bizPatterns) {
+    const m = raw.match(pat);
+    if (m) {
+      let val = (m[1] || m[0]).trim();
+      val = val.replace(/^(في|بـ|ب)\s+/, '').replace(/\s+(لكن|بس|و|مع|عشان|لأنه).*$/, '').trim();
+      if (val.length >= 3 && val.length <= 60 && !conv.business_type) {
+        out.business_type = val;
+        break;
+      }
+    }
+  }
+
+  // 4. Requests extraction (e.g. profile, portfolio, pricing, meeting)
+  const reqs = [];
+  if (/profile|بروفايل|سابقة\s*أعمال|أعمالكم|سابقة\s*اعمال|اعمالكم|بورتفوليو|portfolio|كتالوج|كاتالوج|ملف\s*الشركة/i.test(raw)) {
+    reqs.push('طلب بروفايل الشركة وسوابق الأعمال (Profile)');
+  }
+  if (/سعر|أسعار|اسعار|تكلفة|تكلفه|بكم|prices?|cost/i.test(raw)) {
+    reqs.push('استفسار عن الأسعار');
+  }
+  if (/موعد|استشارة|استشاره|اجتماع|مكالمة|meeting|consultation/i.test(raw)) {
+    reqs.push('طلب موعد / استشارة');
+  }
+  if (/ديمو|demo|تجربة|تجربه/i.test(raw)) {
+    reqs.push('طلب تجربة ديمو');
+  }
+  if (reqs.length) {
+    out.customer_requests = reqs.join('، ');
+  }
+
   return out;
 }
 
@@ -135,19 +178,25 @@ class ReplyEngine {
     });
     supabaseService.saveMessage(customerMsg, conv.id).catch(() => {});
 
-    // Capture phone / email the customer types (e.g. on Instagram/Facebook) — no AI needed.
-    const contact = extractContact(text);
+    // Capture phone / email / business type / requests the customer types — immediate extraction.
+    const contact = extractContact(text, conv);
     const fresh = storageService.getConversationById(conv.id);
     const contactPatch = {};
     if (contact.phone && !fresh.customer_phone) contactPatch.customer_phone = contact.phone;
     if (contact.email && !fresh.customer_email) contactPatch.customer_email = contact.email;
-    if (Object.keys(contactPatch).length) storageService.saveConversation({ id: conv.id, ...contactPatch });
-
-    // New customer → record them right away (0%), so they reach the CRM / Sheet / Form
-    // at first contact, not only after the bot's first reply.
-    if (!storageService.getLeads().some(l => l.conversation_id === conv.id)) {
-      crmService.upsertLead(storageService.getConversationById(conv.id)).catch(err => console.error('[CRM] first-contact lead:', err.message));
+    if (contact.business_type && !fresh.business_type) contactPatch.business_type = contact.business_type;
+    if (contact.customer_requests) {
+      contactPatch.customer_requests = fresh.customer_requests
+        ? `${fresh.customer_requests} | ${contact.customer_requests}`
+        : contact.customer_requests;
     }
+    if (Object.keys(contactPatch).length) {
+      conv = storageService.saveConversation({ id: conv.id, ...contactPatch });
+    }
+
+    // Real-time sync to Supabase and CRM on EVERY incoming message (أول بأول):
+    supabaseService.saveConversation(conv).catch(err => console.warn('[Supabase] conv sync on message:', err.message));
+    crmService.upsertLead(conv).catch(err => console.warn('[CRM] lead sync on message:', err.message));
 
     conv = this._resumeIfPauseExpired(storageService.getConversationById(conv.id));
     // Handed off but no rep has replied yet: the bot keeps answering, and the rep is told

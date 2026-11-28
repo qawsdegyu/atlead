@@ -10,6 +10,7 @@ const crm = require('../src/services/crmService');
 const callService = require('../src/services/callService');
 const cal = require('../src/services/calendarService');
 const sheets = require('../src/services/googleSheetsService');
+const supabase = require('../src/services/supabaseService');
 
 let app;
 let answers;
@@ -63,6 +64,7 @@ test('the call page and its API are public (private link), the dashboard stays p
   const pageRes = await http(app.base, `/call/${s.token}`, { headers: { Accept: 'text/html' } });
   assert.equal(pageRes.status, 200);
   assert.match(String(pageRes.body), /oai-events/);
+  assert.match(String(pageRes.body), /ثقة التفريغ ليست حكماً مؤكداً على النطق/);
   const info = await http(app.base, `/api/call/${s.token}`);
   assert.deepEqual([info.body.ok, info.body.name], [true, 'هبة']);
   assert.equal((await http(app.base, '/api/leads')).status, 401);
@@ -102,7 +104,7 @@ test('when the call ends, every detail is analysed and saved on the customer, th
   await http(app.base, `/api/call/${s.token}/start`, { method: 'POST' });
   await http(app.base, `/api/call/${s.token}/transcript`, { method: 'POST', json: { lines: [
     { id: 'a1', role: 'assistant', text: 'أهلاً سامي، شو نوع شغلك؟' },
-    { id: 'c1', role: 'customer', text: 'عندي عيادة أسنان بعمّان، فريقنا 6 أشخاص وبتجينا حوالي 400 رسالة بالشهر على واتساب وإنستغرام.' },
+    { id: 'c1', role: 'customer', text: 'عندي عيادة أسنان بعمّان، فريقنا 6 أشخاص وبتجينا حوالي 400 رسالة بالشهر على واتساب وإنستغرام.', speech_review: { speech_duration_ms: 6000, asr_confidence: 0.99, confidence_samples: 1 } },
     { id: 'c1', role: 'customer', text: 'duplicate is ignored' }
   ] } });
   await http(app.base, `/api/call/${s.token}/tool`, { method: 'POST', json: { name: 'get_free_times', args: {} } });
@@ -119,12 +121,18 @@ test('when the call ends, every detail is analysed and saved on the customer, th
   const done = callService.get(s.token);
   assert.equal(done.status, 'completed');
   assert.equal(done.transcript.length, 2, 'duplicates dropped');
+  assert.equal(done.speech_review.measured_utterances, 1);
+  assert.ok(done.speech_review.estimated_wpm > 0, 'pace is computed from the measured customer speech duration');
+  assert.equal(done.speech_review.transcription_confidence_percent, null, 'Realtime does not provide browser ASR confidence');
+  assert.equal(done.speech_review.pronunciation_assessment_available, false);
   const c = storage.getConversationById(conv.id);
   assert.equal(c.ai_call_status, 'completed');
   assert.equal(c.ai_call_qualified, true);
   assert.equal(c.team_size, '6');
   assert.equal(c.budget, 'جاهز يستثمر');
   assert.equal(c.customer_email, 'sami@clinic.jo');
+  assert.equal(c.ai_call_token, s.token);
+  assert.deepEqual(c.ai_call_speech_review, done.speech_review, 'speech review is linked to the customer record');
   assert.equal(c.classification, 'Hot');
   assert.ok(c.handoff_at, 'qualified + meeting booked → handed to the sales team');
   // Google Sheets row carries every detail and the transcript.
@@ -137,6 +145,79 @@ test('when the call ends, every detail is analysed and saved on the customer, th
   // Ending twice changes nothing.
   await callService.finish(s.token);
   assert.equal(storage.getConversationById(conv.id).messages.length, c.messages.length);
+});
+
+test('browser speech review measures customer speech only and labels ASR confidence separately from pronunciation', () => {
+  const s = callService.createSession(newConv('ليلى'));
+  s.mode = 'browser'; s.status = 'in_progress'; callService.save(s);
+  callService.addTranscript(s.token, [
+    { id: 'spoken', role: 'customer', text: 'مرحبا كيف حالك', speech_review: { speech_duration_ms: 3000, asr_confidence: 0.81, confidence_samples: 2 } },
+    { id: 'typed', role: 'customer', text: 'هذا رد كتبته دون صوت' },
+    { id: 'assistant', role: 'assistant', text: 'أهلاً وسهلاً', speech_review: { speech_duration_ms: 1000, asr_confidence: 1 } }
+  ]);
+  const saved = callService.get(s.token);
+  const review = callService.buildSpeechReview(saved);
+  assert.equal(saved.transcript[0].speech_review.estimated_wpm, 60);
+  assert.equal(review.estimated_wpm, 60);
+  assert.equal(review.measured_utterances, 1, 'typed turns and assistant turns are excluded');
+  assert.equal(review.transcription_confidence_percent, 81);
+  assert.equal(review.confidence_samples, 2);
+  assert.equal(review.pronunciation_assessment_available, false);
+  assert.doesNotMatch(JSON.stringify(saved), /audio\/|base64|audio_blob/i, 'no raw audio is persisted');
+});
+
+test('speech pace and confidence are unavailable rather than inferred when measurements are absent or unsupported', () => {
+  const realtime = callService.createSession(newConv('عمر'));
+  realtime.mode = 'realtime'; realtime.status = 'in_progress'; callService.save(realtime);
+  callService.addTranscript(realtime.token, [{ id: 'vad', role: 'customer', text: 'we help teams grow', speech_review: { speech_duration_ms: 2000, asr_confidence: 0.99, confidence_samples: 1 } }]);
+  const measured = callService.get(realtime.token).transcript[0].speech_review;
+  assert.equal(measured.estimated_wpm, 120);
+  assert.equal(measured.asr_confidence, null, 'unavailable realtime confidence is ignored');
+  const unavailable = callService.buildSpeechReview({ mode: 'realtime', transcript: [{ role: 'customer', text: 'typed or unmeasured answer' }] });
+  assert.equal(unavailable.estimated_wpm, null);
+  assert.equal(unavailable.transcription_confidence_percent, null);
+  callService.addTranscript(realtime.token, [{ id: 'invalid', role: 'customer', text: 'short', speech_review: { speech_duration_ms: 100, asr_confidence: 0.99 } }]);
+  assert.equal(callService.get(realtime.token).transcript.find(line => line.id === 'invalid').speech_review, undefined, 'implausible durations are rejected');
+  const browser = callService.createSession(newConv('ريم'));
+  browser.mode = 'browser'; browser.status = 'in_progress'; callService.save(browser);
+  callService.addTranscript(browser.token, [{ id: 'no-confidence', role: 'customer', text: 'hello there', speech_review: { speech_duration_ms: 2000, asr_confidence: null, confidence_samples: 0 } }]);
+  assert.equal(callService.get(browser.token).transcript[0].speech_review.asr_confidence, null, 'unsupported browser confidence remains unavailable, not zero');
+});
+
+test('public call turn rejects oversized JSON before conversation processing', async () => {
+  const s = callService.createSession(newConv('ريم'));
+  await callService.startBrowser(s, storage.getConversationById(s.conversation_id), 'ar');
+  const r = await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: 'x'.repeat(20000) } });
+  assert.equal(r.status, 413);
+  assert.equal(r.body.error, 'payload_too_large');
+});
+
+test('speech review round-trips with the existing Supabase conversation metadata', async () => {
+  const conv = newConv('نورا');
+  conv.ai_call_status = 'completed';
+  conv.ai_call_token = 'call-review-token-1234567890';
+  conv.ai_call_speech_review = { version: 1, mode: 'browser', estimated_wpm: 135, measured_utterances: 2, customer_utterances: 3, transcription_confidence_percent: 84, confidence_samples: 4, pronunciation_assessment_available: false };
+  const originalGetClient = supabase.getClient;
+  const originalUpsert = supabase._upsert;
+  let savedRow;
+  try {
+    supabase.getClient = () => ({});
+    supabase._upsert = async (_table, record) => { savedRow = { ...record, id: 'db-conversation-1' }; return { id: 'db-conversation-1' }; };
+    await supabase.saveConversation(conv);
+    assert.deepEqual(savedRow.metadata.ai_call.speech_review, conv.ai_call_speech_review);
+    supabase.getClient = () => ({ from: () => {
+      const query = { select: () => query, eq: () => query, order: () => query, limit: async () => ({ data: [] }), maybeSingle: async () => ({ data: savedRow }) };
+      return query;
+    } });
+    const restored = await supabase.fetchConversationWithHistory(conv.channel, conv.external_user_id);
+    assert.deepEqual(restored.ai_call_speech_review, conv.ai_call_speech_review);
+    assert.equal(restored.ai_call_token, conv.ai_call_token);
+  } finally {
+    supabase.getClient = originalGetClient;
+    supabase._upsert = originalUpsert;
+    supabase._lastHash?.conversation?.delete(conv.id);
+    supabase._convUuidCache?.delete(conv.id);
+  }
 });
 
 test('expired or finished links cannot start a call', async () => {
@@ -199,7 +280,7 @@ test('with only an OpenRouter key the call runs in browser voice: greeting, free
   assert.doesNotMatch(hello.body.say, /http/, 'nothing unspeakable');
 
   answers = [{ say: '', tool: 'get_free_times' }, { say: 'عندي بكرا الساعة 10 الصبح أو 12 الظهر، شو بناسبك؟', tool: null }];
-  const times = await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: 'آه أكيد، بدي أحجز مع المهندس' } });
+  const times = await http(app.base, `/api/call/${s.token}/turn`, { method: 'POST', json: { text: 'آه أكيد، بدي أحجز مع المهندس', speech_review: { speech_duration_ms: 4000, asr_confidence: 0.87, confidence_samples: 1 } } });
   assert.match(times.body.say, /بكرا/);
   const prompt = calls.filter(c => /openrouter/.test(c.url)).pop().body.messages.slice(-1)[0].content;
   assert.match(prompt, /نتيجة get_free_times/, 'the free times reached the model');
@@ -213,6 +294,7 @@ test('with only an OpenRouter key the call runs in browser voice: greeting, free
   assert.equal(bye.body.end, true);
   const saved = callService.get(s.token);
   assert.equal(saved.mode, 'browser');
+  assert.ok(saved.transcript.some(line => line.role === 'customer' && line.speech_review?.estimated_wpm), 'browser turn metrics pass through the public call API');
   assert.deepEqual(saved.transcript.map(l => l.role), ['assistant', 'customer', 'assistant', 'customer', 'assistant', 'customer', 'assistant']);
   storage.updateSettings({ ai: { openai_api_key: 'sk-openai-secret' } }, { skipDbSync: true });
 });

@@ -2022,6 +2022,9 @@ input[type="radio"] { accent-color: var(--primary); width: 15px; height: 15px; c
 .ai-call-box dd { margin: 0; color: var(--text-primary); }
 .ai-call-box summary { cursor: pointer; color: var(--primary-ink); font-weight: 500; }
 .ai-call-transcript { max-height: 280px; overflow-y: auto; margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.ai-call-review { background: var(--bg-app); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.ai-call-review p, .ai-call-transcript p { margin: 0; }
+.ai-call-review small { line-height: 1.5; }
 
 .phone-codes {
   margin-top: 10px;

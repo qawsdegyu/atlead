@@ -1920,6 +1920,22 @@ document.body.dataset.tab = currentTab;
 if (isPhone()) switchTab(currentTab);
 
 // ---------------- AI voice call: result on the customer, link for staff
+function renderSpeechReview(review) {
+  if (!review) return '';
+  const pace = review.estimated_wpm !== null && review.estimated_wpm !== undefined && Number.isFinite(Number(review.estimated_wpm))
+    ? `${Math.round(Number(review.estimated_wpm))} ${tr('words/min (estimated)', 'كلمة/دقيقة تقريباً')}`
+    : tr('Not available for this call', 'غير متاح لهذه المكالمة');
+  const confidence = review.transcription_confidence_percent !== null && review.transcription_confidence_percent !== undefined && Number.isFinite(Number(review.transcription_confidence_percent))
+    ? `${Math.round(Number(review.transcription_confidence_percent))}% (${Number(review.confidence_samples) || 0} ${tr('samples', 'عينات')})`
+    : tr('Not supported in this browser/mode', 'غير متاح في هذا المتصفح أو الوضع');
+  const measured = `${Number(review.measured_utterances) || 0}/${Number(review.customer_utterances) || 0}`;
+  return `<div class="ai-call-review"><strong>${escapeHtml(tr('Voice review (estimates)', 'مراجعة الصوت (تقديرية)'))}</strong>
+    <p><span class="muted">${escapeHtml(tr('Speaking pace:', 'سرعة الكلام:'))}</span> ${escapeHtml(pace)} <span class="muted">(${escapeHtml(measured)} ${escapeHtml(tr('measured customer turns', 'ردود عميل مقاسة'))})</span></p>
+    <p><span class="muted">${escapeHtml(tr('Speech-recognition confidence:', 'ثقة التفريغ الآلي:'))}</span> ${escapeHtml(confidence)}</p>
+    <small class="muted">${escapeHtml(tr('Recognition confidence is not a pronunciation score. Pronunciation clarity cannot be reliably assessed from the current transcript-only review.', 'ثقة التفريغ ليست درجة وضوح للنطق؛ لا يتوفر حالياً تقييم موثوق للنطق من مراجعة النص فقط.'))}</small>
+  </div>`;
+}
+
 function renderAiCall(conv) {
   const box = document.getElementById('side-ai-call-box');
   if (!box) return;
@@ -1947,6 +1963,7 @@ function renderAiCall(conv) {
     <div class="ai-call-head"><strong>${escapeHtml(status)}</strong>${conv.ai_call_qualified === true ? `<span class="badge-pill success">${escapeHtml(tr('Qualified to buy', 'مؤهل للشراء'))}</span>` : conv.ai_call_qualified === false ? `<span class="badge-pill warning">${escapeHtml(tr('Not qualified yet', 'غير مؤهل حالياً'))}</span>` : ''}</div>
     ${conv.ai_call_summary ? `<p class="no-i18n bidi-text">${escapeHtml(conv.ai_call_summary)}</p>` : ''}
     ${conv.ai_call_next_step ? `<p><span class="muted">${escapeHtml(tr('Next step:', 'الخطوة التالية:'))}</span> <span class="no-i18n bidi-text">${escapeHtml(conv.ai_call_next_step)}</span></p>` : ''}
+    ${renderSpeechReview(conv.ai_call_speech_review)}
     ${facts.length ? `<dl>${facts.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd class="no-i18n bidi-text">${escapeHtml(v)}</dd>`).join('')}</dl>` : ''}
     ${conv.ai_call_token && conv.ai_call_status === 'completed' ? `<details data-call="${escapeHtml(conv.ai_call_token)}"><summary>${escapeHtml(tr('Call transcript', 'نص المكالمة'))}</summary><div class="ai-call-transcript">${escapeHtml(tr('Loading...', 'جاري التحميل...'))}</div></details>` : ''}`;
   document.querySelector('#side-ai-call details')?.addEventListener('toggle', async (e) => {
@@ -1955,8 +1972,11 @@ function renderAiCall(conv) {
     d.dataset.loaded = '1';
     try {
       const r = await (await fetch(`/api/calls/${encodeURIComponent(d.dataset.call)}`)).json();
+      const review = conv.ai_call_speech_review || r.call?.speech_review;
+      const reviewHtml = conv.ai_call_speech_review ? '' : renderSpeechReview(review);
       d.querySelector('.ai-call-transcript').innerHTML = (r.call?.transcript || []).map(l =>
-        `<p><b>${escapeHtml(l.role === 'assistant' ? tr('Assistant', 'المساعد') : tr('Customer', 'العميل'))}:</b> <span class="no-i18n bidi-text">${escapeHtml(l.text)}</span></p>`).join('') || escapeHtml(tr('No transcript.', 'لا يوجد نص.'));
+        `<p><b>${escapeHtml(l.role === 'assistant' ? tr('Assistant', 'المساعد') : tr('Customer', 'العميل'))}:</b> <span class="no-i18n bidi-text">${escapeHtml(l.text)}</span>${l.role === 'customer' && l.speech_review?.estimated_wpm !== null && l.speech_review?.estimated_wpm !== undefined ? `<small class="muted"> — ${escapeHtml(`${Math.round(Number(l.speech_review.estimated_wpm))} ${tr('words/min estimated', 'كلمة/دقيقة تقريباً')}`)}</small>` : ''}</p>`).join('') || escapeHtml(tr('No transcript.', 'لا يوجد نص.'));
+      if (reviewHtml) d.querySelector('.ai-call-transcript').insertAdjacentHTML('afterbegin', reviewHtml);
     } catch { d.querySelector('.ai-call-transcript').textContent = tr('Could not load transcript.', 'تعذّر تحميل النص.'); }
   });
 }

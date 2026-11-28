@@ -3,8 +3,9 @@
  *
  * 1. In chat, when the customer is interested, the bot offers a short voice call and sends a
  *    private link: /call/<token> (a branded page on this site, opens on any phone or laptop).
- * 2. On that page the customer talks by voice with the AI (OpenAI Realtime over WebRTC; the
- *    browser gets a short-lived key, the real API key never leaves the server).
+ * 2. On that page the customer talks by voice with the AI (OpenAI Realtime over WebRTC, or
+ *    browser speech recognition/synthesis in fallback mode; only transcript and bounded speech
+ *    estimates are persisted, never a raw recording).
  * 3. The AI asks the qualification questions, answers only from the company files, and when the
  *    customer wants to go ahead it books the engineer meeting in Google Calendar (tools below).
  * 4. When the call ends, the whole transcript is analysed: every detail the customer gave is saved
@@ -41,6 +42,36 @@ const FALLBACK_MODELS = [
 // Everything the analysis can learn about the customer → saved on the conversation.
 const PROFILE_FIELDS = ['company_name', 'job_title', 'location', 'business_type', 'team_size', 'monthly_volume',
   'channels_used', 'current_tools', 'goals', 'budget', 'timeline', 'decision_maker'];
+
+function speechWordCount(text) {
+  return String(text || '').trim().split(/\s+/u).filter(word => /[\p{L}\p{N}]/u.test(word)).length;
+}
+
+// Only accept bounded, aggregate client measurements. ASR confidence is available in some browser
+// engines, but is not a pronunciation score; realtime mode deliberately has no confidence value.
+function normalizeSpeechReview(text, input, mode) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const words = speechWordCount(text);
+  const rawDuration = Number(input.speech_duration_ms);
+  const duration = Number.isFinite(rawDuration) && rawDuration >= 300 && rawDuration <= 120000 ? Math.round(rawDuration) : null;
+  const rawConfidence = input.asr_confidence === null || input.asr_confidence === undefined || input.asr_confidence === '' ? NaN : Number(input.asr_confidence);
+  const confidence = mode === 'browser' && Number.isFinite(rawConfidence) && rawConfidence >= 0 && rawConfidence <= 1
+    ? Math.round(rawConfidence * 1000) / 1000 : null;
+  const rawSamples = Number(input.confidence_samples);
+  const confidenceSamples = confidence === null ? 0 : (Number.isFinite(rawSamples) ? Math.max(1, Math.min(50, Math.floor(rawSamples))) : 1);
+  const estimated = duration && words ? Math.round(words * 60000 / duration) : null;
+  const rate = estimated !== null && estimated >= 5 && estimated <= 500 ? estimated : null;
+  if (rate === null && confidence === null) return null;
+  return {
+    version: 1,
+    speech_duration_ms: duration,
+    word_count: duration && words ? words : 0,
+    estimated_wpm: rate,
+    asr_confidence: confidence,
+    confidence_samples: confidenceSamples,
+    measurement_source: mode === 'browser' ? 'browser_speech_recognition' : (mode === 'realtime' ? 'realtime_vad' : 'unverified')
+  };
+}
 
 function read() {
   try { return fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE, 'utf8')) : []; } catch { return []; }
@@ -327,12 +358,12 @@ ${String(knowledge.groundingText() || '').slice(0, 14000)}`;
    * One turn of a browser-voice call: the customer's words in, the assistant's next sentence out.
    * The model answers in JSON and may ask for a tool first (free times / booking / end).
    */
-  async turn(token, text) {
+  async turn(token, text, speechReview = null) {
     const { session, error } = this.usable(token);
     if (error) throw Object.assign(new Error(error), { code: error });
     if ((session.turns || 0) >= 120) return { say: '', end: true };
     const said = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 1500);
-    if (said) this.addTranscript(token, [{ role: 'customer', text: said }]);
+    if (said) this.addTranscript(token, [{ role: 'customer', text: said, speech_review: speechReview }]);
     const s = this.get(token);
     const conv = storageService.getConversationById(s.conversation_id) || {};
     const lang = s.lang || 'ar';
@@ -553,7 +584,8 @@ ${s.free_slots.map(x => `  • ${x.start} = ${lang === 'en' ? x.label_en : x.lab
       const id = String(l?.id || crypto.randomUUID()).slice(0, 80);
       if (!text || have.has(id)) continue;
       have.add(id);
-      s.transcript.push({ id, role, text, at: new Date().toISOString() });
+      const speechReview = role === 'customer' ? normalizeSpeechReview(text, l?.speech_review, s.mode) : null;
+      s.transcript.push({ id, role, text, at: new Date().toISOString(), ...(speechReview ? { speech_review: speechReview } : {}) });
     }
     s.last_activity_at = new Date().toISOString();
     return this.save(s);
@@ -650,6 +682,7 @@ ${s.free_slots.map(x => `  • ${x.start} = ${lang === 'en' ? x.label_en : x.lab
       if (s.status === 'in_progress') { s.status = 'offered'; this.save(s); }
       return s;
     }
+    s.speech_review = this.buildSpeechReview(s);
     s.status = 'analyzing';
     s.ended_at = new Date().toISOString();
     s.end_reason = reason;
@@ -664,6 +697,29 @@ ${s.free_slots.map(x => `  • ${x.start} = ${lang === 'en' ? x.label_en : x.lab
     this.save(s);
     if (conv) await this.apply(conv, s, analysis);
     return s;
+  }
+
+  buildSpeechReview(session) {
+    const customerLines = (session?.transcript || []).filter(line => line.role === 'customer');
+    const measured = customerLines.map(line => line.speech_review).filter(Boolean);
+    const paceRows = measured.filter(row => Number.isFinite(row.estimated_wpm) && row.speech_duration_ms > 0 && row.word_count > 0);
+    const totalWords = paceRows.reduce((sum, row) => sum + row.word_count, 0);
+    const totalDuration = paceRows.reduce((sum, row) => sum + row.speech_duration_ms, 0);
+    const confidenceRows = measured.filter(row => Number.isFinite(row.asr_confidence) && row.confidence_samples > 0);
+    const confidenceSamples = confidenceRows.reduce((sum, row) => sum + row.confidence_samples, 0);
+    const confidenceTotal = confidenceRows.reduce((sum, row) => sum + row.asr_confidence * row.confidence_samples, 0);
+    return {
+      version: 1,
+      mode: ['browser', 'realtime'].includes(session?.mode) ? session.mode : 'unknown',
+      customer_utterances: customerLines.length,
+      measured_utterances: paceRows.length,
+      measured_words: totalWords,
+      speech_active_seconds: totalDuration ? Math.round(totalDuration / 100) / 10 : null,
+      estimated_wpm: totalDuration && totalWords ? Math.round(totalWords * 60000 / totalDuration) : null,
+      transcription_confidence_percent: confidenceSamples ? Math.round(confidenceTotal / confidenceSamples * 100) : null,
+      confidence_samples: confidenceSamples,
+      pronunciation_assessment_available: false
+    };
   }
 
   async analyze(session, conv) {
@@ -719,7 +775,8 @@ customer_name, company_name, job_title, location, business_type, team_size, mont
       ai_call_qualified: a ? !!a.qualified : null,
       ai_call_summary: a?.summary || '',
       ai_call_next_step: a?.next_step || '',
-      ai_call_sentiment: a?.sentiment || ''
+      ai_call_sentiment: a?.sentiment || '',
+      ai_call_speech_review: s.speech_review || this.buildSpeechReview(s)
     };
     if (a) {
       for (const f of [...PROFILE_FIELDS, 'identified_problem', 'customer_requests', 'objections', 'proposed_solution']) patch[f] = keep(a[f], fresh[f]);

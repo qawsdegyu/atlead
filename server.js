@@ -15,6 +15,12 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
+// Keep public call-turn payloads small; transcript batches get a separate bounded allowance.
+app.use('/api/call', (req, res, next) => express.json({ limit: req.path.endsWith('/turn') ? '12kb' : '2mb' })(req, res, next));
+app.use('/api/call', (err, req, res, next) => {
+  if (err?.type === 'entity.too.large') return res.status(413).json({ ok: false, error: 'payload_too_large' });
+  next(err);
+});
 app.use(express.json({
   limit: '50mb',
   // Keep the raw body so Meta webhook signatures (X-Hub-Signature-256) can be verified.
@@ -52,6 +58,8 @@ app.get('/privacy', (req, res) => res.send(legalPage('Privacy Policy', `
 <p>Conversations are stored in our secured database and internal sales records for as long as needed to serve you, and deleted on request.</p>
 <h2>Sharing</h2>
 <p>Data is processed by our service providers (Meta, hosting, database and AI providers) only to operate this service.</p>
+<h2>AI qualification calls</h2>
+<p>During an AI call, your voice may be processed live by the browser or configured speech/AI providers. We store the call transcript and, when available, estimated speaking-rate metrics and speech-recognition confidence with the customer record; these are approximate and are not a definitive pronunciation assessment. The atlead application does not store a raw audio recording.</p>
 <h2>Your rights / deletion</h2>
 <p>You can ask us to delete your data at any time — see <a href="/data-deletion">Data Deletion Instructions</a>.</p>
 <h2>Contact</h2>

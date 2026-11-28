@@ -29,7 +29,7 @@ api.post('/:token/start', guard, async (req, res) => {
 // Browser-voice calls: one conversation turn (customer words in, assistant sentence out).
 api.post('/:token/turn', guard, async (req, res) => {
   try {
-    const r = await callService.turn(req.params.token, String(req.body?.text || ''));
+    const r = await callService.turn(req.params.token, String(req.body?.text || ''), req.body?.speech_review || null);
     res.json({ ok: true, say: r.say, end: r.end }); // tool details stay on the server
   } catch (e) {
     console.warn('[Call] turn failed:', e.message);

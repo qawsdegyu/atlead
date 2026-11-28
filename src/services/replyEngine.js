@@ -26,6 +26,8 @@ const aiService = require('./aiService');
 
 const DEFAULT_DELAY_SECONDS = 3;
 const BOOT_TIME = Date.now();
+const VALID_LEAD_STAGES = new Set(['new', 'discovery', 'qualified', 'hot', 'deal_closing', 'handed_off']);
+const VALID_CLASSIFICATIONS = new Set(['Cold', 'Warm', 'Hot']);
 
 // Phone numbers (Jordan local 07xxxxxxxx or international +962 / 00962 / any +country), emails, business type, and requests.
 function extractContact(text, conv = {}) {
@@ -361,12 +363,19 @@ class ReplyEngine {
    */
   async applyAiState(conv, aiResult, handoff = crmService.shouldHandoff(aiResult)) {
     const keep = (v, old) => (v !== null && v !== undefined && String(v).trim() !== '' ? v : old);
-    const prob = Number(String(aiResult.buying_probability ?? '').replace('%', ''));
+    const parsedProbability = Number(String(aiResult.buying_probability ?? '').replace('%', '').trim());
+    const prob = Number.isFinite(parsedProbability) ? Math.max(0, Math.min(100, Math.round(parsedProbability))) : null;
+    const stage = VALID_LEAD_STAGES.has(String(aiResult.lead_stage || '').trim().toLowerCase())
+      ? String(aiResult.lead_stage).trim().toLowerCase()
+      : (conv.lead_stage || 'new');
+    const rawClassification = String(aiResult.classification || '').trim();
+    const classification = VALID_CLASSIFICATIONS.has(rawClassification) ? rawClassification : (conv.classification || 'Cold');
     const patch = {
       id: conv.id,
-      lead_stage: keep(aiResult.lead_stage, conv.lead_stage),
-      classification: keep(aiResult.classification, conv.classification),
-      interest_score: Number.isFinite(prob) && prob > 0 ? Math.min(100, prob) : conv.interest_score,
+      lead_stage: stage,
+      classification,
+      // Zero is a meaningful value (e.g. an explicitly unqualified lead).
+      interest_score: prob !== null ? prob : conv.interest_score,
       identified_problem: keep(aiResult.identified_problem, conv.identified_problem),
       proposed_solution: keep(aiResult.proposed_solution, conv.proposed_solution),
       business_type: keep(aiResult.business_type, conv.business_type),

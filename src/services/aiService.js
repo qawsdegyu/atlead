@@ -40,6 +40,9 @@ const OPENAI_COMPATIBLE = {
 
 const VOICE_FAILED_TEXT = 'رسالة صوتية (تعذّر تفريغها)';
 const VOICE_MARKERS = [VOICE_FAILED_TEXT, '🎤 رسالة صوتية (تعذّر تفريغها)', '__VOICE_TRANSCRIPTION_FAILED__', 'رسالة صوتية من العميل'];
+const VALID_LEAD_STAGES = new Set(['new', 'discovery', 'qualified', 'hot', 'deal_closing', 'handed_off']);
+const VALID_CLASSIFICATIONS = new Set(['Cold', 'Warm', 'Hot']);
+const MAX_AI_FIELD_LENGTH = 2000;
 
 class AiService {
   get VOICE_FAILED_TEXT() { return VOICE_FAILED_TEXT; }
@@ -303,7 +306,7 @@ IMPORTANT: The customer's last message is in ENGLISH. Write "reply_text" entirel
     // AI agent: answers from the company files (in the system prompt), with failover across keys.
     try {
       const { text } = await this.chatWithFailover(systemPrompt, history, userPrompt, { json: true });
-      let result = this.cleanAndParseJson(text);
+      let result = this.cleanAndParseJson(text, { fallbackReply: lang === 'en' ? this.safeAnswer('unknown', 'en', conversation) : this.safeAnswer('unknown', 'ar', conversation) });
       // Language guard: an English message must get an English reply. One strict retry.
       if (lang === 'en' && /[؀-ۿ]/.test(result.reply_text || '')) {
         try {
@@ -312,7 +315,7 @@ IMPORTANT: The customer's last message is in ENGLISH. Write "reply_text" entirel
 
 Your previous answer was in Arabic. The customer writes in English — return the same JSON with reply_text written ONLY in English.`,
             { json: true });
-          const r2 = this.cleanAndParseJson(retry.text);
+          const r2 = this.cleanAndParseJson(retry.text, { fallbackReply: result.reply_text });
           if (r2.reply_text && !/[؀-ۿ]/.test(r2.reply_text)) result = r2;
         } catch { /* keep the first answer */ }
       }
@@ -329,7 +332,7 @@ Your previous answer was in Arabic. The customer writes in English — return th
             const retry = await this.chatWithFailover(systemPrompt, history, `${userPrompt}
 
 ردك السابق ذكر هاي الأرقام وهي مش موجودة بالمرجع: ${check.numbers.join('، ')}. أعد نفس الـ JSON بدون أي رقم مش مكتوب بالمرجع.`, { json: true });
-            const r2 = this.cleanAndParseJson(retry.text);
+            const r2 = this.cleanAndParseJson(retry.text, { fallbackReply: result.reply_text });
             r2.reply_text = this.toPlainText(r2.reply_text);
             const c2 = this.ungroundedNumbers(r2.reply_text, groundSrc);
             if (!c2.price && !c2.numbers.length) fixed = r2;
@@ -481,7 +484,58 @@ Your previous answer was in Arabic. The customer writes in English — return th
     return 'هاي المعلومة مش متوفرة عندي بدقة حالياً وما بدي أعطيك معلومة غير مؤكدة. بقدر أخلي الفريق يتواصل معك ويعطيك التفاصيل الدقيقة، بناسبك؟';
   }
 
-  cleanAndParseJson(text) {
+  cleanAndParseJson(text, { fallbackReply = 'أهلاً وسهلاً بك! كيف بقدر أساعدك اليوم؟' } = {}) {
+    const asText = (value) => {
+      if (value === null || value === undefined) return null;
+      const result = String(value).trim();
+      return result ? result.slice(0, MAX_AI_FIELD_LENGTH) : null;
+    };
+    const asBool = (value) => value === true || value === 'true';
+    const asProbability = (value, fallback = 40) => {
+      const n = typeof value === 'string' ? Number(value.replace('%', '').trim()) : Number(value);
+      return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : fallback;
+    };
+    const normalizeStage = (value, fallback = 'discovery') => {
+      const stage = String(value || '').trim().toLowerCase();
+      return VALID_LEAD_STAGES.has(stage) ? stage : fallback;
+    };
+    const normalizeClassification = (value, probability, fallback = 'Warm') => {
+      const raw = String(value || '').trim().toLowerCase();
+      const classification = raw.charAt(0).toUpperCase() + raw.slice(1);
+      if (VALID_CLASSIFICATIONS.has(classification)) return classification;
+      return probability >= 70 ? 'Hot' : probability >= 40 ? 'Warm' : fallback;
+    };
+    const normalize = (parsed) => {
+      const probability = asProbability(parsed?.buying_probability, 40);
+      const offerAiCall = asBool(parsed?.offer_ai_call);
+      const scheduling = asBool(parsed?.scheduling);
+      return {
+        reply_text: asText(parsed?.reply_text) || fallbackReply,
+        identified_problem: asText(parsed?.identified_problem),
+        proposed_solution: asText(parsed?.proposed_solution),
+        lead_stage: normalizeStage(parsed?.lead_stage),
+        classification: normalizeClassification(parsed?.classification, probability),
+        buying_probability: probability,
+        // A model must not convert a scheduled/call-first turn into a handoff.
+        handoff_triggered: !offerAiCall && !scheduling && asBool(parsed?.handoff_triggered),
+        customer_name: asText(parsed?.customer_name),
+        customer_phone: asText(parsed?.customer_phone),
+        business_type: asText(parsed?.business_type),
+        customer_requests: parsed?.customer_requests
+          ? (Array.isArray(parsed.customer_requests) ? parsed.customer_requests.map(asText).filter(Boolean).join('، ') : asText(parsed.customer_requests))
+          : null,
+        customer_summary: asText(parsed?.customer_summary),
+        objections: asText(parsed?.objections),
+        company_name: asText(parsed?.company_name),
+        customer_email: asText(parsed?.customer_email),
+        consultation_requested: asBool(parsed?.consultation_requested),
+        demo_requested: asBool(parsed?.demo_requested),
+        scheduling,
+        offer_ai_call: offerAiCall,
+        requested_time: asText(parsed?.requested_time)?.slice(0, 120) || null,
+        book_start: asText(parsed?.book_start)
+      };
+    };
     try {
       if (!text) throw new Error('Empty response');
       // Remove any markdown code fence if present
@@ -491,45 +545,10 @@ Your previous answer was in Arabic. The customer writes in English — return th
       if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
       cleaned = cleaned.trim();
 
-      const parsed = JSON.parse(cleaned);
-      return {
-        reply_text: parsed.reply_text || 'أهلاً بك في atlead! كيف نقدر نساعدك اليوم؟',
-        identified_problem: parsed.identified_problem || null,
-        proposed_solution: parsed.proposed_solution || null,
-        lead_stage: parsed.lead_stage || 'discovery',
-        classification: parsed.classification || 'Warm',
-        buying_probability: parsed.buying_probability || 40,
-        handoff_triggered: !!parsed.handoff_triggered,
-        customer_name: parsed.customer_name || null,
-        customer_phone: parsed.customer_phone || null,
-        business_type: parsed.business_type || null,
-        customer_requests: parsed.customer_requests
-          ? (Array.isArray(parsed.customer_requests) ? parsed.customer_requests.join('، ') : String(parsed.customer_requests))
-          : null,
-        customer_summary: parsed.customer_summary || null,
-        objections: parsed.objections || null,
-        company_name: parsed.company_name || null,
-        customer_email: parsed.customer_email || null,
-        consultation_requested: parsed.consultation_requested === true,
-        demo_requested: parsed.demo_requested === true,
-        scheduling: parsed.scheduling === true,
-        offer_ai_call: parsed.offer_ai_call === true,
-        requested_time: typeof parsed.requested_time === 'string' && parsed.requested_time.trim() ? parsed.requested_time.trim().slice(0, 120) : null,
-        book_start: typeof parsed.book_start === 'string' && parsed.book_start.trim() ? parsed.book_start.trim() : null
-      };
+      return normalize(JSON.parse(cleaned));
     } catch (e) {
       console.warn('Failed to parse AI JSON, using fallback parser:', e.message);
-      return {
-        reply_text: text || 'أهلاً وسهلاً بك في شركة atlead، كيف بقدر أساعدك اليوم في تطوير مبيعات شركتك؟',
-        identified_problem: null,
-        proposed_solution: null,
-        lead_stage: 'discovery',
-        classification: 'Warm',
-        buying_probability: 45,
-        handoff_triggered: false,
-        customer_name: null,
-        customer_phone: null
-      };
+      return normalize({ reply_text: fallbackReply, lead_stage: 'discovery', classification: 'Warm', buying_probability: 40 });
     }
   }
 

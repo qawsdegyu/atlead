@@ -159,9 +159,9 @@ class KnowledgeService {
           data = inserted.data || [];
         }
       }
-      const faqRow = (data || []).find(d => d.metadata?.source_key === 'faq' && d.content);
+      const faqRow = (data || []).find(d => d.metadata?.source_key === 'faq' && d.content && d.is_active !== false);
       this.remoteFaq = faqRow ? this.parseFaq(faqRow.content) : [];
-      this.remoteDocuments = (data || []).filter(d => d.content && d.metadata?.source_key !== 'faq').map(d => ({
+      this.remoteDocuments = (data || []).filter(d => d.content && d.is_active !== false && d.metadata?.source_key !== 'faq').map(d => ({
         title: d.title, text: d.content, file_path: d.file_path || '', metadata: d.metadata || {}
       }));
       this.remoteKnowledgeStatus = this.remoteDocuments.length ? 'loaded' : 'empty';
